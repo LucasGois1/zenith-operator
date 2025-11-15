@@ -51,8 +51,9 @@ type FunctionSpec struct {
 type BuildSpec struct {
 	// O nome do Secret do tipo 'kubernetes.io/dockerconfigjson'
 	// no mesmo namespace, usado para autenticar com o registry.
-	// +kubebuilder:validation:Required
-	RegistrySecretName string `json:"registrySecretName"`
+	// Opcional. Se não especificado, assume-se que o registry é público.
+	// +kubebuilder:validation:Optional
+	RegistrySecretName string `json:"registrySecretName,omitempty"`
 
 	// A imagem de destino completa (ex: "docker.io/my-org/my-func")
 	// O pipeline irá adicionar o digest @sha256:
