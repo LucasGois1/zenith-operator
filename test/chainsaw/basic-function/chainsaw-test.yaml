@@ -21,6 +21,12 @@ spec:
         - apply:
             file: buildpacks-phases-task.yaml
     
+    - name: create-git-auth-secret
+      description: Create Git authentication secret (requires GITHUB_TOKEN env var)
+      try:
+        - apply:
+            file: git-auth-secret.yaml
+    
     - name: create-function
       description: Create a basic Function CR
       try:

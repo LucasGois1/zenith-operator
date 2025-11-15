@@ -5,6 +5,7 @@ metadata:
 spec:
   gitRepo: https://github.com/LucasGois1/zenith-test-functions
   gitRevision: devin/1763232295-add-test-functions
+  gitAuthSecretName: github-auth
   build:
     image: ttl.sh/zenith-test-function-git:1h
   deploy:
