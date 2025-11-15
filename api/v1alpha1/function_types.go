@@ -34,6 +34,10 @@ type FunctionSpec struct {
 	// +kubebuilder:validation:Optional
 	GitRevision string `json:"gitRevision,omitempty"`
 
+	// Opcional. O nome do Secret usado para autenticar com o repositório Git privado.
+	// +kubebuilder:validation:Optional
+	GitAuthSecretName string `json:"gitAuthSecretName,omitempty"`
+
 	// Configurações de Build (Tekton)
 	// +kubebuilder:validation:Required
 	Build BuildSpec `json:"build"`

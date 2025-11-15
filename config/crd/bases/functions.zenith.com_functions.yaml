@@ -91,6 +91,10 @@ spec:
                     description: Opcional. Um mapa de atributos para filtrar eventos.
                     type: object
                 type: object
+              gitAuthSecretName:
+                description: Opcional. O nome do Secret usado para autenticar com
+                  o repositório Git privado.
+                type: string
               gitRepo:
                 description: O URL do repositório Git contendo o código-fonte da função.
                 type: string

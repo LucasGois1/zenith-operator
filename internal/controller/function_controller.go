@@ -51,7 +51,7 @@ type FunctionReconciler struct {
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=serving.knative.dev,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eventing.knative.dev,resources=triggers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -70,75 +70,114 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	var function functionsv1alpha1.Function
 	if err := r.Get(ctx, req.NamespacedName, &function); err != nil {
 		log.Error(err, "Não foi possível buscar o recurso Function")
-		// Se não for encontrado (ex: foi excluído), pare a reconciliação
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Obter o nome do Secret do Spec
-	secretName := function.Spec.Build.RegistrySecretName
-	if secretName == "" {
-		// Se nenhum secret for especificado, pulamos esta lógica.
-		// Você pode querer registrar um aviso ou definir uma Condição de Status aqui.
-		log.Info("Nenhum registrySecretName especificado, pulando a autenticação do ServiceAccount")
-	} else {
+	saName := function.Name + "-sa"
+	serviceAccount := &v1.ServiceAccount{}
+	saKey := types.NamespacedName{Name: saName, Namespace: function.Namespace}
 
-		// Etapa 2: Obter o ServiceAccount (usando "default" como alvo)
-		// O ServiceAccount deve estar no mesmo namespace que a Função.
-		saName := "default"
-		serviceAccount := &v1.ServiceAccount{}
-		saKey := types.NamespacedName{Name: saName, Namespace: function.Namespace}
+	err := r.Get(ctx, saKey, serviceAccount)
+	if err != nil && errors.IsNotFound(err) {
+		// ServiceAccount não existe, criar um novo
+		log.Info("Criando ServiceAccount dedicado para Function", "ServiceAccountName", saName)
+		serviceAccount = &v1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      saName,
+				Namespace: function.Namespace,
+			},
+		}
 
-		if err := r.Get(ctx, saKey, serviceAccount); err != nil {
-			if errors.IsNotFound(err) {
-				log.Error(err, "ServiceAccount 'default' não encontrado no namespace", "Namespace", function.Namespace)
-			} else {
-				log.Error(err, "Falha ao buscar ServiceAccount", "ServiceAccountName", saName)
-			}
-			// Tente novamente, pois o ServiceAccount é essencial
+		if err := controllerutil.SetControllerReference(&function, serviceAccount, r.Scheme); err != nil {
+			log.Error(err, "Falha ao definir OwnerReference no ServiceAccount")
 			return ctrl.Result{}, err
 		}
 
-		// Etapa 3: Verificar se o Secret já existe na lista 'imagePullSecrets'
-		// Usamos 'imagePullSecrets' que é o campo padrão do Kubernetes para credenciais de registro
-		// O Tekton é configurado para usar automaticamente este secret.[1]
-		encontrado := false
-		for _, secretRef := range serviceAccount.ImagePullSecrets {
-			if secretRef.Name == secretName {
-				encontrado = true
+		if err := r.Create(ctx, serviceAccount); err != nil {
+			log.Error(err, "Falha ao criar ServiceAccount")
+			return ctrl.Result{}, err
+		}
+
+		log.Info("ServiceAccount criado com sucesso")
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Falha ao buscar ServiceAccount")
+		return ctrl.Result{}, err
+	}
+
+	// 3. Configurar secrets no ServiceAccount
+	needsUpdate := false
+
+	gitSecretName := function.Spec.GitAuthSecretName
+	if gitSecretName != "" {
+		// Verificar se o secret existe
+		gitSecret := &v1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: gitSecretName, Namespace: function.Namespace}, gitSecret); err != nil {
+			if errors.IsNotFound(err) {
+				log.Error(err, "Git auth secret não encontrado", "SecretName", gitSecretName)
+				// Atualizar status com erro
+				gitAuthMissingCondition := metav1.Condition{
+					Type:    "Ready",
+					Status:  metav1.ConditionFalse,
+					Reason:  "GitAuthMissing",
+					Message: "Git authentication secret não encontrado: " + gitSecretName,
+				}
+				meta.SetStatusCondition(&function.Status.Conditions, gitAuthMissingCondition)
+				if err := r.Status().Update(ctx, &function); err != nil {
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+			}
+			return ctrl.Result{}, err
+		}
+
+		// Adicionar secret à lista de secrets do ServiceAccount (não imagePullSecrets)
+		found := false
+		for _, secretRef := range serviceAccount.Secrets {
+			if secretRef.Name == gitSecretName {
+				found = true
 				break
 			}
 		}
-
-		// Etapa 4: Se não for encontrado, adicionar o Secret e atualizar o ServiceAccount
-		if !encontrado {
-			log.Info("Vinculando secret do registry ao ServiceAccount", "SecretName", secretName, "ServiceAccountName", saName)
-
-			// Adiciona a referência do secret à lista
-			secretRef := v1.LocalObjectReference{Name: secretName}
-			serviceAccount.ImagePullSecrets = append(serviceAccount.ImagePullSecrets, secretRef)
-
-			// Executa a atualização no cluster
-			if err := r.Update(ctx, serviceAccount); err != nil {
-				log.Error(err, "Falha ao atualizar ServiceAccount com imagePullSecret")
-				// Re-enfileira a requisição para tentar novamente
-				return ctrl.Result{}, err
-			}
-
-			// A atualização foi bem-sucedida. Re-enfileire imediatamente
-			// para que a próxima etapa da reconciliação (criar o PipelineRun)
-			// veja o ServiceAccount atualizado.
-			log.Info("ServiceAccount atualizado com sucesso")
-			return ctrl.Result{Requeue: true}, nil
+		if !found {
+			log.Info("Adicionando Git auth secret ao ServiceAccount", "SecretName", gitSecretName)
+			serviceAccount.Secrets = append(serviceAccount.Secrets, v1.ObjectReference{Name: gitSecretName})
+			needsUpdate = true
 		}
+	}
 
-		log.Info("ServiceAccount já está configurado com o secret do registry", "SecretName", secretName)
+	registrySecretName := function.Spec.Build.RegistrySecretName
+	if registrySecretName != "" {
+		// Adicionar à lista imagePullSecrets
+		found := false
+		for _, secretRef := range serviceAccount.ImagePullSecrets {
+			if secretRef.Name == registrySecretName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.Info("Adicionando Registry secret ao ServiceAccount", "SecretName", registrySecretName)
+			serviceAccount.ImagePullSecrets = append(serviceAccount.ImagePullSecrets, v1.LocalObjectReference{Name: registrySecretName})
+			needsUpdate = true
+		}
+	}
+
+	// 3.3. Atualizar ServiceAccount se necessário
+	if needsUpdate {
+		if err := r.Update(ctx, serviceAccount); err != nil {
+			log.Error(err, "Falha ao atualizar ServiceAccount")
+			return ctrl.Result{}, err
+		}
+		log.Info("ServiceAccount atualizado com sucesso")
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	pipelineRunName := function.Name + "-build"
 	pipelineRun := &tektonv1.PipelineRun{}
 
 	// Tenta obter o PipelineRun que gerenciamos
-	err := r.Get(ctx, types.NamespacedName{Name: pipelineRunName, Namespace: function.Namespace}, pipelineRun)
+	err = r.Get(ctx, types.NamespacedName{Name: pipelineRunName, Namespace: function.Namespace}, pipelineRun)
 
 	// Verifica se o PipelineRun não existe
 	if err != nil && errors.IsNotFound(err) {
@@ -314,7 +353,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Se chegamos aqui, o Knative Service FOI encontrado.
 	log.Info("Knative Service encontrado. Verificando se há atualizações...")
 
-	needsUpdate := false
+	needsUpdate = false
 
 	// 1. Verificar se a imagem está desatualizada
 	// Compara a imagem no cluster com a imagem que acabamos de construir
@@ -413,7 +452,7 @@ Este PipelineRun é projetado para:
  2. Construir uma imagem de contêiner usando Cloud Native Buildpacks com a Task 'buildpacks-phases'.
  3. Enviar a imagem para o registry especificado.
 */
-func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Function) (*tektonv1.PipelineRun, error) { // Substitua 'appsv1alpha1.Function' pelo seu tipo de API
+func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Function) (*tektonv1.PipelineRun, error) {
 	pipelineRunName := function.Name + "-build"
 
 	// Define 'main' como padrão para a revisão do git se não for especificado
@@ -422,8 +461,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 		gitRevision = "main"
 	}
 
-	// O nome do ServiceAccount que vinculamos ao secret do registry no Passo 3.1.3
-	const serviceAccountName = "default"
+	serviceAccountName := function.Name + "-sa"
 	const sharedWorkspaceName = "source-workspace"
 
 	return &tektonv1.PipelineRun{
@@ -432,13 +470,10 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 			Namespace: function.Namespace,
 		},
 		Spec: tektonv1.PipelineRunSpec{
-			// Vincula o PipelineRun ao ServiceAccount que tem as credenciais do registry [1]
-			// --- MUDANÇA DA v1beta1 para v1 ---
-			// O ServiceAccountName agora está aninhado dentro de TaskRunTemplate
+			// Vincula o PipelineRun ao ServiceAccount dedicado que tem as credenciais
 			TaskRunTemplate: tektonv1.PipelineTaskRunTemplate{
 				ServiceAccountName: serviceAccountName,
 			},
-			// ----
 
 			// 'pipelineSpec' define um pipeline embutido [4]
 			PipelineSpec: &tektonv1.PipelineSpec{
@@ -628,6 +663,7 @@ func (r *FunctionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&tektonv1.PipelineRun{}).
 		Owns(&knservingv1.Service{}).
 		Owns(&kneventingv1.Trigger{}).
+		Owns(&v1.ServiceAccount{}).
 		Named("function").
 		Complete(r)
 }
