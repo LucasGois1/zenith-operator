@@ -6,7 +6,7 @@ spec:
   gitRepo: https://github.com/LucasGois1/zenith-test-functions
   gitRevision: devin/1763232295-add-test-functions
   build:
-    image: ttl.sh/zenith-test-function-secret-$(date +%s):1h
+    image: ttl.sh/zenith-test-function-secret:1h
     registrySecretName: test-registry-secret
   deploy:
     dapr:
