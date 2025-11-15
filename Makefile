@@ -141,6 +141,19 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
 
+## Tool Binaries
+CHAINSAW ?= chainsaw
+
+.PHONY: test-chainsaw
+test-chainsaw: ## Run Chainsaw end-to-end tests against the current cluster
+	@command -v $(CHAINSAW) >/dev/null 2>&1 || { \
+		echo "Chainsaw is not installed. Please install Chainsaw:"; \
+		echo "curl -L https://github.com/kyverno/chainsaw/releases/latest/download/chainsaw_linux_amd64.tar.gz -o /tmp/chainsaw.tar.gz"; \
+		echo "tar -xzf /tmp/chainsaw.tar.gz -C /tmp && sudo mv /tmp/chainsaw /usr/local/bin/"; \
+		exit 1; \
+	}
+	$(CHAINSAW) test --test-dir test/chainsaw
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run

@@ -1,0 +1,16 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Configuration
+metadata:
+  name: zenith-operator-chainsaw-config
+spec:
+  timeouts:
+    apply: 30s
+    assert: 5m
+    error: 30s
+    delete: 30s
+    cleanup: 30s
+    exec: 30s
+  namespace: chainsaw-test
+  skipDelete: false
+  failFast: false
+  parallel: 1
