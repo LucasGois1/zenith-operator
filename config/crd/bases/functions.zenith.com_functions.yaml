@@ -51,10 +51,10 @@ spec:
                     description: |-
                       O nome do Secret do tipo 'kubernetes.io/dockerconfigjson'
                       no mesmo namespace, usado para autenticar com o registry.
+                      Opcional. Se não especificado, assume-se que o registry é público.
                     type: string
                 required:
                 - image
-                - registrySecretName
                 type: object
               deploy:
                 description: Configurações de Deploy (Knative + Dapr)
