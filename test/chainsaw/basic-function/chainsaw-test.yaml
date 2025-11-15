@@ -24,8 +24,20 @@ spec:
     - name: create-git-auth-secret
       description: Create Git authentication secret (requires GITHUB_TOKEN env var)
       try:
-        - apply:
-            file: git-auth-secret.yaml
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: x-access-token
+                password: __GITHUB_TOKEN__
+              EOF
     
     - name: create-function
       description: Create a basic Function CR
