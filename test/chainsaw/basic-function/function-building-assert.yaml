@@ -8,3 +8,4 @@ status:
       status: "False"
       reason: Building
       message: Pipeline de build iniciado
+      (lastTransitionTime): "?"
