@@ -360,7 +360,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log.Info("Knative Service está sincronizado.")
 	// --- FIM DA FASE 3.4 ---
 
-	//... (A lógica para a Fase 3.5: Criação do Trigger começa aqui)...
+	// ... (A lógica para a Fase 3.5: Criação do Trigger começa aqui)...
 	// Se 'eventing' não estiver configurado, pule.
 	if function.Spec.Eventing.Broker == "" {
 		// (Lógica para atualizar Status para "Ready" e parar)
