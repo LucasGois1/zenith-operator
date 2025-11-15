@@ -1,0 +1,14 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-git
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: devin/1763232295-add-test-functions
+  build:
+    image: ttl.sh/zenith-test-function-git-$(date +%s):1h
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080

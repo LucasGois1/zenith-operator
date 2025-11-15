@@ -1,0 +1,10 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function
+status:
+  conditions:
+    - type: Ready
+      status: "False"
+      reason: Building
+      message: Pipeline de build iniciado
