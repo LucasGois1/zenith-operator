@@ -1,0 +1,15 @@
+apiVersion: eventing.knative.dev/v1
+kind: Broker
+metadata:
+  annotations:
+    # Informa ao Knative para usar a implementação 'Kafka'
+    eventing.knative.dev/broker.class: Kafka
+  name: default
+  namespace: default
+spec:
+  config:
+    # Aponta para a configuração global do Kafka
+    apiVersion: v1
+    kind: ConfigMap
+    name: kafka-broker-config
+    namespace: knative-eventing
