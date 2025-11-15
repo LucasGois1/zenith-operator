@@ -35,7 +35,7 @@ spec:
                   tekton.dev/git-0: https://github.com
               type: kubernetes.io/basic-auth
               stringData:
-                username: x-access-token
+                username: LucasGois1
                 password: __GITHUB_TOKEN__
               EOF
     
