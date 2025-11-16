@@ -1,0 +1,7 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: devin/1763232295-add-test-functions

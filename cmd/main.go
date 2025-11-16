@@ -39,8 +39,7 @@ import (
 
 	functionsv1alpha1 "github.com/lucasgois1/zenith-operator/api/v1alpha1"
 	"github.com/lucasgois1/zenith-operator/internal/controller"
-	//... outros imports
-	tektonv1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	kneventingv1 "knative.dev/eventing/pkg/apis/eventing/v1"
 	knservingv1 "knative.dev/serving/pkg/apis/serving/v1"
 	// +kubebuilder:scaffold:imports
@@ -53,7 +52,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(tektonv1beta1.AddToScheme(scheme))
+	utilruntime.Must(tektonv1.AddToScheme(scheme))
 	utilruntime.Must(knservingv1.AddToScheme(scheme))
 	utilruntime.Must(kneventingv1.AddToScheme(scheme))
 	utilruntime.Must(functionsv1alpha1.AddToScheme(scheme))

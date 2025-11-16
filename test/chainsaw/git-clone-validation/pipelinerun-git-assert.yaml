@@ -1,0 +1,33 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: test-function-git-build
+spec:
+  pipelineSpec:
+    tasks:
+      - name: fetch-source
+        taskRef:
+          kind: Task
+          name: git-clone
+        params:
+          - name: url
+            value: https://github.com/LucasGois1/zenith-test-functions
+          - name: revision
+            value: devin/1763232295-add-test-functions
+        workspaces:
+          - name: output
+            workspace: source-workspace
+      - name: build-and-push
+        taskRef:
+          kind: Task
+          name: buildpacks-phases
+        params:
+          - name: APP_IMAGE
+            value: ttl.sh/zenith-test-function-git:1h
+          - name: CNB_BUILDER_IMAGE
+            value: paketobuildpacks/builder-jammy-base:latest
+        runAfter:
+          - fetch-source
+        workspaces:
+          - name: source
+            workspace: source-workspace

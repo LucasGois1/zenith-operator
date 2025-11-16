@@ -1,0 +1,7 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-with-secret
+spec:
+  build:
+    registrySecretName: test-registry-secret
