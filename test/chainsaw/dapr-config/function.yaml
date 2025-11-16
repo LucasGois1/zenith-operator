@@ -1,0 +1,15 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-dapr
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: ttl.sh/zenith-test-dapr-$(uuidgen):1h
+  deploy:
+    dapr:
+      enabled: true
+      appID: test-dapr-app
+      appPort: 8080
