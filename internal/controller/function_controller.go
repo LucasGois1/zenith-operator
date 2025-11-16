@@ -250,12 +250,13 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Error(nil, "PipelineRun failed", "PipelineRun.Name", pipelineRun.Name)
 		// (Atualizar Status para "BuildFailed" e parar)
 		buildFailedCondition := metav1.Condition{
-			Type:    "NotReady", // Tipo de condição padrão
+			Type:    "Ready", // Usar tipo "Ready" consistentemente
 			Status:  metav1.ConditionFalse,
 			Reason:  "BuildFailed",
 			Message: "O build falhou",
 		}
 		meta.SetStatusCondition(&function.Status.Conditions, buildFailedCondition)
+		function.Status.ObservedGeneration = function.Generation
 		if err := r.Status().Update(ctx, &function); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -281,12 +282,13 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			Message: "Ocorreu um erro ao gerar o digest da imagem",
 		}
 		meta.SetStatusCondition(&function.Status.Conditions, imageErrorCondition)
+		function.Status.ObservedGeneration = function.Generation
 
 		if err := r.Status().Update(ctx, &function); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{Requeue: true}, nil // Requeue imediato para iniciar a Fase 3
+		return ctrl.Result{}, nil // Não requeue - erro permanente
 	}
 
 	// 4. Salvar o digest no Status e passar para a próxima fase.
@@ -298,6 +300,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Message: "Imagem gerada com sucesso",
 	}
 	meta.SetStatusCondition(&function.Status.Conditions, buildSucceededCondition)
+	function.Status.ObservedGeneration = function.Generation
 
 	if err := r.Status().Update(ctx, &function); err != nil {
 		return ctrl.Result{}, err
@@ -400,10 +403,39 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log.Info("Knative Service está sincronizado.")
 	// --- FIM DA FASE 3.4 ---
 
+	// Verificar se o Knative Service está pronto e atualizar URL
+	if knativeService.Status.URL != nil {
+		function.Status.URL = knativeService.Status.URL.String()
+	}
+
+	// Verificar se o KService está Ready
+	ksvcReady := false
+	for _, cond := range knativeService.Status.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			ksvcReady = true
+			break
+		}
+	}
+
+	if !ksvcReady {
+		log.Info("Knative Service ainda não está pronto, aguardando...")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
 	// ... (A lógica para a Fase 3.5: Criação do Trigger começa aqui)...
-	// Se 'eventing' não estiver configurado, pule.
+	// Se 'eventing' não estiver configurado, marcar como Ready e parar.
 	if function.Spec.Eventing.Broker == "" {
-		// (Lógica para atualizar Status para "Ready" e parar)
+		readyCondition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionTrue,
+			Reason:  "Ready",
+			Message: "Function deployed and ready to accept requests",
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, readyCondition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, &function); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -429,13 +461,14 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		readyCondition := metav1.Condition{
-			Type:    "Ready", // Tipo de condição padrão
-			Status:  metav1.ConditionFalse,
+			Type:    "Ready",
+			Status:  metav1.ConditionTrue,
 			Reason:  "Ready",
-			Message: "Deployed and ready to accept requests",
+			Message: "Function deployed with eventing and ready to accept requests",
 		}
 		// 4. Atualizar Status para "Ready"
 		meta.SetStatusCondition(&function.Status.Conditions, readyCondition)
+		function.Status.ObservedGeneration = function.Generation
 		if err := r.Status().Update(ctx, &function); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -483,6 +516,15 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 				// Isto é um slice de 'PipelineWorkspaceDeclaration'.
 				Workspaces: []tektonv1.PipelineWorkspaceDeclaration{
 					{Name: sharedWorkspaceName, Description: "", Optional: false},
+				},
+
+				// Declara os resultados que o pipeline irá expor
+				Results: []tektonv1.PipelineResult{
+					{
+						Name:        "APP_IMAGE_DIGEST",
+						Description: "The digest of the built application image",
+						Value:       tektonv1.ResultValue{Type: tektonv1.ParamTypeString, StringVal: "$(tasks.build-and-push.results.APP_IMAGE_DIGEST)"},
+					},
 				},
 
 				// 2. DEFINIÇÃO DAS TASKS:
