@@ -1,0 +1,57 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: serviceaccount-secret-binding-test
+spec:
+  description: |
+    Test that the operator correctly binds registry secrets to the default ServiceAccount.
+    This test verifies:
+    1. The operator adds the registry secret to the ServiceAccount's imagePullSecrets
+    2. The ServiceAccount is updated correctly
+  timeouts:
+    apply: 1m
+    assert: 3m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-registry-secret
+      description: Create a mock registry secret
+      try:
+        - apply:
+            file: registry-secret.yaml
+    
+    - name: create-function-with-secret
+      description: Create a Function CR that references the registry secret
+      try:
+        - apply:
+            file: function.yaml
+        - assert:
+            file: function-created-assert.yaml
+    
+    - name: verify-serviceaccount-updated
+      description: Verify that the default ServiceAccount has the secret in imagePullSecrets
+      try:
+        - assert:
+            file: serviceaccount-assert.yaml
+            timeout: 2m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-with-secret
+        - delete:
+            ref:
+              apiVersion: v1
+              kind: Secret
+              name: test-registry-secret

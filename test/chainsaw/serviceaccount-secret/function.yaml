@@ -1,0 +1,15 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-with-secret
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: devin/1763232295-add-test-functions
+  build:
+    image: ttl.sh/zenith-test-function-secret:1h
+    registrySecretName: test-registry-secret
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080

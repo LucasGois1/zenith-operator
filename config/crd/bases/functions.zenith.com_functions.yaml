@@ -51,10 +51,10 @@ spec:
                     description: |-
                       O nome do Secret do tipo 'kubernetes.io/dockerconfigjson'
                       no mesmo namespace, usado para autenticar com o registry.
+                      Opcional. Se não especificado, assume-se que o registry é público.
                     type: string
                 required:
                 - image
-                - registrySecretName
                 type: object
               deploy:
                 description: Configurações de Deploy (Knative + Dapr)
@@ -91,6 +91,10 @@ spec:
                     description: Opcional. Um mapa de atributos para filtrar eventos.
                     type: object
                 type: object
+              gitAuthSecretName:
+                description: Opcional. O nome do Secret usado para autenticar com
+                  o repositório Git privado.
+                type: string
               gitRepo:
                 description: O URL do repositório Git contendo o código-fonte da função.
                 type: string
