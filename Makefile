@@ -143,6 +143,20 @@ cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 
 ## Tool Binaries
 CHAINSAW ?= chainsaw
+CLUSTER_NAME ?= zenith-operator-test-e2e
+IMG ?= zenith-operator:test
+
+.PHONY: dev-up
+dev-up: ## Setup completo do ambiente de desenvolvimento (cluster + operator)
+	@bash hack/dev-up.sh
+
+.PHONY: dev-redeploy
+dev-redeploy: docker-build ## Rebuild e redeploy rápido do operator (sem recriar cluster)
+	@echo "📤 Loading image into kind cluster..."
+	@kind load docker-image $(IMG) --name $(CLUSTER_NAME)
+	@echo "🚀 Redeploying operator..."
+	@$(MAKE) deploy IMG=$(IMG)
+	@echo "✅ Operator redeployed!"
 
 .PHONY: test-chainsaw
 test-chainsaw: ## Run Chainsaw end-to-end tests against the current cluster
@@ -152,7 +166,19 @@ test-chainsaw: ## Run Chainsaw end-to-end tests against the current cluster
 		echo "tar -xzf /tmp/chainsaw.tar.gz -C /tmp && sudo mv /tmp/chainsaw /usr/local/bin/"; \
 		exit 1; \
 	}
-	$(CHAINSAW) test --test-dir test/chainsaw
+	$(CHAINSAW) test --test-dir test/chainsaw $(CHAINSAW_ARGS)
+
+.PHONY: test-chainsaw-git
+test-chainsaw-git: ## Run apenas o teste de git-clone validation (~2 min)
+	@$(MAKE) test-chainsaw CHAINSAW_ARGS="--test-dir test/chainsaw/git-clone-validation"
+
+.PHONY: test-chainsaw-basic
+test-chainsaw-basic: ## Run apenas o teste básico de Function (~10 min)
+	@$(MAKE) test-chainsaw CHAINSAW_ARGS="--test-dir test/chainsaw/basic-function"
+
+.PHONY: test-chainsaw-sa
+test-chainsaw-sa: ## Run apenas o teste de ServiceAccount secret binding (~2 min)
+	@$(MAKE) test-chainsaw CHAINSAW_ARGS="--test-dir test/chainsaw/serviceaccount-secret"
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
