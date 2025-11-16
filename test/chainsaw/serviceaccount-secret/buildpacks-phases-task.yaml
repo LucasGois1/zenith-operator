@@ -423,23 +423,55 @@ spec:
     - name: export
       image: $(params.CNB_BUILDER_IMAGE)
       imagePullPolicy: Always
-      command: ["/cnb/lifecycle/exporter"]
       env:
         - name: CNB_PLATFORM_API
           value: $(steps.get-labels-and-env.results.CNB_PLATFORM_API)
-      args:
-        - "-log-level=$(params.CNB_LOG_LEVEL)"
-        - "-app=$(workspaces.source.path)/$(params.SOURCE_SUBPATH)"
-        - "-layers=$(params.CNB_LAYERS_DIR)"
-        - "-group=/layers/group.toml"
-        - "-cache-dir=$(workspaces.cache.path)"
-        - "-cache-image=$(params.CNB_CACHE_IMAGE)"
-        - "-report=/layers/report.toml"
-        - "-process-type=$(params.CNB_PROCESS_TYPE)"
-        - "-uid=$(steps.get-labels-and-env.results.UID)"
-        - "-gid=$(steps.get-labels-and-env.results.GID)"
-        - "-insecure-registry=$(params.CNB_INSECURE_REGISTRIES)"
-        - "$(params.APP_IMAGE)"
+        - name: CNB_PROCESS_TYPE
+          value: $(params.CNB_PROCESS_TYPE)
+        - name: CNB_LOG_LEVEL
+          value: $(params.CNB_LOG_LEVEL)
+        - name: SOURCE_PATH
+          value: $(workspaces.source.path)/$(params.SOURCE_SUBPATH)
+        - name: CNB_LAYERS_DIR
+          value: $(params.CNB_LAYERS_DIR)
+        - name: CACHE_PATH
+          value: $(workspaces.cache.path)
+        - name: CNB_CACHE_IMAGE
+          value: $(params.CNB_CACHE_IMAGE)
+        - name: UID
+          value: $(steps.get-labels-and-env.results.UID)
+        - name: GID
+          value: $(steps.get-labels-and-env.results.GID)
+        - name: CNB_INSECURE_REGISTRIES
+          value: $(params.CNB_INSECURE_REGISTRIES)
+        - name: APP_IMAGE
+          value: $(params.APP_IMAGE)
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        
+        args=(
+          "-log-level=${CNB_LOG_LEVEL}"
+          "-app=${SOURCE_PATH}"
+          "-layers=${CNB_LAYERS_DIR}"
+          "-group=/layers/group.toml"
+          "-cache-dir=${CACHE_PATH}"
+          "-cache-image=${CNB_CACHE_IMAGE}"
+          "-report=/layers/report.toml"
+        )
+        
+        if [ -n "${CNB_PROCESS_TYPE}" ]; then
+          args+=("-process-type=${CNB_PROCESS_TYPE}")
+        fi
+        
+        args+=(
+          "-uid=${UID}"
+          "-gid=${GID}"
+          "-insecure-registry=${CNB_INSECURE_REGISTRIES}"
+          "${APP_IMAGE}"
+        )
+        
+        /cnb/lifecycle/exporter "${args[@]}"
       volumeMounts:
         - name: layers-dir
           mountPath: /layers
