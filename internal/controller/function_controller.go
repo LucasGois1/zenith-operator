@@ -25,6 +25,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -539,9 +540,16 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 				{
 					Name: sharedWorkspaceName, // Corresponde ao nome em 'pipelineSpec.workspaces'
 
-					// Define o tipo de volume como 'emptyDir'.
-					// Isto é o equivalente em Go do YAML 'emptyDir: {}'.
-					EmptyDir: &v1.EmptyDirVolumeSource{},
+					VolumeClaimTemplate: &v1.PersistentVolumeClaim{
+						Spec: v1.PersistentVolumeClaimSpec{
+							AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+							Resources: v1.VolumeResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceStorage: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
 				},
 			},
 		},
