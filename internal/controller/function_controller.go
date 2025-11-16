@@ -64,6 +64,8 @@ type FunctionReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
+//
+//nolint:gocyclo // Monolithic reconcile function; to be refactored into phases in a follow-up
 func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -185,11 +187,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Info("PipelineRun não encontrado. Criando um novo...", "PipelineRun.Name", pipelineRunName)
 
 		// 1. Construir o objeto PipelineRun em Go
-		newPipelineRun, err := r.buildPipelineRun(&function)
-		if err != nil {
-			log.Error(err, "Falha ao construir o objeto PipelineRun")
-			return ctrl.Result{}, err
-		}
+		newPipelineRun := r.buildPipelineRun(&function)
 
 		// 2. Definir o OwnerReference [2]
 		// Isso torna o 'Function' dono do 'PipelineRun'.
@@ -313,14 +311,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// 1. Construir o estado DESEJADO do Knative Service
 	// Fazemos isso primeiro para que possamos usá-lo tanto para criar quanto para comparar/atualizar.
-	desiredKsvc, err := r.buildKnativeService(&function)
-	if err != nil {
-		log.Error(err, "Falha ao construir a especificação do Knative Service desejado")
-		// (Defina uma condição de status de falha e retorne)
-		// meta.SetStatusCondition(&function.Status.Conditions,...)
-		// r.Status().Update(ctx, &function)
-		return ctrl.Result{}, err
-	}
+	desiredKsvc := r.buildKnativeService(&function)
 
 	// 2. Tentar obter o estado ATUAL do Knative Service no cluster
 	err = r.Get(ctx, types.NamespacedName{Name: knativeServiceName, Namespace: function.Namespace}, knativeService)
@@ -486,7 +477,7 @@ Este PipelineRun é projetado para:
  2. Construir uma imagem de contêiner usando Cloud Native Buildpacks com a Task 'buildpacks-phases'.
  3. Enviar a imagem para o registry especificado.
 */
-func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Function) (*tektonv1.PipelineRun, error) {
+func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Function) *tektonv1.PipelineRun {
 	pipelineRunName := function.Name + "-build"
 
 	// Define 'main' como padrão para a revisão do git se não for especificado
@@ -596,7 +587,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 /*
@@ -605,7 +596,7 @@ baseado no Spec da Função e no ImageDigest do Status.
 Ele adere à API 'v1' do Knative Serving, onde o ServiceSpec
 contém ConfigurationSpec e RouteSpec embutidos.
 */
-func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Function) (*knservingv1.Service, error) { // Substitua 'appsv1alpha1.Function' pelo seu tipo de API
+func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Function) *knservingv1.Service {
 
 	// --- Ponto de Integração do Dapr ---
 	// Estas anotações devem ser aplicadas ao TEMPLATE do Pod.[3, 4]
@@ -674,7 +665,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		},
 	}
 
-	return ksvc, nil
+	return ksvc
 }
 
 func (r *FunctionReconciler) buildKnativeTrigger(function *functionsv1alpha1.Function) *kneventingv1.Trigger {
