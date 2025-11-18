@@ -7,7 +7,7 @@ spec:
   gitRevision: devin/1763232295-add-test-functions
   gitAuthSecretName: github-auth
   build:
-    image: ttl.sh/zenith-test-function-git:1h
+    image: registry.registry.svc.cluster.local:5000/zenith-test/git-clone-validation:latest
   deploy:
     dapr:
       enabled: false

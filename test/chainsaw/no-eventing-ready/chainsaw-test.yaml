@@ -45,14 +45,19 @@ spec:
       description: Create a Function CR without eventing configuration
       try:
         - apply:
-            file: function.yaml
-    
-    - name: wait-for-build-completion
-      description: Wait for PipelineRun to complete
-      try:
-        - assert:
-            file: pipelinerun-success-assert.yaml
-            timeout: 8m
+            file: function.yaml
+        - script:
+            content: |
+              FN_NAME=test-function-no-eventing
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"
+"}{end}' | tail -n1)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
     
     - name: verify-knative-service-created
       description: Verify that a Knative Service was created

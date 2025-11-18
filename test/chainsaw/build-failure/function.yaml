@@ -7,7 +7,7 @@ spec:
   gitRevision: main
   gitAuthSecretName: github-auth
   build:
-    image: ttl.sh/zenith-test-build-fail-$(uuidgen):1h
+    image: registry.registry.svc.cluster.local:5000/zenith-test/build-failure:latest
   deploy:
     dapr:
       enabled: false
