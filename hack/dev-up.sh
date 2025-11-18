@@ -7,6 +7,15 @@ IMG="${IMG:-zenith-operator:test}"
 GITHUB_USERNAME="${GITHUB_USERNAME:-LucasGois1}"
 
 echo "🚀 Configurando ambiente de desenvolvimento..."
+echo ""
+
+echo "🔍 Verificando dependências..."
+bash hack/verify-env.sh || {
+    echo ""
+    echo "⚠️  Algumas dependências estão faltando. Instale-as antes de continuar."
+    exit 1
+}
+echo ""
 
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
   echo "📦 Criando cluster kind..."
@@ -216,8 +225,13 @@ echo ""
 echo "✅ Ambiente pronto!"
 echo ""
 echo "Comandos úteis:"
+echo "  bash hack/test-single.sh <suite>      # Executar um teste específico"
+echo "  bash hack/test-debug.sh <suite>       # Executar teste com namespace preservado"
+echo "  bash hack/dev-redeploy.sh             # Rebuild e redeploy rápido do operator"
+echo "  bash hack/wait-pr.sh <ns> <fn>        # Aguardar PipelineRun completar"
 echo "  make test-chainsaw                    # Executar todos os testes (~10 min)"
-echo "  make test-chainsaw-git                # Executar apenas teste de git-clone (~2 min)"
-echo "  make test-chainsaw-basic              # Executar apenas teste básico (~10 min)"
-echo "  make dev-redeploy                     # Rebuild e redeploy rápido"
+echo ""
+echo "Exemplos:"
+echo "  bash hack/test-single.sh eventing-trigger"
+echo "  bash hack/test-debug.sh e2e-http-basic"
 echo ""
