@@ -1,0 +1,137 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: ksvc-update-image-test
+spec:
+  description: |
+    Test that Knative Service is updated when Function image changes.
+    This test verifies:
+    1. Function deploys successfully with initial image
+    2. Updating the image digest triggers KService update
+    3. Function status reflects the new image
+    4. ObservedGeneration is updated correctly
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-initial-build
+      description: Wait for initial PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-initial-knative-service
+      description: Verify that initial Knative Service was created
+      try:
+        - assert:
+            file: knative-service-initial-assert.yaml
+            timeout: 1m
+    
+    - name: verify-initial-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: capture-initial-generation
+      description: Capture initial ObservedGeneration
+      try:
+        - script:
+            content: |
+              INITIAL_GEN=$(kubectl get function test-function-update-image -n $NAMESPACE -o jsonpath='{.status.observedGeneration}')
+              echo "Initial ObservedGeneration: $INITIAL_GEN"
+              echo "$INITIAL_GEN" > /tmp/initial-generation.txt
+    
+    - name: simulate-image-update
+      description: Simulate new build by updating imageDigest in status
+      try:
+        - script:
+            content: |
+              NEW_DIGEST="docker.io/zenith-test/test-function-update-image@sha256:$(openssl rand -hex 32)"
+              kubectl patch function test-function-update-image -n $NAMESPACE --type=merge --subresource=status -p "{\"status\":{\"imageDigest\":\"$NEW_DIGEST\"}}"
+              echo "Updated imageDigest to: $NEW_DIGEST"
+              echo "$NEW_DIGEST" > /tmp/new-digest.txt
+    
+    - name: trigger-reconciliation
+      description: Trigger reconciliation by updating spec
+      try:
+        - script:
+            content: |
+              kubectl annotate function test-function-update-image -n $NAMESPACE test-update="$(date +%s)" --overwrite
+    
+    - name: verify-ksvc-image-updated
+      description: Verify Knative Service image was updated
+      try:
+        - script:
+            content: |
+              NEW_DIGEST=$(cat /tmp/new-digest.txt)
+              sleep 5  # Give controller time to reconcile
+              
+              KSVC_IMAGE=$(kubectl get service.serving.knative.dev test-function-update-image -n $NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}')
+              
+              if [ "$KSVC_IMAGE" = "$NEW_DIGEST" ]; then
+                echo "SUCCESS: KService image updated to $NEW_DIGEST"
+              else
+                echo "ERROR: KService image is $KSVC_IMAGE, expected $NEW_DIGEST"
+                exit 1
+              fi
+            timeout: 30s
+    
+    - name: verify-generation-updated
+      description: Verify ObservedGeneration was updated
+      try:
+        - script:
+            content: |
+              INITIAL_GEN=$(cat /tmp/initial-generation.txt)
+              CURRENT_GEN=$(kubectl get function test-function-update-image -n $NAMESPACE -o jsonpath='{.status.observedGeneration}')
+              
+              if [ "$CURRENT_GEN" -gt "$INITIAL_GEN" ]; then
+                echo "SUCCESS: ObservedGeneration updated from $INITIAL_GEN to $CURRENT_GEN"
+              else
+                echo "ERROR: ObservedGeneration not updated (initial: $INITIAL_GEN, current: $CURRENT_GEN)"
+                exit 1
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-update-image
