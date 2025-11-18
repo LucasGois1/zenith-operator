@@ -1,0 +1,8 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: test-function-build-fail-build
+status:
+  conditions:
+    - type: Succeeded
+      status: "False"

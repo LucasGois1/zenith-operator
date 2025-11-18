@@ -1,0 +1,15 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-git-auth
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: ttl.sh/zenith-test-git-auth-$(uuidgen):1h
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080

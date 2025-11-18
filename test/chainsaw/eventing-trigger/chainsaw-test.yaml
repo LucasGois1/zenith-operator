@@ -1,0 +1,84 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: eventing-trigger-test
+spec:
+  description: |
+    Test that a Function with eventing configuration creates a Trigger.
+    This test verifies:
+    1. Function with eventing.broker and filters creates a Trigger
+    2. Trigger has correct broker, filters, and subscriber configuration
+    3. Function status is updated to Ready=True
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function-with-eventing
+      description: Create a Function CR with eventing configuration
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build-completion
+      description: Wait for PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-knative-service-created
+      description: Verify that a Knative Service was created
+      try:
+        - assert:
+            file: knative-service-assert.yaml
+            timeout: 1m
+    
+    - name: verify-trigger-created
+      description: Verify that a Trigger was created with correct configuration
+      try:
+        - assert:
+            file: trigger-assert.yaml
+            timeout: 1m
+    
+    - name: verify-function-ready
+      description: Verify Function status shows Ready=True
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-eventing

@@ -1,0 +1,15 @@
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: test-function-eventing-trigger
+spec:
+  broker: default
+  filter:
+    attributes:
+      type: com.example.test.event
+      source: test-source
+  subscriber:
+    ref:
+      kind: Service
+      name: test-function-eventing
+      apiVersion: serving.knative.dev/v1
