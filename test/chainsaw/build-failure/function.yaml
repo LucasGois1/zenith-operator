@@ -1,0 +1,15 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-build-fail
+spec:
+  gitRepo: https://github.com/LucasGois1/this-repo-does-not-exist-404
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: ttl.sh/zenith-test-build-fail-$(uuidgen):1h
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080

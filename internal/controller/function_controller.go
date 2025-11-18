@@ -64,6 +64,8 @@ type FunctionReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
+//
+//nolint:gocyclo // Monolithic reconcile function; to be refactored into phases in a follow-up
 func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -185,11 +187,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Info("PipelineRun não encontrado. Criando um novo...", "PipelineRun.Name", pipelineRunName)
 
 		// 1. Construir o objeto PipelineRun em Go
-		newPipelineRun, err := r.buildPipelineRun(&function)
-		if err != nil {
-			log.Error(err, "Falha ao construir o objeto PipelineRun")
-			return ctrl.Result{}, err
-		}
+		newPipelineRun := r.buildPipelineRun(&function)
 
 		// 2. Definir o OwnerReference [2]
 		// Isso torna o 'Function' dono do 'PipelineRun'.
@@ -250,12 +248,13 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Error(nil, "PipelineRun failed", "PipelineRun.Name", pipelineRun.Name)
 		// (Atualizar Status para "BuildFailed" e parar)
 		buildFailedCondition := metav1.Condition{
-			Type:    "NotReady", // Tipo de condição padrão
+			Type:    "Ready", // Usar tipo "Ready" consistentemente
 			Status:  metav1.ConditionFalse,
 			Reason:  "BuildFailed",
 			Message: "O build falhou",
 		}
 		meta.SetStatusCondition(&function.Status.Conditions, buildFailedCondition)
+		function.Status.ObservedGeneration = function.Generation
 		if err := r.Status().Update(ctx, &function); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -281,12 +280,13 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			Message: "Ocorreu um erro ao gerar o digest da imagem",
 		}
 		meta.SetStatusCondition(&function.Status.Conditions, imageErrorCondition)
+		function.Status.ObservedGeneration = function.Generation
 
 		if err := r.Status().Update(ctx, &function); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{Requeue: true}, nil // Requeue imediato para iniciar a Fase 3
+		return ctrl.Result{}, nil // Não requeue - erro permanente
 	}
 
 	// 4. Salvar o digest no Status e passar para a próxima fase.
@@ -298,6 +298,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Message: "Imagem gerada com sucesso",
 	}
 	meta.SetStatusCondition(&function.Status.Conditions, buildSucceededCondition)
+	function.Status.ObservedGeneration = function.Generation
 
 	if err := r.Status().Update(ctx, &function); err != nil {
 		return ctrl.Result{}, err
@@ -310,14 +311,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// 1. Construir o estado DESEJADO do Knative Service
 	// Fazemos isso primeiro para que possamos usá-lo tanto para criar quanto para comparar/atualizar.
-	desiredKsvc, err := r.buildKnativeService(&function)
-	if err != nil {
-		log.Error(err, "Falha ao construir a especificação do Knative Service desejado")
-		// (Defina uma condição de status de falha e retorne)
-		// meta.SetStatusCondition(&function.Status.Conditions,...)
-		// r.Status().Update(ctx, &function)
-		return ctrl.Result{}, err
-	}
+	desiredKsvc := r.buildKnativeService(&function)
 
 	// 2. Tentar obter o estado ATUAL do Knative Service no cluster
 	err = r.Get(ctx, types.NamespacedName{Name: knativeServiceName, Namespace: function.Namespace}, knativeService)
@@ -400,10 +394,39 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log.Info("Knative Service está sincronizado.")
 	// --- FIM DA FASE 3.4 ---
 
+	// Verificar se o Knative Service está pronto e atualizar URL
+	if knativeService.Status.URL != nil {
+		function.Status.URL = knativeService.Status.URL.String()
+	}
+
+	// Verificar se o KService está Ready
+	ksvcReady := false
+	for _, cond := range knativeService.Status.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			ksvcReady = true
+			break
+		}
+	}
+
+	if !ksvcReady {
+		log.Info("Knative Service ainda não está pronto, aguardando...")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
 	// ... (A lógica para a Fase 3.5: Criação do Trigger começa aqui)...
-	// Se 'eventing' não estiver configurado, pule.
+	// Se 'eventing' não estiver configurado, marcar como Ready e parar.
 	if function.Spec.Eventing.Broker == "" {
-		// (Lógica para atualizar Status para "Ready" e parar)
+		readyCondition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionTrue,
+			Reason:  "Ready",
+			Message: "Function deployed and ready to accept requests",
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, readyCondition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, &function); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -429,13 +452,14 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		readyCondition := metav1.Condition{
-			Type:    "Ready", // Tipo de condição padrão
-			Status:  metav1.ConditionFalse,
+			Type:    "Ready",
+			Status:  metav1.ConditionTrue,
 			Reason:  "Ready",
-			Message: "Deployed and ready to accept requests",
+			Message: "Function deployed with eventing and ready to accept requests",
 		}
 		// 4. Atualizar Status para "Ready"
 		meta.SetStatusCondition(&function.Status.Conditions, readyCondition)
+		function.Status.ObservedGeneration = function.Generation
 		if err := r.Status().Update(ctx, &function); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -453,7 +477,7 @@ Este PipelineRun é projetado para:
  2. Construir uma imagem de contêiner usando Cloud Native Buildpacks com a Task 'buildpacks-phases'.
  3. Enviar a imagem para o registry especificado.
 */
-func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Function) (*tektonv1.PipelineRun, error) {
+func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Function) *tektonv1.PipelineRun {
 	pipelineRunName := function.Name + "-build"
 
 	// Define 'main' como padrão para a revisão do git se não for especificado
@@ -483,6 +507,15 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 				// Isto é um slice de 'PipelineWorkspaceDeclaration'.
 				Workspaces: []tektonv1.PipelineWorkspaceDeclaration{
 					{Name: sharedWorkspaceName, Description: "", Optional: false},
+				},
+
+				// Declara os resultados que o pipeline irá expor
+				Results: []tektonv1.PipelineResult{
+					{
+						Name:        "APP_IMAGE_DIGEST",
+						Description: "The digest of the built application image",
+						Value:       tektonv1.ResultValue{Type: tektonv1.ParamTypeString, StringVal: "$(tasks.build-and-push.results.APP_IMAGE_DIGEST)"},
+					},
 				},
 
 				// 2. DEFINIÇÃO DAS TASKS:
@@ -554,7 +587,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 /*
@@ -563,7 +596,7 @@ baseado no Spec da Função e no ImageDigest do Status.
 Ele adere à API 'v1' do Knative Serving, onde o ServiceSpec
 contém ConfigurationSpec e RouteSpec embutidos.
 */
-func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Function) (*knservingv1.Service, error) { // Substitua 'appsv1alpha1.Function' pelo seu tipo de API
+func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Function) *knservingv1.Service {
 
 	// --- Ponto de Integração do Dapr ---
 	// Estas anotações devem ser aplicadas ao TEMPLATE do Pod.[3, 4]
@@ -632,7 +665,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		},
 	}
 
-	return ksvc, nil
+	return ksvc
 }
 
 func (r *FunctionReconciler) buildKnativeTrigger(function *functionsv1alpha1.Function) *kneventingv1.Trigger {
