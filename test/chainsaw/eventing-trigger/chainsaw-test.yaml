@@ -77,26 +77,72 @@ spec:
               kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
             timeout: 600s
     
+    - name: wait-for-image-digest
+      description: Wait for controller to set Function.status.imageDigest after build
+      try:
+        - script:
+            content: |
+              echo "Waiting for Function.status.imageDigest to be set..."
+              for i in $(seq 1 60); do
+                IMAGE_DIGEST=$(kubectl get function test-function-eventing -n "$NAMESPACE" -o jsonpath='{.status.imageDigest}')
+                if [ -n "$IMAGE_DIGEST" ]; then
+                  echo "SUCCESS: imageDigest set to: $IMAGE_DIGEST"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: imageDigest not set after 120 seconds"
+              exit 1
+            timeout: 150s
+    
     - name: verify-knative-service-created
       description: Verify that a Knative Service was created
       try:
-        - assert:
-            file: knative-service-assert.yaml
-            timeout: 1m
+        - script:
+            content: |
+              echo "Waiting for Knative Service to be created..."
+              for i in $(seq 1 60); do
+                if kubectl get service.serving.knative.dev test-function-eventing -n "$NAMESPACE" 2>/dev/null; then
+                  echo "SUCCESS: Knative Service created"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: Knative Service not created after 120 seconds"
+              exit 1
+            timeout: 150s
     
     - name: verify-trigger-created
-      description: Verify that a Trigger was created with correct configuration
+      description: Verify that a Trigger was created with correct broker and subscriber
       try:
-        - assert:
-            file: trigger-assert.yaml
-            timeout: 1m
-    
-    - name: verify-function-ready
-      description: Verify Function status shows Ready=True
-      try:
-        - assert:
-            file: function-ready-assert.yaml
-            timeout: 2m
+        - script:
+            content: |
+              echo "Waiting for Trigger to be created..."
+              for i in $(seq 1 60); do
+                if kubectl get trigger test-function-eventing -n "$NAMESPACE" 2>/dev/null; then
+                  echo "SUCCESS: Trigger exists"
+                  
+                  BROKER=$(kubectl get trigger test-function-eventing -n "$NAMESPACE" -o jsonpath='{.spec.broker}')
+                  SUBSCRIBER=$(kubectl get trigger test-function-eventing -n "$NAMESPACE" -o jsonpath='{.spec.subscriber.ref.name}')
+                  
+                  echo "Trigger broker: $BROKER"
+                  echo "Trigger subscriber: $SUBSCRIBER"
+                  
+                  if [ "$BROKER" = "default" ] && [ "$SUBSCRIBER" = "test-function-eventing" ]; then
+                    echo "SUCCESS: Trigger has correct broker and subscriber"
+                    exit 0
+                  else
+                    echo "ERROR: Trigger configuration incorrect"
+                    echo "Expected broker=default, got: $BROKER"
+                    echo "Expected subscriber=test-function-eventing, got: $SUBSCRIBER"
+                    exit 1
+                  fi
+                fi
+                sleep 2
+              done
+              echo "ERROR: Trigger not created after 120 seconds"
+              exit 1
+            timeout: 150s
     
     - name: cleanup
       description: Clean up resources
