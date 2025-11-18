@@ -633,6 +633,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 							{Name: "APP_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: function.Spec.Build.Image}},
 							{Name: "CNB_BUILDER_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "paketobuildpacks/builder-jammy-base:latest"}},
 							{Name: "CNB_PROCESS_TYPE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: ""}},
+							{Name: "CNB_INSECURE_REGISTRIES", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "registry.registry.svc.cluster.local:5000"}},
 						},
 					},
 				},

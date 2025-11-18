@@ -7,7 +7,7 @@ spec:
   gitRevision: main
   gitAuthSecretName: github-auth
   build:
-    image: docker.io/zenith-test/test-function-dapr-update
+    image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-dapr-update
   deploy:
     dapr:
       enabled: false

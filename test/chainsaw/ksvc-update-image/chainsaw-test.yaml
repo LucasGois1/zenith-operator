@@ -82,7 +82,7 @@ spec:
       try:
         - script:
             content: |
-              NEW_DIGEST="docker.io/zenith-test/test-function-update-image@sha256:$(openssl rand -hex 32)"
+              NEW_DIGEST="registry.registry.svc.cluster.local:5000/zenith-test/test-function-update-image@sha256:$(openssl rand -hex 32)"
               kubectl patch function test-function-update-image -n $NAMESPACE --type=merge --subresource=status -p "{\"status\":{\"imageDigest\":\"$NEW_DIGEST\"}}"
               echo "Updated imageDigest to: $NEW_DIGEST"
               echo "$NEW_DIGEST" > /tmp/new-digest.txt
