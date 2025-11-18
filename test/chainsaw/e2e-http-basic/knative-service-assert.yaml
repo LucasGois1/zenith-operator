@@ -6,4 +6,4 @@ spec:
   template:
     spec:
       containers:
-        - image: ($image != '')
+        - image: (contains(@, 'registry.registry.svc.cluster.local:5000/zenith-test/test-function-http-basic'))
