@@ -72,8 +72,82 @@ if ! kubectl get namespace kong 2>/dev/null; then
   echo "⏳ Aguardando Kong ficar pronto..."
   kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=controller -n kong --timeout=300s
   kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=gateway -n kong --timeout=300s
+  
+  echo "📦 Configurando Kong proxy como NodePort para kind..."
+  kubectl patch svc kong-gateway-proxy -n kong -p '{"spec":{"type":"NodePort"}}'
 else
   echo "✅ Kong Ingress Controller já instalado"
+fi
+
+KONG_NODE_PORT=$(kubectl get svc kong-gateway-proxy -n kong -o jsonpath='{.spec.ports[?(@.name=="kong-proxy")].nodePort}')
+KONG_NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+if [ -n "$KONG_NODE_PORT" ] && [ -n "$KONG_NODE_IP" ]; then
+  echo "📍 Kong proxy acessível em: http://${KONG_NODE_IP}:${KONG_NODE_PORT}"
+  echo "   Use com Host header para acessar functions: curl -H 'Host: <function-url>' http://${KONG_NODE_IP}:${KONG_NODE_PORT}"
+fi
+
+if ! kubectl get namespace registry 2>/dev/null; then
+  echo "📦 Instalando registry local para buildpacks..."
+  kubectl create namespace registry
+  cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-pvc
+  namespace: registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+      - name: registry
+        image: registry:2
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: registry-storage
+          mountPath: /var/lib/registry
+      volumes:
+      - name: registry-storage
+        persistentVolumeClaim:
+          claimName: registry-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+  selector:
+    app: registry
+EOF
+  echo "⏳ Aguardando registry ficar pronto..."
+  kubectl wait --for=condition=available --timeout=60s deployment/registry -n registry
+  echo "📍 Registry local acessível em: registry.registry.svc.cluster.local:5000"
+else
+  echo "✅ Registry local já instalado"
 fi
 
 if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev/null; then

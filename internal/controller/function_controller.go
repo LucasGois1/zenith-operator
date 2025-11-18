@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
@@ -466,10 +468,158 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil // Fim!
+	} else if err != nil {
+		// Erro real ao tentar o Get
+		log.Error(err, "Falha ao obter Knative Trigger")
+		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil // Já existe, tudo pronto.
+	// --- CAMINHO DE ATUALIZAÇÃO DO TRIGGER ---
+	// Se chegamos aqui, o Trigger FOI encontrado.
+	log.Info("Knative Trigger encontrado. Verificando se há atualizações...")
 
+	// Construir o Trigger desejado
+	desiredTrigger := r.buildKnativeTrigger(&function)
+
+	needsUpdate = false
+
+	// 1. Verificar se o broker mudou
+	if trigger.Spec.Broker != desiredTrigger.Spec.Broker {
+		log.Info("Broker mudou, marcando para atualização.", "Atual", trigger.Spec.Broker, "Desejado", desiredTrigger.Spec.Broker)
+		needsUpdate = true
+	}
+
+	// 2. Verificar se os filtros mudaram
+	// Comparar os atributos do filtro
+	currentFilters := trigger.Spec.Filter
+	desiredFilters := desiredTrigger.Spec.Filter
+
+	if currentFilters == nil && desiredFilters != nil {
+		needsUpdate = true
+	} else if currentFilters != nil && desiredFilters == nil {
+		needsUpdate = true
+	} else if currentFilters != nil && desiredFilters != nil {
+		// Comparar os atributos
+		if len(currentFilters.Attributes) != len(desiredFilters.Attributes) {
+			needsUpdate = true
+		} else {
+			for k, v := range desiredFilters.Attributes {
+				if currentFilters.Attributes[k] != v {
+					log.Info("Filtros do Trigger mudaram, marcando para atualização.")
+					needsUpdate = true
+					break
+				}
+			}
+		}
+	}
+
+	// 3. Executar a atualização se necessário
+	if needsUpdate {
+		log.Info("Atualizando Knative Trigger...")
+		// Atualiza o spec do objeto existente com o spec desejado
+		trigger.Spec = desiredTrigger.Spec
+		if err := r.Update(ctx, trigger); err != nil {
+			log.Error(err, "Falha ao atualizar Knative Trigger")
+			return ctrl.Result{}, err
+		}
+		log.Info("Knative Trigger atualizado com sucesso.")
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	log.Info("Knative Trigger está sincronizado.")
+
+	readyCondition := metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionTrue,
+		Reason:  "Ready",
+		Message: "Function deployed with eventing and ready to accept requests",
+	}
+	meta.SetStatusCondition(&function.Status.Conditions, readyCondition)
+	function.Status.ObservedGeneration = function.Generation
+	if err := r.Status().Update(ctx, &function); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil // Tudo pronto.
+
+}
+
+/*
+buildPipelineParams constrói os parâmetros para a task de buildpacks.
+Implementa lógica inteligente para detectar quando usar registries inseguros:
+ 1. Verifica variável de ambiente INSECURE_REGISTRIES para configuração explícita
+ 2. Detecta automaticamente registries locais/cluster-internal baseado no hostname da imagem
+ 3. Suporta múltiplos registries inseguros separados por vírgula
+*/
+func (r *FunctionReconciler) buildPipelineParams(function *functionsv1alpha1.Function) []tektonv1.Param {
+	params := []tektonv1.Param{
+		{Name: "APP_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: function.Spec.Build.Image}},
+		{Name: "CNB_BUILDER_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "paketobuildpacks/builder-jammy-base:latest"}},
+		{Name: "CNB_PROCESS_TYPE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: ""}},
+	}
+
+	// Determinar registries inseguros usando lógica inteligente
+	insecureRegistries := r.detectInsecureRegistries(function.Spec.Build.Image)
+	if insecureRegistries != "" {
+		params = append(params, tektonv1.Param{
+			Name:  "CNB_INSECURE_REGISTRIES",
+			Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: insecureRegistries},
+		})
+	}
+
+	return params
+}
+
+/*
+detectInsecureRegistries implementa lógica inteligente para detectar registries inseguros.
+Prioridade de detecção:
+ 1. Variável de ambiente INSECURE_REGISTRIES (configuração explícita do usuário)
+ 2. Auto-detecção baseada no hostname da imagem:
+    - Registries cluster-internal (.svc.cluster.local)
+    - Registries localhost (localhost, 127.0.0.1)
+    - Registries com portas não-padrão (indicam ambiente de desenvolvimento)
+ 3. Retorna string vazia para registries públicos conhecidos (docker.io, gcr.io, etc.)
+*/
+func (r *FunctionReconciler) detectInsecureRegistries(imageURL string) string {
+	// 1. Verificar configuração explícita via variável de ambiente
+	if envInsecure := os.Getenv("INSECURE_REGISTRIES"); envInsecure != "" {
+		return envInsecure
+	}
+
+	parts := strings.Split(imageURL, "/")
+	if len(parts) == 0 {
+		return ""
+	}
+
+	if len(parts) == 1 {
+		return ""
+	}
+
+	potentialRegistry := parts[0]
+
+	
+	if strings.Contains(potentialRegistry, ".svc.cluster.local") {
+		return potentialRegistry
+	}
+
+	if strings.HasPrefix(potentialRegistry, "localhost") || 
+	   strings.HasPrefix(potentialRegistry, "127.0.0.1") {
+		return potentialRegistry
+	}
+
+	if strings.Contains(potentialRegistry, ":") {
+		// Verificar se não é um registry público conhecido
+		if !strings.Contains(potentialRegistry, "docker.io") &&
+		   !strings.Contains(potentialRegistry, "gcr.io") &&
+		   !strings.Contains(potentialRegistry, "ghcr.io") &&
+		   !strings.Contains(potentialRegistry, "quay.io") &&
+		   !strings.Contains(potentialRegistry, "registry.k8s.io") {
+			return potentialRegistry
+		}
+	}
+
+	// Retorna string vazia (sem CNB_INSECURE_REGISTRIES)
+	return ""
 }
 
 /*
@@ -558,12 +708,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 								Workspace: sharedWorkspaceName, // Mapeia para o mesmo workspace
 							},
 						},
-						Params: []tektonv1.Param{
-							// Passa o nome da imagem de destino para a task [5]
-							{Name: "APP_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: function.Spec.Build.Image}},
-							{Name: "CNB_BUILDER_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "paketobuildpacks/builder-jammy-base:latest"}},
-							{Name: "CNB_PROCESS_TYPE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: ""}},
-						},
+						Params: r.buildPipelineParams(function),
 					},
 				},
 			},

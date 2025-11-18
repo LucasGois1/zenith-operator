@@ -1,0 +1,150 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: trigger-update-test
+spec:
+  description: |
+    Test that controller updates Trigger when eventing config changes.
+    This test verifies:
+    1. Function with eventing deploys successfully
+    2. Trigger is created with initial config
+    3. Updating broker/filters triggers Trigger update
+    4. Trigger spec reflects the new configuration
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-broker
+      description: Create a Knative Broker for eventing
+      try:
+        - apply:
+            file: broker.yaml
+    
+    - name: create-function-with-eventing
+      description: Create a Function CR with eventing config
+      try:
+        - apply:
+            file: function-initial.yaml
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-initial-trigger
+      description: Verify Trigger was created with initial config
+      try:
+        - assert:
+            file: trigger-initial-assert.yaml
+            timeout: 1m
+    
+    - name: capture-initial-trigger-spec
+      description: Capture initial Trigger spec
+      try:
+        - script:
+            content: |
+              INITIAL_BROKER=$(kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o jsonpath='{.spec.broker}')
+              INITIAL_FILTER=$(kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o jsonpath='{.spec.filter.attributes.type}')
+              
+              echo "Initial broker: $INITIAL_BROKER"
+              echo "Initial filter type: $INITIAL_FILTER"
+              
+              echo "$INITIAL_BROKER" > /tmp/initial-broker.txt
+              echo "$INITIAL_FILTER" > /tmp/initial-filter.txt
+    
+    - name: update-function-eventing-config
+      description: Update Function with new eventing configuration
+      try:
+        - apply:
+            file: function-updated.yaml
+    
+    - name: wait-for-trigger-update
+      description: Wait for Trigger to be updated
+      try:
+        - script:
+            content: |
+              echo "Waiting for Trigger to be updated..."
+              sleep 5
+              
+              INITIAL_FILTER=$(cat /tmp/initial-filter.txt)
+              
+              for i in {1..30}; do
+                CURRENT_FILTER=$(kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o jsonpath='{.spec.filter.attributes.type}')
+                
+                if [ "$CURRENT_FILTER" != "$INITIAL_FILTER" ]; then
+                  echo "SUCCESS: Trigger filter updated from '$INITIAL_FILTER' to '$CURRENT_FILTER'"
+                  break
+                fi
+                
+                if [ $i -eq 30 ]; then
+                  echo "ERROR: Trigger not updated after 30 seconds"
+                  exit 1
+                fi
+                
+                sleep 1
+              done
+            timeout: 45s
+    
+    - name: verify-updated-trigger
+      description: Verify Trigger has new configuration
+      try:
+        - assert:
+            file: trigger-updated-assert.yaml
+            timeout: 1m
+    
+    - name: verify-still-ready
+      description: Verify Function is still Ready after update
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 1m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-trigger-update
+        - delete:
+            ref:
+              apiVersion: eventing.knative.dev/v1
+              kind: Broker
+              name: test-broker

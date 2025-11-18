@@ -1,0 +1,101 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: pipelinerun-progress-test
+spec:
+  description: |
+    Test that controller correctly handles PipelineRun in progress.
+    This test verifies:
+    1. Function status shows Building while PipelineRun is running
+    2. Controller requeues after 30 seconds (inferred by status persistence)
+    3. Function eventually reaches Ready when build completes
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-pipelinerun-created
+      description: Verify PipelineRun was created
+      try:
+        - assert:
+            file: pipelinerun-assert.yaml
+            timeout: 1m
+    
+    - name: verify-building-status-persists
+      description: Verify Function status shows Building while PR is running
+      try:
+        - assert:
+            file: function-building-assert.yaml
+            timeout: 1m
+    
+    - name: wait-short-period
+      description: Wait to verify status persists (controller requeues)
+      try:
+        - script:
+            content: |
+              echo "Waiting 35 seconds to verify Building status persists..."
+              sleep 35
+              
+              STATUS_REASON=$(kubectl get function test-function-progress -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}')
+              
+              if [ "$STATUS_REASON" = "Building" ] || [ "$STATUS_REASON" = "BuildSucceeded" ]; then
+                echo "SUCCESS: Status is $STATUS_REASON (controller is requeuing correctly)"
+              else
+                echo "ERROR: Unexpected status reason: $STATUS_REASON"
+                exit 1
+              fi
+    
+    - name: wait-for-build-completion
+      description: Wait for PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-final-ready
+      description: Verify Function eventually reaches Ready
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-progress

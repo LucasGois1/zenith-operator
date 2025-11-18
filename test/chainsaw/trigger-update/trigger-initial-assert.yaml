@@ -1,0 +1,9 @@
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: test-function-trigger-update-trigger
+spec:
+  broker: test-broker
+  filter:
+    attributes:
+      type: com.example.event.v1
