@@ -1,0 +1,146 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: update-no-rebuild-test
+spec:
+  description: |
+    Test that updating Function spec doesn't trigger rebuild (immutable builds).
+    This test verifies:
+    1. Function deploys successfully with initial gitRevision
+    2. Updating gitRevision doesn't create new PipelineRun
+    3. This documents the immutable build behavior
+    4. Function continues using original image
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function-initial.yaml
+    
+    - name: wait-for-initial-build
+      description: Wait for initial PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: capture-initial-image
+      description: Capture initial image digest
+      try:
+        - script:
+            content: |
+              INITIAL_IMAGE=$(kubectl get function test-function-no-rebuild -n $NAMESPACE -o jsonpath='{.status.imageDigest}')
+              echo "Initial image: $INITIAL_IMAGE"
+              echo "$INITIAL_IMAGE" > /tmp/initial-image.txt
+    
+    - name: count-initial-pipelineruns
+      description: Count PipelineRuns before update
+      try:
+        - script:
+            content: |
+              INITIAL_COUNT=$(kubectl get pipelineruns -n $NAMESPACE -l functions.zenith.com/function=test-function-no-rebuild --no-headers 2>/dev/null | wc -l)
+              echo "Initial PipelineRun count: $INITIAL_COUNT"
+              echo "$INITIAL_COUNT" > /tmp/initial-pr-count.txt
+    
+    - name: update-function-gitrevision
+      description: Update Function gitRevision
+      try:
+        - apply:
+            file: function-updated.yaml
+    
+    - name: wait-for-reconciliation
+      description: Wait for reconciliation to complete
+      try:
+        - script:
+            content: |
+              echo "Waiting for reconciliation..."
+              sleep 10
+    
+    - name: verify-no-new-pipelinerun
+      description: Verify no new PipelineRun was created
+      try:
+        - script:
+            content: |
+              INITIAL_COUNT=$(cat /tmp/initial-pr-count.txt)
+              CURRENT_COUNT=$(kubectl get pipelineruns -n $NAMESPACE -l functions.zenith.com/function=test-function-no-rebuild --no-headers 2>/dev/null | wc -l)
+              
+              echo "Initial PipelineRun count: $INITIAL_COUNT"
+              echo "Current PipelineRun count: $CURRENT_COUNT"
+              
+              if [ "$INITIAL_COUNT" = "$CURRENT_COUNT" ]; then
+                echo "SUCCESS: No new PipelineRun created (immutable build behavior)"
+              else
+                echo "ERROR: New PipelineRun was created"
+                exit 1
+              fi
+    
+    - name: verify-image-unchanged
+      description: Verify image digest hasn't changed
+      try:
+        - script:
+            content: |
+              INITIAL_IMAGE=$(cat /tmp/initial-image.txt)
+              CURRENT_IMAGE=$(kubectl get function test-function-no-rebuild -n $NAMESPACE -o jsonpath='{.status.imageDigest}')
+              
+              echo "Initial image: $INITIAL_IMAGE"
+              echo "Current image: $CURRENT_IMAGE"
+              
+              if [ "$INITIAL_IMAGE" = "$CURRENT_IMAGE" ]; then
+                echo "SUCCESS: Image digest unchanged (immutable build)"
+              else
+                echo "ERROR: Image digest changed unexpectedly"
+                exit 1
+              fi
+    
+    - name: verify-still-ready
+      description: Verify Function is still Ready
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 1m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-no-rebuild
