@@ -50,16 +50,26 @@ spec:
     - name: wait-for-initial-build
       description: Wait for initial PipelineRun to complete
       try:
-        - assert:
-            file: pipelinerun-success-assert.yaml
-            timeout: 8m
+        - script:
+            content: |
+              FN_NAME=test-function-update-image
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"\n"}{end}' | tail -n1)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
     
     - name: verify-initial-knative-service
       description: Verify that initial Knative Service was created
       try:
-        - assert:
-            file: knative-service-initial-assert.yaml
-            timeout: 1m
+        - script:
+            content: |
+              IMAGE=$(kubectl get service.serving.knative.dev test-function-update-image -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].image}')
+              test -n "$IMAGE" || { echo "ERROR: KService image is empty"; exit 1; }
+              echo "SUCCESS: KService created with image: $IMAGE"
     
     - name: verify-initial-ready
       description: Verify Function reaches Ready status
