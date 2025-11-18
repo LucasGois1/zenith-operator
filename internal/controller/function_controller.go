@@ -597,23 +597,22 @@ func (r *FunctionReconciler) detectInsecureRegistries(imageURL string) string {
 
 	potentialRegistry := parts[0]
 
-	
 	if strings.Contains(potentialRegistry, ".svc.cluster.local") {
 		return potentialRegistry
 	}
 
-	if strings.HasPrefix(potentialRegistry, "localhost") || 
-	   strings.HasPrefix(potentialRegistry, "127.0.0.1") {
+	if strings.HasPrefix(potentialRegistry, "localhost") ||
+		strings.HasPrefix(potentialRegistry, "127.0.0.1") {
 		return potentialRegistry
 	}
 
 	if strings.Contains(potentialRegistry, ":") {
 		// Verificar se não é um registry público conhecido
 		if !strings.Contains(potentialRegistry, "docker.io") &&
-		   !strings.Contains(potentialRegistry, "gcr.io") &&
-		   !strings.Contains(potentialRegistry, "ghcr.io") &&
-		   !strings.Contains(potentialRegistry, "quay.io") &&
-		   !strings.Contains(potentialRegistry, "registry.k8s.io") {
+			!strings.Contains(potentialRegistry, "gcr.io") &&
+			!strings.Contains(potentialRegistry, "ghcr.io") &&
+			!strings.Contains(potentialRegistry, "quay.io") &&
+			!strings.Contains(potentialRegistry, "registry.k8s.io") {
 			return potentialRegistry
 		}
 	}
