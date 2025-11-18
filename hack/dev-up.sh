@@ -77,8 +77,13 @@ if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.se
   echo "📦 Instalando Knative Serving..."
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-crds.yaml
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-core.yaml
+  
+  echo "📦 Configurando Knative webhook para Kubernetes 1.30.0..."
+  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
+  
   echo "⏳ Aguardando Knative Serving ficar pronto..."
   kubectl wait --for=condition=ready pod -l app=controller -n knative-serving --timeout=300s
+  kubectl wait --for=condition=ready pod -l app=webhook -n knative-serving --timeout=300s
 else
   echo "✅ Knative Serving já instalado"
 fi
