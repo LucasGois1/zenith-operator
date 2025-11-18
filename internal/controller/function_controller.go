@@ -466,9 +466,79 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil // Fim!
+	} else if err != nil {
+		// Erro real ao tentar o Get
+		log.Error(err, "Falha ao obter Knative Trigger")
+		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil // Já existe, tudo pronto.
+	// --- CAMINHO DE ATUALIZAÇÃO DO TRIGGER ---
+	// Se chegamos aqui, o Trigger FOI encontrado.
+	log.Info("Knative Trigger encontrado. Verificando se há atualizações...")
+
+	// Construir o Trigger desejado
+	desiredTrigger := r.buildKnativeTrigger(&function)
+
+	needsUpdate = false
+
+	// 1. Verificar se o broker mudou
+	if trigger.Spec.Broker != desiredTrigger.Spec.Broker {
+		log.Info("Broker mudou, marcando para atualização.", "Atual", trigger.Spec.Broker, "Desejado", desiredTrigger.Spec.Broker)
+		needsUpdate = true
+	}
+
+	// 2. Verificar se os filtros mudaram
+	// Comparar os atributos do filtro
+	currentFilters := trigger.Spec.Filter
+	desiredFilters := desiredTrigger.Spec.Filter
+
+	if currentFilters == nil && desiredFilters != nil {
+		needsUpdate = true
+	} else if currentFilters != nil && desiredFilters == nil {
+		needsUpdate = true
+	} else if currentFilters != nil && desiredFilters != nil {
+		// Comparar os atributos
+		if len(currentFilters.Attributes) != len(desiredFilters.Attributes) {
+			needsUpdate = true
+		} else {
+			for k, v := range desiredFilters.Attributes {
+				if currentFilters.Attributes[k] != v {
+					log.Info("Filtros do Trigger mudaram, marcando para atualização.")
+					needsUpdate = true
+					break
+				}
+			}
+		}
+	}
+
+	// 3. Executar a atualização se necessário
+	if needsUpdate {
+		log.Info("Atualizando Knative Trigger...")
+		// Atualiza o spec do objeto existente com o spec desejado
+		trigger.Spec = desiredTrigger.Spec
+		if err := r.Update(ctx, trigger); err != nil {
+			log.Error(err, "Falha ao atualizar Knative Trigger")
+			return ctrl.Result{}, err
+		}
+		log.Info("Knative Trigger atualizado com sucesso.")
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	log.Info("Knative Trigger está sincronizado.")
+
+	readyCondition := metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionTrue,
+		Reason:  "Ready",
+		Message: "Function deployed with eventing and ready to accept requests",
+	}
+	meta.SetStatusCondition(&function.Status.Conditions, readyCondition)
+	function.Status.ObservedGeneration = function.Generation
+	if err := r.Status().Update(ctx, &function); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil // Tudo pronto.
 
 }
 
