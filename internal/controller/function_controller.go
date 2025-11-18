@@ -403,7 +403,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		function.Status.URL = knativeService.Status.URL.String()
 	}
 
-	// Verificar se o KService está Ready
+	// Verificar se o KService está Ready (para atualizar status, mas não bloquear Trigger)
 	ksvcReady := false
 	for _, cond := range knativeService.Status.Conditions {
 		if cond.Type == "Ready" && cond.Status == "True" {
@@ -412,12 +412,6 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
-	if !ksvcReady {
-		log.Info("Knative Service ainda não está pronto, aguardando...")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
-	// ... (A lógica para a Fase 3.5: Criação do Trigger começa aqui)...
 	// Se 'eventing' não estiver configurado, marcar como Ready e parar.
 	if function.Spec.Eventing.Broker == "" {
 		readyCondition := metav1.Condition{
