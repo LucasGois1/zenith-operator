@@ -56,14 +56,19 @@ spec:
       description: Create a Function CR with both secrets
       try:
         - apply:
-            file: function.yaml
-    
-    - name: wait-for-build
-      description: Wait for PipelineRun to complete
-      try:
-        - assert:
-            file: pipelinerun-success-assert.yaml
-            timeout: 8m
+            file: function.yaml
+        - script:
+            content: |
+              FN_NAME=test-function-idempotent
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"
+"}{end}' | tail -n1)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
     
     - name: verify-function-ready
       description: Verify Function reaches Ready status

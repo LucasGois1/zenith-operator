@@ -6,7 +6,7 @@ spec:
   gitRepo: https://github.com/LucasGois1/zenith-test-functions
   gitRevision: devin/1763232295-add-test-functions
   build:
-    image: ttl.sh/zenith-test-function-secret:1h
+    image: registry.registry.svc.cluster.local:5000/zenith-test/serviceaccount-secret:latest
     registrySecretName: test-registry-secret
   deploy:
     dapr:

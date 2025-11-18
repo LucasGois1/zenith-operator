@@ -75,14 +75,19 @@ spec:
               else
                 echo "ERROR: Unexpected status reason: $STATUS_REASON"
                 exit 1
-              fi
-    
-    - name: wait-for-build-completion
-      description: Wait for PipelineRun to complete
-      try:
-        - assert:
-            file: pipelinerun-success-assert.yaml
-            timeout: 8m
+              fi
+        - script:
+            content: |
+              FN_NAME=test-function-progress
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"
+"}{end}' | tail -n1)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
     
     - name: verify-final-ready
       description: Verify Function eventually reaches Ready
