@@ -18,8 +18,8 @@ spec:
   workspaces:
     - name: source
   results:
-    - name: IMAGE_DIGEST
-      description: Digest of the image just built (intentionally not set for this test)
+    - name: APP_IMAGE_DIGEST
+      description: Digest of the image just built (intentionally empty for this test)
   steps:
     - name: build
       image: paketobuildpacks/builder:base
@@ -27,9 +27,9 @@ spec:
         #!/usr/bin/env bash
         set -e
         
-        echo "Simulating successful build without producing IMAGE_DIGEST result"
+        echo "Simulating successful build without producing APP_IMAGE_DIGEST result"
         echo "This tests the error handling path in the controller"
         
-        echo -n "" > "$(results.IMAGE_DIGEST.path)"
+        echo -n "" > "$(results.APP_IMAGE_DIGEST.path)"
         
         echo "Build completed successfully (but no digest produced)"
