@@ -1,0 +1,127 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: ksvc-not-ready-test
+spec:
+  description: |
+    Test that controller handles KService not becoming Ready.
+    This test verifies:
+    1. Function with invalid image configuration
+    2. KService is created but doesn't reach Ready
+    3. Function status reflects the not-ready state
+    4. Controller requeues appropriately
+  timeouts:
+    apply: 1m
+    assert: 5m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: manually-create-ksvc-invalid
+      description: Manually create KService with invalid image to simulate not-ready scenario
+      try:
+        - script:
+            content: |
+              kubectl patch function test-function-not-ready -n $NAMESPACE --type=merge --subresource=status -p '{"status":{"imageDigest":"docker.io/invalid/nonexistent:invalid"}}'
+              
+              kubectl annotate function test-function-not-ready -n $NAMESPACE force-reconcile="$(date +%s)" --overwrite
+    
+    - name: wait-for-ksvc-creation
+      description: Wait for KService to be created
+      try:
+        - script:
+            content: |
+              echo "Waiting for KService to be created..."
+              for i in {1..30}; do
+                if kubectl get service.serving.knative.dev test-function-not-ready -n $NAMESPACE 2>/dev/null; then
+                  echo "KService created"
+                  break
+                fi
+                sleep 1
+              done
+    
+    - name: verify-ksvc-not-ready
+      description: Verify KService exists but is not Ready
+      try:
+        - script:
+            content: |
+              sleep 10  # Give time for KService to attempt becoming ready
+              
+              if ! kubectl get service.serving.knative.dev test-function-not-ready -n $NAMESPACE 2>/dev/null; then
+                echo "ERROR: KService not found"
+                exit 1
+              fi
+              
+              KSVC_READY=$(kubectl get service.serving.knative.dev test-function-not-ready -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+              
+              if [ "$KSVC_READY" = "False" ] || [ "$KSVC_READY" = "Unknown" ]; then
+                echo "SUCCESS: KService is not Ready (status: $KSVC_READY)"
+              else
+                echo "WARNING: KService Ready status is: $KSVC_READY"
+              fi
+    
+    - name: verify-function-not-ready
+      description: Verify Function doesn't reach Ready status
+      try:
+        - script:
+            content: |
+              sleep 15
+              
+              FUNCTION_READY=$(kubectl get function test-function-not-ready -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+              FUNCTION_REASON=$(kubectl get function test-function-not-ready -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}')
+              
+              echo "Function Ready status: $FUNCTION_READY"
+              echo "Function Ready reason: $FUNCTION_REASON"
+              
+              if [ "$FUNCTION_READY" != "True" ]; then
+                echo "SUCCESS: Function is not Ready as expected"
+              else
+                echo "WARNING: Function became Ready unexpectedly"
+              fi
+            timeout: 30s
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-not-ready

@@ -1,0 +1,10 @@
+apiVersion: eventing.knative.dev/v1
+kind: Broker
+metadata:
+  name: test-broker
+spec:
+  config:
+    apiVersion: v1
+    kind: ConfigMap
+    name: config-br-defaults
+    namespace: knative-eventing

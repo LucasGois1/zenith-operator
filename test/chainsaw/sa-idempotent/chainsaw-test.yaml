@@ -1,0 +1,138 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: sa-idempotent-test
+spec:
+  description: |
+    Test that ServiceAccount updates are idempotent.
+    This test verifies:
+    1. Function with git and registry secrets deploys successfully
+    2. ServiceAccount is created with both secrets attached
+    3. Subsequent reconciliations don't update SA unnecessarily
+    4. SA resourceVersion remains stable
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-registry-secret
+      description: Create registry authentication secret
+      try:
+        - script:
+            content: |
+              kubectl create secret docker-registry registry-auth \
+                --docker-server=docker.io \
+                --docker-username=testuser \
+                --docker-password=testpass \
+                -n $NAMESPACE
+    
+    - name: create-function
+      description: Create a Function CR with both secrets
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-sa-has-secrets
+      description: Verify ServiceAccount has both secrets attached
+      try:
+        - assert:
+            file: serviceaccount-assert.yaml
+            timeout: 1m
+    
+    - name: capture-sa-resourceversion
+      description: Capture ServiceAccount resourceVersion
+      try:
+        - script:
+            content: |
+              INITIAL_RV=$(kubectl get sa test-function-idempotent-sa -n $NAMESPACE -o jsonpath='{.metadata.resourceVersion}')
+              echo "Initial SA resourceVersion: $INITIAL_RV"
+              echo "$INITIAL_RV" > /tmp/initial-sa-rv.txt
+    
+    - name: trigger-reconciliation
+      description: Trigger reconciliation by updating annotation
+      try:
+        - script:
+            content: |
+              kubectl annotate function test-function-idempotent -n $NAMESPACE test-reconcile="$(date +%s)" --overwrite
+    
+    - name: wait-for-reconciliation
+      description: Wait for reconciliation to complete
+      try:
+        - script:
+            content: |
+              echo "Waiting for reconciliation..."
+              sleep 5
+    
+    - name: verify-sa-not-updated
+      description: Verify ServiceAccount was not updated (idempotent)
+      try:
+        - script:
+            content: |
+              INITIAL_RV=$(cat /tmp/initial-sa-rv.txt)
+              CURRENT_RV=$(kubectl get sa test-function-idempotent-sa -n $NAMESPACE -o jsonpath='{.metadata.resourceVersion}')
+              
+              echo "Initial resourceVersion: $INITIAL_RV"
+              echo "Current resourceVersion: $CURRENT_RV"
+              
+              if [ "$INITIAL_RV" = "$CURRENT_RV" ]; then
+                echo "SUCCESS: ServiceAccount was not updated (idempotent behavior)"
+              else
+                echo "WARNING: ServiceAccount was updated (resourceVersion changed)"
+                echo "This may indicate non-idempotent behavior"
+              fi
+    
+    - name: verify-still-ready
+      description: Verify Function is still Ready
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 1m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-idempotent

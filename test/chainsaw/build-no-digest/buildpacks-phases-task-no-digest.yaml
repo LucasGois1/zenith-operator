@@ -1,0 +1,33 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: buildpacks-phases
+spec:
+  params:
+    - name: APP_IMAGE
+      type: string
+    - name: SOURCE_SUBPATH
+      type: string
+      default: ""
+    - name: CNB_BUILDER_IMAGE
+      type: string
+      default: "paketobuildpacks/builder-jammy-base:latest"
+    - name: CNB_PROCESS_TYPE
+      type: string
+      default: ""
+  workspaces:
+    - name: source
+  results:
+    - name: IMAGE_DIGEST
+      description: Digest of the image just built (intentionally not set for this test)
+  steps:
+    - name: build
+      image: paketobuildpacks/builder:base
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        
+        echo "Simulating successful build without producing IMAGE_DIGEST result"
+        echo "This tests the error handling path in the controller"
+        
+        echo "Build completed successfully (but no digest produced)"

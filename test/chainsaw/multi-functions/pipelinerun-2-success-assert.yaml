@@ -1,0 +1,8 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: test-function-multi-2-build
+status:
+  conditions:
+    - type: Succeeded
+      status: "True"

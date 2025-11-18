@@ -1,0 +1,141 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: multi-functions-test
+spec:
+  description: |
+    Test that multiple Functions in same namespace work correctly.
+    This test verifies:
+    1. Two Functions can be created in same namespace
+    2. Each gets distinct ServiceAccount, PipelineRun, KService
+    3. Both reach Ready status independently
+    4. No resource conflicts or naming collisions
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function-1
+      description: Create first Function CR
+      try:
+        - apply:
+            file: function-1.yaml
+    
+    - name: create-function-2
+      description: Create second Function CR
+      try:
+        - apply:
+            file: function-2.yaml
+    
+    - name: verify-distinct-serviceaccounts
+      description: Verify each Function has distinct ServiceAccount
+      try:
+        - assert:
+            file: serviceaccount-1-assert.yaml
+            timeout: 1m
+        - assert:
+            file: serviceaccount-2-assert.yaml
+            timeout: 1m
+    
+    - name: verify-distinct-pipelineruns
+      description: Verify each Function has distinct PipelineRun
+      try:
+        - assert:
+            file: pipelinerun-1-assert.yaml
+            timeout: 1m
+        - assert:
+            file: pipelinerun-2-assert.yaml
+            timeout: 1m
+    
+    - name: wait-for-builds
+      description: Wait for both PipelineRuns to complete
+      try:
+        - assert:
+            file: pipelinerun-1-success-assert.yaml
+            timeout: 8m
+        - assert:
+            file: pipelinerun-2-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-distinct-knative-services
+      description: Verify each Function has distinct Knative Service
+      try:
+        - assert:
+            file: knative-service-1-assert.yaml
+            timeout: 1m
+        - assert:
+            file: knative-service-2-assert.yaml
+            timeout: 1m
+    
+    - name: verify-both-ready
+      description: Verify both Functions reach Ready status
+      try:
+        - assert:
+            file: function-1-ready-assert.yaml
+            timeout: 2m
+        - assert:
+            file: function-2-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-no-conflicts
+      description: Verify no resource conflicts
+      try:
+        - script:
+            content: |
+              echo "Verifying resource isolation..."
+              
+              SA_COUNT=$(kubectl get sa -n $NAMESPACE -l functions.zenith.com/managed-by=zenith-operator --no-headers | wc -l)
+              echo "ServiceAccount count: $SA_COUNT"
+              
+              PR_COUNT=$(kubectl get pipelineruns -n $NAMESPACE --no-headers | wc -l)
+              echo "PipelineRun count: $PR_COUNT"
+              
+              KSVC_COUNT=$(kubectl get service.serving.knative.dev -n $NAMESPACE --no-headers | wc -l)
+              echo "KService count: $KSVC_COUNT"
+              
+              if [ "$SA_COUNT" -ge 2 ] && [ "$PR_COUNT" -ge 2 ] && [ "$KSVC_COUNT" -ge 2 ]; then
+                echo "SUCCESS: All resources created distinctly for each Function"
+              else
+                echo "ERROR: Resource counts don't match expectations"
+                exit 1
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-multi-1
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-multi-2
