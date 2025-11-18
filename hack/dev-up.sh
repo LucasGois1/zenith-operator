@@ -59,7 +59,7 @@ echo ""
 
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
   echo "📦 Criando cluster kind..."
-  kind create cluster --name "${CLUSTER_NAME}"
+  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0
 else
   echo "✅ Cluster kind '${CLUSTER_NAME}' já existe"
 fi

@@ -61,6 +61,7 @@ spec:
               [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
               echo "Found PipelineRun: $PR_NAME"
               kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+            timeout: 600s
     
     - name: verify-initial-knative-service
       description: Verify that initial Knative Service was created
