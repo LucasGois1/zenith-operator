@@ -8,8 +8,8 @@ spec:
   gitAuthSecretName: github-auth
   build:
     image: docker.io/zenith-test/test-function-trigger-update
+  deploy: {}
   eventing:
-    enabled: true
     broker: test-broker
     filters:
-      - type: com.example.event.v1
+      type: com.example.event.v1
