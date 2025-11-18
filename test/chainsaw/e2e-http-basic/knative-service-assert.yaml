@@ -6,4 +6,4 @@ spec:
   template:
     spec:
       containers:
-        - image: (startsWith(@, 'registry.registry.svc.cluster.local:5000/zenith-test/test-function-http-basic@sha256:'))
+        - image: "?*"
