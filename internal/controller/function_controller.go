@@ -398,18 +398,9 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log.Info("Knative Service está sincronizado.")
 	// --- FIM DA FASE 3.4 ---
 
-	// Verificar se o Knative Service está pronto e atualizar URL
+	// Atualizar URL se disponível
 	if knativeService.Status.URL != nil {
 		function.Status.URL = knativeService.Status.URL.String()
-	}
-
-	// Verificar se o KService está Ready (para atualizar status, mas não bloquear Trigger)
-	ksvcReady := false
-	for _, cond := range knativeService.Status.Conditions {
-		if cond.Type == "Ready" && cond.Status == "True" {
-			ksvcReady = true
-			break
-		}
 	}
 
 	// Se 'eventing' não estiver configurado, marcar como Ready e parar.
