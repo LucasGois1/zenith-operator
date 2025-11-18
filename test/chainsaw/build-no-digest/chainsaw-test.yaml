@@ -46,8 +46,8 @@ spec:
         - apply:
             file: function.yaml
     
-    - name: wait-for-build-failure
-      description: Wait for PipelineRun to fail due to missing digest result
+    - name: wait-for-build-completion
+      description: Wait for PipelineRun to complete successfully (but with empty digest)
       try:
         - script:
             content: |
@@ -60,26 +60,9 @@ spec:
               [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
               echo "Found PipelineRun: $PR_NAME"
               
-              for i in $(seq 1 240); do
-                STATUS=$(kubectl get pipelinerun "$PR_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}')
-                REASON=$(kubectl get pipelinerun "$PR_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].reason}')
-                
-                if [ "$STATUS" = "False" ]; then
-                  echo "PipelineRun failed as expected with reason: $REASON"
-                  if [ "$REASON" = "InvalidPipelineResultReference" ]; then
-                    echo "SUCCESS: PipelineRun failed with InvalidPipelineResultReference"
-                    exit 0
-                  else
-                    echo "WARNING: PipelineRun failed but with unexpected reason: $REASON"
-                    exit 0
-                  fi
-                fi
-                
-                sleep 2
-              done
-              
-              echo "ERROR: PipelineRun did not fail within timeout"
-              exit 1
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              echo "SUCCESS: PipelineRun completed successfully"
+            timeout: 600s
     
     - name: verify-no-digest-in-results
       description: Verify PipelineRun has no IMAGE_DIGEST result
