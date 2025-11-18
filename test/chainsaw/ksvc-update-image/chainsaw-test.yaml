@@ -117,7 +117,7 @@ spec:
               echo "$INITIAL_IMAGE" > /tmp/initial-image.txt
     
     - name: simulate-image-update
-      description: Simulate new build by updating imageDigest in status
+      description: Simulate new build by updating imageDigest in status and triggering reconcile
       try:
         - script:
             content: |
@@ -125,13 +125,9 @@ spec:
               kubectl patch function test-function-update-image -n $NAMESPACE --type=merge --subresource=status -p "{\"status\":{\"imageDigest\":\"$NEW_DIGEST\"}}"
               echo "Updated imageDigest to: $NEW_DIGEST"
               echo "$NEW_DIGEST" > /tmp/new-digest.txt
-    
-    - name: trigger-reconciliation
-      description: Trigger reconciliation to pick up new image
-      try:
-        - script:
-            content: |
-              kubectl annotate function test-function-update-image -n $NAMESPACE reconcile-trigger="$(date +%s)" --overwrite
+              
+              kubectl patch function test-function-update-image -n $NAMESPACE --type=merge -p '{"spec":{"gitRevision":"main"}}'
+              echo "Triggered reconciliation by updating spec"
     
     - name: verify-ksvc-image-updated
       description: Verify Knative Service image was updated
