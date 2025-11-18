@@ -9,6 +9,12 @@ spec:
     - name: SOURCE_SUBPATH
       type: string
       default: ""
+    - name: CNB_BUILDER_IMAGE
+      type: string
+      default: "paketobuildpacks/builder-jammy-base:latest"
+    - name: CNB_PROCESS_TYPE
+      type: string
+      default: ""
   workspaces:
     - name: source
   results:
