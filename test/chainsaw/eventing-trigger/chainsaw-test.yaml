@@ -52,8 +52,7 @@ spec:
                 name: default
               EOF
               
-              echo "Waiting for Broker to be ready..."
-              kubectl wait --for=condition=Ready broker/default -n $NAMESPACE --timeout=2m || echo "Broker may not be ready yet"
+              echo "Broker created (readiness not required for test)"
     
     - name: create-function-with-eventing
       description: Create a Function CR with eventing configuration
