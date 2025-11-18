@@ -86,6 +86,70 @@ if [ -n "$KONG_NODE_PORT" ] && [ -n "$KONG_NODE_IP" ]; then
   echo "   Use com Host header para acessar functions: curl -H 'Host: <function-url>' http://${KONG_NODE_IP}:${KONG_NODE_PORT}"
 fi
 
+if ! kubectl get namespace registry 2>/dev/null; then
+  echo "📦 Instalando registry local para buildpacks..."
+  kubectl create namespace registry
+  cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-pvc
+  namespace: registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+      - name: registry
+        image: registry:2
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: registry-storage
+          mountPath: /var/lib/registry
+      volumes:
+      - name: registry-storage
+        persistentVolumeClaim:
+          claimName: registry-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+  selector:
+    app: registry
+EOF
+  echo "⏳ Aguardando registry ficar pronto..."
+  kubectl wait --for=condition=available --timeout=60s deployment/registry -n registry
+  echo "📍 Registry local acessível em: registry.registry.svc.cluster.local:5000"
+else
+  echo "✅ Registry local já instalado"
+fi
+
 if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev/null; then
   echo "📦 Instalando Knative net-gateway-api..."
   kubectl apply -f https://github.com/knative-extensions/net-gateway-api/releases/download/knative-v1.17.0/net-gateway-api.yaml
