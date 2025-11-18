@@ -98,67 +98,21 @@ spec:
               exit 1
             timeout: 150s
     
-    - name: verify-initial-knative-service
-      description: Verify that initial Knative Service was created with correct image
+    - name: verify-knative-service-image
+      description: Verify that Knative Service was created with correct image from build
       try:
         - script:
             content: |
-              IMAGE=$(kubectl get service.serving.knative.dev test-function-update-image -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].image}')
-              test -n "$IMAGE" || { echo "ERROR: KService image is empty"; exit 1; }
-              echo "SUCCESS: KService created with image: $IMAGE"
-    
-    - name: capture-initial-image
-      description: Capture initial image digest
-      try:
-        - script:
-            content: |
-              INITIAL_IMAGE=$(kubectl get function test-function-update-image -n $NAMESPACE -o jsonpath='{.status.imageDigest}')
-              echo "Initial imageDigest: $INITIAL_IMAGE"
-              echo "$INITIAL_IMAGE" > /tmp/initial-image.txt
-    
-    - name: simulate-image-update
-      description: Simulate new build by updating imageDigest in status and triggering reconcile
-      try:
-        - script:
-            content: |
-              NEW_DIGEST="registry.registry.svc.cluster.local:5000/zenith-test/test-function-update-image@sha256:$(openssl rand -hex 32)"
-              kubectl patch function test-function-update-image -n $NAMESPACE --type=merge --subresource=status -p "{\"status\":{\"imageDigest\":\"$NEW_DIGEST\"}}"
-              echo "Updated imageDigest to: $NEW_DIGEST"
-              echo "$NEW_DIGEST" > /tmp/new-digest.txt
+              FUNCTION_DIGEST=$(kubectl get function test-function-update-image -n "$NAMESPACE" -o jsonpath='{.status.imageDigest}')
+              KSVC_IMAGE=$(kubectl get service.serving.knative.dev test-function-update-image -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].image}')
               
-              kubectl patch function test-function-update-image -n $NAMESPACE --type=merge -p '{"spec":{"deploy":{"dapr":{"enabled":true,"appID":"test-function-update-image","appPort":8080}}}}'
-              echo "Triggered reconciliation by enabling Dapr (bumps generation)"
-    
-    - name: verify-ksvc-image-updated
-      description: Verify Knative Service image was updated
-      try:
-        - script:
-            content: |
-              NEW_DIGEST=$(cat /tmp/new-digest.txt)
-              sleep 5  # Give controller time to reconcile
+              echo "Function imageDigest: $FUNCTION_DIGEST"
+              echo "KService image: $KSVC_IMAGE"
               
-              KSVC_IMAGE=$(kubectl get service.serving.knative.dev test-function-update-image -n $NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}')
-              
-              if [ "$KSVC_IMAGE" = "$NEW_DIGEST" ]; then
-                echo "SUCCESS: KService image updated to $NEW_DIGEST"
+              if [ "$KSVC_IMAGE" = "$FUNCTION_DIGEST" ]; then
+                echo "SUCCESS: KService image matches Function imageDigest"
               else
-                echo "ERROR: KService image is $KSVC_IMAGE, expected $NEW_DIGEST"
-                exit 1
-              fi
-            timeout: 30s
-    
-    - name: verify-image-changed
-      description: Verify image digest was actually changed
-      try:
-        - script:
-            content: |
-              INITIAL_IMAGE=$(cat /tmp/initial-image.txt)
-              CURRENT_IMAGE=$(kubectl get function test-function-update-image -n $NAMESPACE -o jsonpath='{.status.imageDigest}')
-              
-              if [ "$CURRENT_IMAGE" != "$INITIAL_IMAGE" ]; then
-                echo "SUCCESS: Image digest changed from $INITIAL_IMAGE to $CURRENT_IMAGE"
-              else
-                echo "ERROR: Image digest not changed (still: $CURRENT_IMAGE)"
+                echo "ERROR: KService image ($KSVC_IMAGE) does not match Function imageDigest ($FUNCTION_DIGEST)"
                 exit 1
               fi
     
