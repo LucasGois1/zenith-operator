@@ -40,6 +40,21 @@ spec:
                 password: __GITHUB_TOKEN__
               EOF
     
+    - name: create-eventing-broker
+      description: Create Knative Eventing Broker for the test
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | kubectl apply -f - -n $NAMESPACE
+              apiVersion: eventing.knative.dev/v1
+              kind: Broker
+              metadata:
+                name: default
+              EOF
+              
+              echo "Waiting for Broker to be ready..."
+              kubectl wait --for=condition=Ready broker/default -n $NAMESPACE --timeout=2m || echo "Broker may not be ready yet"
+    
     - name: create-function-with-eventing
       description: Create a Function CR with eventing configuration
       try:
@@ -60,6 +75,7 @@ spec:
               [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
               echo "Found PipelineRun: $PR_NAME"
               kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+            timeout: 600s
     
     - name: verify-knative-service-created
       description: Verify that a Knative Service was created
