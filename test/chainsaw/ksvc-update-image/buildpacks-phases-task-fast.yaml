@@ -32,7 +32,7 @@ spec:
         
         TIMESTAMP=$(date +%s)
         HASH=$(echo -n "$(params.APP_IMAGE)-$TIMESTAMP" | sha256sum | cut -d' ' -f1)
-        DIGEST="$(params.APP_IMAGE)@sha256:$HASH"
+        DIGEST="sha256:$HASH"
         echo "Generated digest: $DIGEST"
         
         echo -n "$DIGEST" > "$(results.APP_IMAGE_DIGEST.path)"
