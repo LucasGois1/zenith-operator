@@ -1,135 +1,177 @@
-# zenith-operator
-// TODO(user): Add simple overview of use/purpose
+# 🚀 Zenith Operator
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+> **Serverless on Kubernetes, Made Simple.**
 
-## Getting Started
+[![Go Report Card](https://goreportcard.com/badge/github.com/LucasGois1/zenith-operator)](https://goreportcard.com/report/github.com/LucasGois1/zenith-operator)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Kubernetes](https://img.shields.io/badge/kubernetes-v1.24+-326ce5.svg?logo=kubernetes)](https://kubernetes.io)
+
+Zenith Operator abstracts the complexity of building and deploying serverless functions on Kubernetes. It orchestrates **Tekton Pipelines** for builds, **Knative Serving** for deployments, and **Knative Eventing** for event-driven invocations — all through a single `Function` Custom Resource Definition (CRD).
+
+---
+
+## ✨ Features
+
+* **🛠 Automated Builds**: Integrated Cloud Native Buildpacks via Tekton. Source code to container image without a `Dockerfile`.
+* **⚡ Serverless Deployment**: Auto-scaling (including scale-to-zero) powered by Knative Serving.
+* **🔗 Event Driven**: Native subscription to Knative Brokers with attribute filtering.
+* **🕸 Dapr Integration**: First-class support for Dapr sidecars to enable service mesh capabilities (pub/sub, state management).
+* **🔒 Secure by Design**: Secret-based authentication for private Git repos and Container Registries.
+
+---
+
+## 🏗 Architecture
+
+Zenith Operator serves as the glue between powerful CNCF projects:
+
+```mermaid
+graph LR
+    DEV[Developer] -->|Apply Function CR| CRD
+    CRD -->|Reconcile| OP[Zenith Operator]
+    
+    OP -->|Create| TEKTON[Tekton Pipeline]
+    TEKTON -->|Build & Push| REGISTRY[(Registry)]
+    
+    OP -->|Deploy| KNATIVE[Knative Service]
+    KNATIVE -->|Pull| REGISTRY
+    
+    OP -->|Subscribe| TRIGGER[Trigger]
+    TRIGGER -->|Route Events| KNATIVE
+```
+
+For a deep dive into the architecture, check out the [Architecture Documentation](zenith-operator-architecture.md).
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- go version v1.24.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+* Kubernetes Cluster (v1.24+)
+* [Tekton Pipelines](https://tekton.dev/docs/pipelines/install/) installed
+* [Knative Serving](https://knative.dev/docs/install/serving/) installed
+* *(Optional)* [Knative Eventing](https://knative.dev/docs/eventing/install/) and [Dapr](https://docs.dapr.io/getting-started/install-dapr-selfhost/)
 
-```sh
-make docker-build docker-push IMG=<some-registry>/zenith-operator:tag
+### Installation
+
+1. **Install the CRDs and Operator:**
+
+   ```sh
+   kubectl apply -f https://github.com/LucasGois1/zenith-operator/releases/latest/download/install.yaml
+   ```
+
+2. **Verify installation:**
+
+   ```sh
+   kubectl get pods -n zenith-operator-system
+   ```
+
+---
+
+## 📖 Usage
+
+Create a `function.yaml` file to define your function.
+
+### 1. Basic Function (Public Repo)
+
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: hello-world
+  namespace: default
+spec:
+  # Source Code
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  
+  # Build Config
+  build:
+    image: docker.io/your-username/hello-world # Target image
+    registrySecretName: registry-creds # Docker credentials
+    
+  # Runtime Config
+  deploy:
+    dapr:
+      enabled: false
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+### 2. Event-Driven Function with Dapr
 
-**Install the CRDs into the cluster:**
-
-```sh
-make install
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: payment-processor
+spec:
+  gitRepo: https://github.com/my-org/payment-service
+  build:
+    image: registry.my-company.com/payment-processor
+    registrySecretName: private-registry-creds
+  deploy:
+    dapr:
+      enabled: true
+      appID: payment-service
+      appPort: 8080
+  eventing:
+    broker: default
+    filters:
+      type: order.created
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+### Apply the Function
 
 ```sh
-make deploy IMG=<some-registry>/zenith-operator:tag
+kubectl apply -f function.yaml
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
-
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+Check the status:
 
 ```sh
-kubectl apply -k config/samples/
+kubectl get function hello-world
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+---
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+## 🛠 Development
 
-```sh
-kubectl delete -k config/samples/
-```
+To run the operator locally for development:
 
-**Delete the APIs(CRDs) from the cluster:**
+1. **Clone the repo:**
 
-```sh
-make uninstall
-```
+   ```sh
+   git clone https://github.com/LucasGois1/zenith-operator.git
+   cd zenith-operator
+   ```
 
-**UnDeploy the controller from the cluster:**
+2. **Install dependencies:**
 
-```sh
-make undeploy
-```
+   ```sh
+   go mod download
+   ```
 
-## Project Distribution
+3. **Run against your active cluster:**
 
-Following the options to release and provide this solution to the users.
+   ```sh
+   make install
+   make run
+   ```
 
-### By providing a bundle with all YAML files
+---
 
-1. Build the installer for the image built and published in the registry:
+## 📚 Documentation
 
-```sh
-make build-installer IMG=<some-registry>/zenith-operator:tag
-```
+Visit our [Documentation Website](https://lucasgois1.github.io/zenith-operator/) for full API references and guides.
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
+* [Git Authentication](docs/GIT_AUTHENTICATION.md)
+* [Registry Configuration](docs/REGISTRY_CONFIGURATION.md)
 
-2. Using the installer
+---
 
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
+## 🤝 Contributing
 
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/zenith-operator/<tag or branch>/dist/install.yaml
-```
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting a Pull Request.
 
-### By providing a Helm Chart
+## 📄 License
 
-1. Build the chart using the optional helm plugin
-
-```sh
-operator-sdk edit --plugins=helm/v1-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
