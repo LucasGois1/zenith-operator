@@ -9,25 +9,45 @@ The Zenith Operator uses Cloud Native Buildpacks to build container images from 
 1. **Analyze phase**: Check if previous image layers exist (for optimization)
 2. **Export phase**: Push the built image to the registry
 
-In the current implementation, the operator is configured to use a local insecure registry for testing (`registry.registry.svc.cluster.local:5000`). For production use, you need to configure the operator to use Docker Hub or your own container registry.
+## Smart Registry Detection
 
-## Current Test Configuration
+**The operator automatically detects registry types and configures insecure registries when needed.** You don't need to configure anything for most common scenarios:
 
-The test environment uses a local Docker registry that doesn't require authentication:
+### Automatic Detection (No Configuration Needed)
+
+The operator automatically detects and configures insecure registries for:
+
+1. **Cluster-internal registries**: Any registry with `.svc.cluster.local` in the hostname
+   - Example: `registry.registry.svc.cluster.local:5000`
+   - Automatically detected and configured as insecure
+
+2. **Localhost registries**: Registries running on localhost
+   - Examples: `localhost:5000`, `127.0.0.1:5000`
+   - Automatically detected and configured as insecure
+
+3. **Development registries**: Registries with non-standard ports (except known public registries)
+   - Example: `my-registry.local:5000`
+   - Automatically detected and configured as insecure
+
+4. **Public registries**: Docker Hub, GCR, GHCR, Quay, etc.
+   - Examples: `docker.io/myuser/myapp`, `gcr.io/myproject/myapp`
+   - Automatically use HTTPS (no insecure configuration needed)
+
+### Manual Configuration (Optional)
+
+If you need to override the automatic detection or add additional insecure registries, use the `INSECURE_REGISTRIES` environment variable in the operator deployment:
 
 ```yaml
-# Local registry (test-only)
-registry.registry.svc.cluster.local:5000
+# config/manager/manager.yaml
+env:
+  - name: INSECURE_REGISTRIES
+    value: "registry1.example.com:5000,registry2.example.com:5000"
 ```
 
-This is configured in `internal/controller/function_controller.go:636`:
-
-```go
-{Name: "CNB_INSECURE_REGISTRIES", Value: tektonv1.ParamValue{
-    Type: tektonv1.ParamTypeString, 
-    StringVal: "registry.registry.svc.cluster.local:5000"
-}},
-```
+**When to use manual configuration:**
+- You have a custom registry that isn't automatically detected
+- You want to disable automatic detection (set to empty string)
+- You need to add multiple custom registries
 
 ## Production Configuration Options
 

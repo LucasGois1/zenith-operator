@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
@@ -543,6 +545,84 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 }
 
 /*
+buildPipelineParams constrói os parâmetros para a task de buildpacks.
+Implementa lógica inteligente para detectar quando usar registries inseguros:
+ 1. Verifica variável de ambiente INSECURE_REGISTRIES para configuração explícita
+ 2. Detecta automaticamente registries locais/cluster-internal baseado no hostname da imagem
+ 3. Suporta múltiplos registries inseguros separados por vírgula
+*/
+func (r *FunctionReconciler) buildPipelineParams(function *functionsv1alpha1.Function) []tektonv1.Param {
+	params := []tektonv1.Param{
+		{Name: "APP_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: function.Spec.Build.Image}},
+		{Name: "CNB_BUILDER_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "paketobuildpacks/builder-jammy-base:latest"}},
+		{Name: "CNB_PROCESS_TYPE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: ""}},
+	}
+
+	// Determinar registries inseguros usando lógica inteligente
+	insecureRegistries := r.detectInsecureRegistries(function.Spec.Build.Image)
+	if insecureRegistries != "" {
+		params = append(params, tektonv1.Param{
+			Name:  "CNB_INSECURE_REGISTRIES",
+			Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: insecureRegistries},
+		})
+	}
+
+	return params
+}
+
+/*
+detectInsecureRegistries implementa lógica inteligente para detectar registries inseguros.
+Prioridade de detecção:
+ 1. Variável de ambiente INSECURE_REGISTRIES (configuração explícita do usuário)
+ 2. Auto-detecção baseada no hostname da imagem:
+    - Registries cluster-internal (.svc.cluster.local)
+    - Registries localhost (localhost, 127.0.0.1)
+    - Registries com portas não-padrão (indicam ambiente de desenvolvimento)
+ 3. Retorna string vazia para registries públicos conhecidos (docker.io, gcr.io, etc.)
+*/
+func (r *FunctionReconciler) detectInsecureRegistries(imageURL string) string {
+	// 1. Verificar configuração explícita via variável de ambiente
+	if envInsecure := os.Getenv("INSECURE_REGISTRIES"); envInsecure != "" {
+		return envInsecure
+	}
+
+	parts := strings.Split(imageURL, "/")
+	if len(parts) == 0 {
+		return ""
+	}
+
+	if len(parts) == 1 {
+		return ""
+	}
+
+	potentialRegistry := parts[0]
+
+	
+	if strings.Contains(potentialRegistry, ".svc.cluster.local") {
+		return potentialRegistry
+	}
+
+	if strings.HasPrefix(potentialRegistry, "localhost") || 
+	   strings.HasPrefix(potentialRegistry, "127.0.0.1") {
+		return potentialRegistry
+	}
+
+	if strings.Contains(potentialRegistry, ":") {
+		// Verificar se não é um registry público conhecido
+		if !strings.Contains(potentialRegistry, "docker.io") &&
+		   !strings.Contains(potentialRegistry, "gcr.io") &&
+		   !strings.Contains(potentialRegistry, "ghcr.io") &&
+		   !strings.Contains(potentialRegistry, "quay.io") &&
+		   !strings.Contains(potentialRegistry, "registry.k8s.io") {
+			return potentialRegistry
+		}
+	}
+
+	// Retorna string vazia (sem CNB_INSECURE_REGISTRIES)
+	return ""
+}
+
+/*
 buildPipelineRun constrói um *tektonv1.PipelineRun em memória.
 Este PipelineRun é projetado para:
  1. Clonar um repositório Git usando a Task 'git-clone'.
@@ -628,13 +708,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 								Workspace: sharedWorkspaceName, // Mapeia para o mesmo workspace
 							},
 						},
-						Params: []tektonv1.Param{
-							// Passa o nome da imagem de destino para a task [5]
-							{Name: "APP_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: function.Spec.Build.Image}},
-							{Name: "CNB_BUILDER_IMAGE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "paketobuildpacks/builder-jammy-base:latest"}},
-							{Name: "CNB_PROCESS_TYPE", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: ""}},
-							{Name: "CNB_INSECURE_REGISTRIES", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "registry.registry.svc.cluster.local:5000"}},
-						},
+						Params: r.buildPipelineParams(function),
 					},
 				},
 			},
