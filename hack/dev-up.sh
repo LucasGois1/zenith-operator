@@ -9,12 +9,52 @@ GITHUB_USERNAME="${GITHUB_USERNAME:-LucasGois1}"
 echo "🚀 Configurando ambiente de desenvolvimento..."
 echo ""
 
-echo "🔍 Verificando dependências..."
-bash hack/verify-env.sh || {
-    echo ""
-    echo "⚠️  Algumas dependências estão faltando. Instale-as antes de continuar."
-    exit 1
-}
+echo "🔍 Verificando e instalando dependências..."
+
+if ! command -v go &> /dev/null; then
+  echo "📦 Instalando Go..."
+  GO_VERSION="1.25.4"
+  curl -sL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | sudo tar -C /usr/local -xzf -
+  export PATH="/usr/local/go/bin:$PATH"
+  echo 'export PATH="/usr/local/go/bin:$PATH"' >> ~/.bashrc
+else
+  echo "✅ Go já instalado"
+fi
+
+if ! command -v kubectl &> /dev/null; then
+  echo "📦 Instalando kubectl..."
+  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+  chmod +x kubectl
+  sudo mv kubectl /usr/local/bin/
+else
+  echo "✅ kubectl já instalado"
+fi
+
+if ! command -v kind &> /dev/null; then
+  echo "📦 Instalando kind..."
+  curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64"
+  chmod +x ./kind
+  sudo mv ./kind /usr/local/bin/kind
+else
+  echo "✅ kind já instalado"
+fi
+
+if ! command -v docker &> /dev/null; then
+  echo "⚠️  Docker não está instalado. Por favor, instale Docker manualmente:"
+  echo "   https://docs.docker.com/get-docker/"
+  exit 1
+else
+  echo "✅ Docker já instalado"
+fi
+
+if ! command -v chainsaw &> /dev/null; then
+  echo "📦 Instalando Chainsaw..."
+  bash hack/install-chainsaw.sh
+  export PATH="$(pwd)/bin:$PATH"
+else
+  echo "✅ Chainsaw já instalado"
+fi
+
 echo ""
 
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
