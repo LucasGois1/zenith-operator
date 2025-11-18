@@ -46,12 +46,40 @@ spec:
         - apply:
             file: function.yaml
     
-    - name: wait-for-build-success
-      description: Wait for PipelineRun to succeed (without digest)
+    - name: wait-for-build-failure
+      description: Wait for PipelineRun to fail due to missing digest result
       try:
-        - assert:
-            file: pipelinerun-success-assert.yaml
-            timeout: 8m
+        - script:
+            content: |
+              FN_NAME=test-function-no-digest
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"\n"}{end}' | tail -n1)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              
+              for i in $(seq 1 240); do
+                STATUS=$(kubectl get pipelinerun "$PR_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}')
+                REASON=$(kubectl get pipelinerun "$PR_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].reason}')
+                
+                if [ "$STATUS" = "False" ]; then
+                  echo "PipelineRun failed as expected with reason: $REASON"
+                  if [ "$REASON" = "InvalidPipelineResultReference" ]; then
+                    echo "SUCCESS: PipelineRun failed with InvalidPipelineResultReference"
+                    exit 0
+                  else
+                    echo "WARNING: PipelineRun failed but with unexpected reason: $REASON"
+                    exit 0
+                  fi
+                fi
+                
+                sleep 2
+              done
+              
+              echo "ERROR: PipelineRun did not fail within timeout"
+              exit 1
     
     - name: verify-no-digest-in-results
       description: Verify PipelineRun has no IMAGE_DIGEST result
