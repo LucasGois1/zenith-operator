@@ -11,3 +11,5 @@ spec:
   deploy:
     dapr:
       enabled: false
+      appID: placeholder-app
+      appPort: 8080

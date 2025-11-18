@@ -8,4 +8,5 @@ spec:
   gitAuthSecretName: github-auth
   build:
     image: docker.io/zenith-test/test-function-idempotent
+  deploy: {}
     registryAuthSecretName: registry-auth

@@ -8,3 +8,4 @@ spec:
   gitAuthSecretName: github-auth
   build:
     image: docker.io/zenith-test/test-function-no-rebuild
+  deploy: {}
