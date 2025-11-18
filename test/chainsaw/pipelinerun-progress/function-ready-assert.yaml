@@ -1,0 +1,9 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-progress
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Ready
