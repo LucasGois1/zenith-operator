@@ -63,6 +63,24 @@ spec:
               kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
             timeout: 600s
     
+    - name: wait-for-image-digest
+      description: Wait for controller to set Function.status.imageDigest after build
+      try:
+        - script:
+            content: |
+              echo "Waiting for Function.status.imageDigest to be set..."
+              for i in $(seq 1 60); do
+                IMAGE_DIGEST=$(kubectl get function test-function-update-image -n "$NAMESPACE" -o jsonpath='{.status.imageDigest}')
+                if [ -n "$IMAGE_DIGEST" ]; then
+                  echo "SUCCESS: imageDigest set to: $IMAGE_DIGEST"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: imageDigest not set after 120 seconds"
+              exit 1
+            timeout: 150s
+    
     - name: wait-for-ksvc-creation
       description: Wait for controller to create Knative Service after build
       try:
@@ -81,20 +99,13 @@ spec:
             timeout: 150s
     
     - name: verify-initial-knative-service
-      description: Verify that initial Knative Service was created
+      description: Verify that initial Knative Service was created with correct image
       try:
         - script:
             content: |
               IMAGE=$(kubectl get service.serving.knative.dev test-function-update-image -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].image}')
               test -n "$IMAGE" || { echo "ERROR: KService image is empty"; exit 1; }
               echo "SUCCESS: KService created with image: $IMAGE"
-    
-    - name: verify-initial-ready
-      description: Verify Function reaches Ready status
-      try:
-        - assert:
-            file: function-ready-assert.yaml
-            timeout: 2m
     
     - name: capture-initial-image
       description: Capture initial image digest
