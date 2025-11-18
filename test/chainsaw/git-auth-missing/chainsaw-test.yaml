@@ -1,0 +1,69 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: git-auth-missing-test
+spec:
+  description: |
+    Test that the operator correctly handles missing Git authentication secret.
+    This test verifies:
+    1. Function with gitAuthSecretName referencing non-existent secret sets Ready=False with GitAuthMissing reason
+    2. When the secret is created, the Function recovers and proceeds to Building
+  timeouts:
+    apply: 1m
+    assert: 5m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-function-without-secret
+      description: Create a Function CR that references a non-existent git auth secret
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-git-auth-missing-status
+      description: Verify Function status shows GitAuthMissing
+      try:
+        - assert:
+            file: function-git-auth-missing-assert.yaml
+            timeout: 1m
+    
+    - name: create-git-auth-secret
+      description: Create the missing Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: verify-function-recovers
+      description: Verify Function status changes to Building after secret is created
+      try:
+        - assert:
+            file: function-building-assert.yaml
+            timeout: 2m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-git-auth
