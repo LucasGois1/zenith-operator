@@ -22,16 +22,17 @@ spec:
       description: Digest of the image (fast-path for testing operator behavior)
   steps:
     - name: fast-build
-      image: paketobuildpacks/builder:base
+      image: busybox:1.36
       script: |
-        #!/usr/bin/env bash
+        #!/bin/sh
         set -e
         
         echo "Fast-path builder for testing operator behavior"
         echo "This simulates a successful build and writes a plausible digest"
-        echo "APP_IMAGE: $(params.APP_IMAGE)"
         
-        DIGEST="$(params.APP_IMAGE)@sha256:$(echo -n "$(params.APP_IMAGE)-$(date +%s)" | sha256sum | cut -d' ' -f1)"
+        TIMESTAMP=$(date +%s)
+        HASH=$(echo -n "$(params.APP_IMAGE)-$TIMESTAMP" | sha256sum | cut -d' ' -f1)
+        DIGEST="$(params.APP_IMAGE)@sha256:$HASH"
         echo "Generated digest: $DIGEST"
         
         echo -n "$DIGEST" > "$(results.APP_IMAGE_DIGEST.path)"
