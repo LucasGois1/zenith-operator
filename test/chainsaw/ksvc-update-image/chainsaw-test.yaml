@@ -21,7 +21,7 @@ spec:
         - apply:
             file: git-clone-task.yaml
         - apply:
-            file: buildpacks-phases-task.yaml
+            file: buildpacks-phases-task-fast.yaml
     
     - name: create-git-auth-secret
       description: Create Git authentication secret
