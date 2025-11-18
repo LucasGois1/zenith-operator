@@ -290,7 +290,9 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 4. Salvar o digest no Status e passar para a próxima fase.
-	function.Status.ImageDigest = imageDigest
+	// Construir a referência completa da imagem com o digest
+	imageWithDigest := function.Spec.Build.Image + "@" + imageDigest
+	function.Status.ImageDigest = imageWithDigest
 	buildSucceededCondition := metav1.Condition{
 		Type:    "Ready", // Tipo de condição padrão
 		Status:  metav1.ConditionFalse,
@@ -509,7 +511,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 					{Name: sharedWorkspaceName, Description: "", Optional: false},
 				},
 
-				// Declara os resultados que o pipeline irá expor
+				// Declara os resultados que o pipeline irá expor a partir das tasks.
 				Results: []tektonv1.PipelineResult{
 					{
 						Name:        "APP_IMAGE_DIGEST",
@@ -609,6 +611,12 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	}
 	// ------------------------------------
 
+	// Determinar a porta do container
+	containerPort := int32(8080)
+	if function.Spec.Deploy.Dapr.Enabled && function.Spec.Deploy.Dapr.AppPort > 0 {
+		containerPort = int32(function.Spec.Deploy.Dapr.AppPort)
+	}
+
 	// Construir a definição do container
 	container := v1.Container{
 		// Usa o digest do build bem-sucedido da Fase 3.3
@@ -617,7 +625,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 			{
 				// Informa ao Knative a porta que o contêiner da aplicação escuta
 				// Isso é importante para o Dapr saber para onde encaminhar [4, 5]
-				ContainerPort: int32(function.Spec.Deploy.Dapr.AppPort),
+				ContainerPort: containerPort,
 			},
 		},
 	}
