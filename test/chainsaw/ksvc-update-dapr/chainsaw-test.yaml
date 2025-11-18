@@ -1,0 +1,142 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: ksvc-update-dapr-test
+spec:
+  description: |
+    Test that Knative Service is updated when Dapr configuration changes.
+    This test verifies:
+    1. Function deploys successfully without Dapr
+    2. Enabling Dapr triggers KService update with annotations
+    3. Dapr annotations are correctly applied
+    4. Container port is updated to match appPort
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function-without-dapr
+      description: Create a Function CR without Dapr
+      try:
+        - apply:
+            file: function-no-dapr.yaml
+    
+    - name: wait-for-initial-build
+      description: Wait for initial PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-initial-ksvc-no-dapr
+      description: Verify KService has no Dapr annotations
+      try:
+        - script:
+            content: |
+              DAPR_ENABLED=$(kubectl get service.serving.knative.dev test-function-dapr-update -n $NAMESPACE -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/enabled}' 2>/dev/null || echo "")
+              
+              if [ -z "$DAPR_ENABLED" ]; then
+                echo "SUCCESS: No Dapr annotations present"
+              else
+                echo "ERROR: Dapr annotations found when they shouldn't be"
+                exit 1
+              fi
+    
+    - name: verify-initial-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: update-function-enable-dapr
+      description: Update Function to enable Dapr
+      try:
+        - apply:
+            file: function-with-dapr.yaml
+    
+    - name: wait-for-ksvc-update
+      description: Wait for KService to be updated with Dapr annotations
+      try:
+        - script:
+            content: |
+              echo "Waiting for Dapr annotations to appear..."
+              for i in {1..30}; do
+                DAPR_ENABLED=$(kubectl get service.serving.knative.dev test-function-dapr-update -n $NAMESPACE -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/enabled}' 2>/dev/null || echo "")
+                
+                if [ "$DAPR_ENABLED" = "true" ]; then
+                  echo "SUCCESS: Dapr enabled annotation found"
+                  break
+                fi
+                
+                if [ $i -eq 30 ]; then
+                  echo "ERROR: Dapr annotations not applied after 30 seconds"
+                  exit 1
+                fi
+                
+                sleep 1
+              done
+            timeout: 45s
+    
+    - name: verify-dapr-annotations
+      description: Verify all Dapr annotations are correct
+      try:
+        - assert:
+            file: knative-service-dapr-assert.yaml
+            timeout: 1m
+    
+    - name: verify-container-port-updated
+      description: Verify container port matches Dapr appPort
+      try:
+        - script:
+            content: |
+              CONTAINER_PORT=$(kubectl get service.serving.knative.dev test-function-dapr-update -n $NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].ports[0].containerPort}')
+              
+              if [ "$CONTAINER_PORT" = "3000" ]; then
+                echo "SUCCESS: Container port updated to 3000"
+              else
+                echo "ERROR: Container port is $CONTAINER_PORT, expected 3000"
+                exit 1
+              fi
+    
+    - name: verify-still-ready
+      description: Verify Function is still Ready after update
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-dapr-update
