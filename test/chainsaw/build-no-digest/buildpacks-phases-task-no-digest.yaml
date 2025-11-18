@@ -22,9 +22,9 @@ spec:
       description: Digest of the image just built (intentionally empty for this test)
   steps:
     - name: build
-      image: paketobuildpacks/builder:base
+      image: busybox:1.36
       script: |
-        #!/usr/bin/env bash
+        #!/bin/sh
         set -e
         
         echo "Simulating successful build without producing APP_IMAGE_DIGEST result"
