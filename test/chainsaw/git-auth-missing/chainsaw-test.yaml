@@ -30,9 +30,28 @@ spec:
     - name: verify-git-auth-missing-status
       description: Verify Function status shows GitAuthMissing
       try:
-        - assert:
-            file: function-git-auth-missing-assert.yaml
-            timeout: 1m
+        - script:
+            content: |
+              for i in $(seq 1 60); do
+                READY_STATUS=$(kubectl get function test-function-git-auth -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+                READY_REASON=$(kubectl get function test-function-git-auth -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+                
+                if [ "$READY_STATUS" = "False" ] && [ "$READY_REASON" = "GitAuthMissing" ]; then
+                  echo "SUCCESS: Function shows GitAuthMissing status"
+                  exit 0
+                fi
+                
+                if [ -n "$READY_STATUS" ]; then
+                  echo "Found status=$READY_STATUS reason=$READY_REASON, waiting for GitAuthMissing..."
+                fi
+                
+                sleep 1
+              done
+              
+              echo "ERROR: Function did not show GitAuthMissing status after 60 seconds"
+              echo "Final status: $READY_STATUS, reason: $READY_REASON"
+              exit 1
+            timeout: 90s
     
     - name: create-git-auth-secret
       description: Create the missing Git authentication secret
