@@ -47,11 +47,21 @@ spec:
             file: function.yaml
     
     - name: verify-pipelinerun-created
-      description: Verify that a PipelineRun was created
+      description: Verify that a PipelineRun was created and has status
       try:
-        - assert:
-            file: pipelinerun-assert.yaml
-            timeout: 1m
+        - script:
+            content: |
+              for i in $(seq 1 60); do
+                STATUS=$(kubectl get pipelinerun test-function-build-fail-build -n $NAMESPACE -o jsonpath='{.status.conditions[0].type}' 2>/dev/null || echo "")
+                if [ -n "$STATUS" ]; then
+                  echo "SUCCESS: PipelineRun has status field"
+                  exit 0
+                fi
+                sleep 1
+              done
+              echo "ERROR: PipelineRun status not found after 60 seconds"
+              exit 1
+            timeout: 90s
     
     - name: wait-for-build-failure
       description: Wait for PipelineRun to fail

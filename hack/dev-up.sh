@@ -59,7 +59,7 @@ echo ""
 
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
   echo "📦 Criando cluster kind..."
-  kind create cluster --name "${CLUSTER_NAME}"
+  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0
 else
   echo "✅ Cluster kind '${CLUSTER_NAME}' já existe"
 fi
@@ -77,8 +77,13 @@ if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.se
   echo "📦 Instalando Knative Serving..."
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-crds.yaml
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-core.yaml
+  
+  echo "📦 Configurando Knative webhook para Kubernetes 1.30.0..."
+  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
+  
   echo "⏳ Aguardando Knative Serving ficar pronto..."
   kubectl wait --for=condition=ready pod -l app=controller -n knative-serving --timeout=300s
+  kubectl wait --for=condition=ready pod -l app=webhook -n knative-serving --timeout=300s
 else
   echo "✅ Knative Serving já instalado"
 fi

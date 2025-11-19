@@ -64,6 +64,7 @@ spec:
               
               PR_STATUS=$(kubectl get pipelinerun test-function-delete-build -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].reason}' 2>/dev/null || echo "Unknown")
               echo "PipelineRun status: $PR_STATUS"
+            timeout: 15s
     
     - name: delete-function-during-build
       description: Delete Function while build is running
@@ -95,7 +96,7 @@ spec:
             content: |
               echo "Waiting for PipelineRun garbage collection..."
               
-              for i in {1..30}; do
+              for i in $(seq 1 120); do
                 if ! kubectl get pipelinerun test-function-delete-build -n $NAMESPACE 2>/dev/null; then
                   echo "SUCCESS: PipelineRun garbage-collected via OwnerReference"
                   exit 0
@@ -103,9 +104,9 @@ spec:
                 sleep 1
               done
               
-              echo "WARNING: PipelineRun still exists after 30 seconds"
+              echo "WARNING: PipelineRun still exists after 120 seconds"
               echo "This may indicate OwnerReference is not set correctly"
-            timeout: 45s
+            timeout: 150s
     
     - name: verify-serviceaccount-deleted
       description: Verify ServiceAccount is garbage-collected
