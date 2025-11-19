@@ -117,12 +117,13 @@ spec:
         - script:
             content: |
               echo "Waiting for Trigger to be created..."
+              TRIGGER_NAME="test-function-eventing-trigger"
               for i in $(seq 1 60); do
-                if kubectl get trigger test-function-eventing -n "$NAMESPACE" 2>/dev/null; then
+                if kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" 2>/dev/null; then
                   echo "SUCCESS: Trigger exists"
                   
-                  BROKER=$(kubectl get trigger test-function-eventing -n "$NAMESPACE" -o jsonpath='{.spec.broker}')
-                  SUBSCRIBER=$(kubectl get trigger test-function-eventing -n "$NAMESPACE" -o jsonpath='{.spec.subscriber.ref.name}')
+                  BROKER=$(kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.broker}')
+                  SUBSCRIBER=$(kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.subscriber.ref.name}')
                   
                   echo "Trigger broker: $BROKER"
                   echo "Trigger subscriber: $SUBSCRIBER"
