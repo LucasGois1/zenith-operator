@@ -174,7 +174,11 @@ spec:
           set -x
         fi
 
-        if [ "${WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND}" = "true" ] ; then
+        if [ -f "${PARAM_USER_HOME}/.git-credentials" ]; then
+          echo "Using Tekton-injected git credentials from HOME directory"
+          git config --global credential.helper store
+        elif [ "${WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND}" = "true" ] ; then
+          echo "Using git credentials from basic-auth workspace"
           cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.git-credentials" "${PARAM_USER_HOME}/.git-credentials"
           cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.gitconfig" "${PARAM_USER_HOME}/.gitconfig"
           chmod 400 "${PARAM_USER_HOME}/.git-credentials"
