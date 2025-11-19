@@ -1,8 +1,5 @@
 
-profile: standard
-
-global:
-  kubernetesVersion: "1.30.0"
+profile: dev
 
 installStack: true
 
@@ -50,22 +47,22 @@ kong:
   gateway:
     enabled: true
   proxy:
-    type: LoadBalancer
+    type: NodePort
 
 dapr:
-  enabled: false
+  enabled: true
   version: "1.14.0"
   repository: "https://dapr.github.io/helm-charts/"
 
 registry:
-  enabled: false
+  enabled: true
   image:
     repository: registry
     tag: "2"
     pullPolicy: IfNotPresent
   storage:
     size: "10Gi"
-    storageClass: ""  # Use default StorageClass
+    storageClass: "standard"  # Kind default StorageClass
   service:
     type: ClusterIP
     port: 5000
@@ -74,7 +71,7 @@ registry:
 operator:
   image:
     repository: ghcr.io/lucasgois1/zenith-operator
-    tag: ""  # Defaults to Chart.AppVersion
+    tag: "test"  # Use test tag for development
     pullPolicy: IfNotPresent
 
   replicaCount: 1
@@ -106,15 +103,13 @@ operator:
       memory: 64Mi
 
   nodeSelector: {}
-
   tolerations: []
-
   affinity: {}
-
   imagePullSecrets: []
 
   controller:
-    insecureRegistries: []
+    insecureRegistries:
+      - "registry.registry.svc.cluster.local:5000"
 
 preflight:
   enabled: true

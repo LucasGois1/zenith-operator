@@ -1,0 +1,170 @@
+{{- if .Values.preflight.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: zenith-preflight-checks
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: zenith-preflight-checks
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses"]
+  verbs: ["get", "list"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: zenith-preflight-checks
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: zenith-preflight-checks
+subjects:
+- kind: ServiceAccount
+  name: zenith-preflight-checks
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: zenith-preflight-checks-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/name: zenith-preflight-checks
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zenith-preflight-checks
+    spec:
+      serviceAccountName: zenith-preflight-checks
+      restartPolicy: OnFailure
+      containers:
+      - name: preflight-checks
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          echo "=========================================="
+          echo "Zenith Operator Preflight Checks"
+          echo "=========================================="
+          echo ""
+          
+          ERRORS=0
+          WARNINGS=0
+          
+          {{- if .Values.preflight.checks.kubernetesVersion }}
+          echo "Checking Kubernetes version..."
+          K8S_VERSION=$(kubectl version --short 2>/dev/null | grep "Server Version" | awk '{print $3}' | sed 's/v//')
+          K8S_MAJOR=$(echo $K8S_VERSION | cut -d. -f1)
+          K8S_MINOR=$(echo $K8S_VERSION | cut -d. -f2)
+          
+          if [ "$K8S_MAJOR" -lt 1 ] || ([ "$K8S_MAJOR" -eq 1 ] && [ "$K8S_MINOR" -lt 30 ]); then
+            echo "❌ ERROR: Kubernetes version $K8S_VERSION is not supported. Minimum version is 1.30.0"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "✓ Kubernetes version $K8S_VERSION is supported"
+          fi
+          echo ""
+          {{- end }}
+          
+          {{- if .Values.preflight.checks.storageClass }}
+          echo "Checking for default StorageClass..."
+          DEFAULT_SC=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
+          
+          if [ -z "$DEFAULT_SC" ]; then
+            echo "⚠️  WARNING: No default StorageClass found. You may need to specify storageClass in values."
+            WARNINGS=$((WARNINGS + 1))
+          else
+            echo "✓ Default StorageClass found: $DEFAULT_SC"
+          fi
+          echo ""
+          {{- end }}
+          
+          {{- if .Values.preflight.checks.nodeResources }}
+          echo "Checking node resources..."
+          TOTAL_CPU=$(kubectl get nodes -o jsonpath='{.items[*].status.capacity.cpu}' | tr ' ' '\n' | awk '{sum+=$1} END {print sum}')
+          TOTAL_MEM=$(kubectl get nodes -o jsonpath='{.items[*].status.capacity.memory}' | tr ' ' '\n' | sed 's/Ki$//' | awk '{sum+=$1} END {print sum/1024/1024}')
+          
+          echo "Total cluster resources:"
+          echo "  CPU: ${TOTAL_CPU} cores"
+          echo "  Memory: ${TOTAL_MEM} GB"
+          
+          if [ "$TOTAL_CPU" -lt 4 ]; then
+            echo "⚠️  WARNING: Cluster has less than 4 CPU cores. Some components may not run optimally."
+            WARNINGS=$((WARNINGS + 1))
+          fi
+          
+          if [ "$(echo "$TOTAL_MEM < 8" | bc)" -eq 1 ]; then
+            echo "⚠️  WARNING: Cluster has less than 8GB memory. Some components may not run optimally."
+            WARNINGS=$((WARNINGS + 1))
+          fi
+          echo ""
+          {{- end }}
+          
+          {{- if .Values.preflight.checks.rbac }}
+          echo "Checking RBAC permissions..."
+          if kubectl auth can-i create clusterroles --all-namespaces >/dev/null 2>&1; then
+            echo "✓ Cluster-admin permissions verified"
+          else
+            echo "❌ ERROR: Insufficient RBAC permissions. cluster-admin role required for installation."
+            ERRORS=$((ERRORS + 1))
+          fi
+          echo ""
+          {{- end }}
+          
+          echo "=========================================="
+          echo "Preflight Check Summary"
+          echo "=========================================="
+          echo "Errors: $ERRORS"
+          echo "Warnings: $WARNINGS"
+          echo ""
+          
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ Preflight checks failed with $ERRORS error(s)."
+            echo "Please resolve the errors above before installing."
+            exit 1
+          fi
+          
+          if [ $WARNINGS -gt 0 ]; then
+            echo "⚠️  Preflight checks completed with $WARNINGS warning(s)."
+            echo "Installation will proceed, but please review the warnings above."
+          else
+            echo "✓ All preflight checks passed!"
+          fi
+          
+          echo ""
+          echo "Proceeding with installation..."
+{{- end }}
