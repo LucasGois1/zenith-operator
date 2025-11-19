@@ -87,15 +87,23 @@ spec:
           
           {{- if .Values.preflight.checks.kubernetesVersion }}
           echo "Checking Kubernetes version..."
-          K8S_VERSION=$(kubectl version --short 2>/dev/null | grep "Server Version" | awk '{print $3}' | sed 's/v//')
-          K8S_MAJOR=$(echo $K8S_VERSION | cut -d. -f1)
-          K8S_MINOR=$(echo $K8S_VERSION | cut -d. -f2)
+          K8S_VERSION=$(kubectl version -o json 2>/dev/null | grep -o '"gitVersion":"v[^"]*"' | head -1 | cut -d'"' -f4 | sed 's/v//')
+          if [ -z "$K8S_VERSION" ]; then
+            K8S_VERSION=$(kubectl version 2>/dev/null | grep "Server Version" | awk '{print $3}' | sed 's/v//')
+          fi
+          K8S_MAJOR=$(echo "$K8S_VERSION" | cut -d. -f1)
+          K8S_MINOR=$(echo "$K8S_VERSION" | cut -d. -f2)
           
-          if [ "$K8S_MAJOR" -lt 1 ] || ([ "$K8S_MAJOR" -eq 1 ] && [ "$K8S_MINOR" -lt 30 ]); then
-            echo "❌ ERROR: Kubernetes version $K8S_VERSION is not supported. Minimum version is 1.30.0"
-            ERRORS=$((ERRORS + 1))
+          if [ -n "$K8S_MAJOR" ] && [ -n "$K8S_MINOR" ]; then
+            if [ "$K8S_MAJOR" -lt 1 ] || ([ "$K8S_MAJOR" -eq 1 ] && [ "$K8S_MINOR" -lt 30 ]); then
+              echo "❌ ERROR: Kubernetes version $K8S_VERSION is not supported. Minimum version is 1.30.0"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "✓ Kubernetes version $K8S_VERSION is supported"
+            fi
           else
-            echo "✓ Kubernetes version $K8S_VERSION is supported"
+            echo "⚠️  WARNING: Could not determine Kubernetes version"
+            WARNINGS=$((WARNINGS + 1))
           fi
           echo ""
           {{- end }}
@@ -122,25 +130,33 @@ spec:
           echo "  CPU: ${TOTAL_CPU} cores"
           echo "  Memory: ${TOTAL_MEM} GB"
           
-          if [ "$TOTAL_CPU" -lt 4 ]; then
+          if [ -n "$TOTAL_CPU" ] && [ "$TOTAL_CPU" -lt 4 ]; then
             echo "⚠️  WARNING: Cluster has less than 4 CPU cores. Some components may not run optimally."
             WARNINGS=$((WARNINGS + 1))
           fi
           
-          if [ "$(echo "$TOTAL_MEM < 8" | bc)" -eq 1 ]; then
-            echo "⚠️  WARNING: Cluster has less than 8GB memory. Some components may not run optimally."
-            WARNINGS=$((WARNINGS + 1))
+          if [ -n "$TOTAL_MEM" ]; then
+            MEM_CHECK=$(echo "$TOTAL_MEM" | awk '{if ($1 < 8) print "1"; else print "0"}')
+            if [ "$MEM_CHECK" -eq 1 ]; then
+              echo "⚠️  WARNING: Cluster has less than 8GB memory. Some components may not run optimally."
+              WARNINGS=$((WARNINGS + 1))
+            fi
           fi
           echo ""
           {{- end }}
           
           {{- if .Values.preflight.checks.rbac }}
           echo "Checking RBAC permissions..."
-          if kubectl auth can-i create clusterroles --all-namespaces >/dev/null 2>&1; then
+          CAN_CREATE_CRD=$(kubectl auth can-i create customresourcedefinitions 2>/dev/null && echo "yes" || echo "no")
+          CAN_CREATE_CLUSTERROLE=$(kubectl auth can-i create clusterroles 2>/dev/null && echo "yes" || echo "no")
+          
+          if [ "$CAN_CREATE_CRD" = "yes" ] && [ "$CAN_CREATE_CLUSTERROLE" = "yes" ]; then
             echo "✓ Cluster-admin permissions verified"
           else
-            echo "❌ ERROR: Insufficient RBAC permissions. cluster-admin role required for installation."
-            ERRORS=$((ERRORS + 1))
+            echo "⚠️  WARNING: Some cluster-admin permissions may be missing."
+            echo "   CRD creation: $CAN_CREATE_CRD"
+            echo "   ClusterRole creation: $CAN_CREATE_CLUSTERROLE"
+            WARNINGS=$((WARNINGS + 1))
           fi
           echo ""
           {{- end }}

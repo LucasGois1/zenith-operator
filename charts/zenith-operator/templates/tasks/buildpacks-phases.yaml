@@ -1,6 +1,6 @@
 {{- if and .Values.installStack .Values.tekton.enabled .Values.tekton.clusterTasks.buildpacksPhases.enabled }}
 ---
-apiVersion: tekton.dev/v1
+apiVersion: tekton.dev/v1beta1
 kind: ClusterTask
 metadata:
   name: buildpacks-phases
