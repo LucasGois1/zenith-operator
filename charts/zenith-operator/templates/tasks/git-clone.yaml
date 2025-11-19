@@ -101,14 +101,14 @@ spec:
       type: string
       default: "true"
     - name: gitInitImage
-      description: The image providing the git-init binary that this Task runs.
+      description: The image providing the git binary that this Task runs.
       type: string
-      default: "gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/git-init:v0.68.0"
+      default: "alpine/git:latest"
     - name: userHome
       description: |
         Absolute path to the user's home directory.
       type: string
-      default: "/home/git"
+      default: "/root"
   results:
     - name: commit
       description: The precise commit SHA that was fetched by this Task.
@@ -166,9 +166,6 @@ spec:
         value: $(workspaces.ssl-ca-directory.bound)
       - name: WORKSPACE_SSL_CA_DIRECTORY_PATH
         value: $(workspaces.ssl-ca-directory.path)
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 65532
       script: |
         #!/usr/bin/env sh
         set -eu
@@ -199,16 +196,9 @@ spec:
         CHECKOUT_DIR="${WORKSPACE_OUTPUT_PATH}/${PARAM_SUBDIRECTORY}"
 
         cleandir() {
-          # Delete any existing contents of the repo directory if it exists.
-          #
-          # We don't just "rm -rf ${CHECKOUT_DIR}" because ${CHECKOUT_DIR} might be "/"
-          # or the root of a mounted volume.
           if [ -d "${CHECKOUT_DIR}" ] ; then
-            # Delete non-hidden files and directories
             rm -rf "${CHECKOUT_DIR:?}"/*
-            # Delete files and directories starting with . but excluding ..
             rm -rf "${CHECKOUT_DIR}"/.[!.]*
-            # Delete files and directories starting with .. plus any other character
             rm -rf "${CHECKOUT_DIR}"/..?*
           fi
         }
@@ -222,21 +212,38 @@ spec:
         test -z "${PARAM_NO_PROXY}" || export NO_PROXY="${PARAM_NO_PROXY}"
 
         git config --global --add safe.directory "${WORKSPACE_OUTPUT_PATH}"
-        /ko-app/git-init \
-          -url="${PARAM_URL}" \
-          -revision="${PARAM_REVISION}" \
-          -refspec="${PARAM_REFSPEC}" \
-          -path="${CHECKOUT_DIR}" \
-          -sslVerify="${PARAM_SSL_VERIFY}" \
-          -submodules="${PARAM_SUBMODULES}" \
-          -depth="${PARAM_DEPTH}" \
-          -sparseCheckoutDirectories="${PARAM_SPARSE_CHECKOUT_DIRECTORIES}"
+        git config --global http.sslVerify "${PARAM_SSL_VERIFY}"
+        
+        mkdir -p "${CHECKOUT_DIR}"
         cd "${CHECKOUT_DIR}"
-        RESULT_SHA="$(git rev-parse HEAD)"
-        EXIT_CODE="$?"
-        if [ "${EXIT_CODE}" != 0 ] ; then
-          exit "${EXIT_CODE}"
+        
+        CLONE_ARGS="--no-checkout"
+        if [ "${PARAM_DEPTH}" != "0" ] ; then
+          CLONE_ARGS="${CLONE_ARGS} --depth=${PARAM_DEPTH}"
         fi
+        
+        git clone ${CLONE_ARGS} "${PARAM_URL}" .
+        
+        if [ -n "${PARAM_REFSPEC}" ] ; then
+          git fetch origin "${PARAM_REFSPEC}"
+        fi
+        
+        if [ -n "${PARAM_REVISION}" ] ; then
+          git checkout "${PARAM_REVISION}"
+        else
+          git checkout HEAD
+        fi
+        
+        if [ "${PARAM_SUBMODULES}" = "true" ] ; then
+          git submodule update --init --recursive
+        fi
+        
+        if [ -n "${PARAM_SPARSE_CHECKOUT_DIRECTORIES}" ] ; then
+          git sparse-checkout init --cone
+          git sparse-checkout set ${PARAM_SPARSE_CHECKOUT_DIRECTORIES}
+        fi
+        
+        RESULT_SHA="$(git rev-parse HEAD)"
         printf "%s" "${RESULT_SHA}" > "$(results.commit.path)"
         printf "%s" "${PARAM_URL}" > "$(results.url.path)"
         printf "%s" "$(git log -1 --pretty=%ct)" > "$(results.committer-date.path)"
