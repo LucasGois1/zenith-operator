@@ -54,9 +54,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create the name of the service account to use
 */}}
 {{- define "zenith-operator.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "zenith-operator.fullname" .) .Values.serviceAccount.name }}
+{{- if .Values.operator.serviceAccount.create }}
+{{- default (include "zenith-operator.fullname" .) .Values.operator.serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- default "default" .Values.operator.serviceAccount.name }}
 {{- end }}
 {{- end }}

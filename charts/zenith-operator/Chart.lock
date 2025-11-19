@@ -2,5 +2,8 @@ dependencies:
 - name: ingress
   repository: https://charts.konghq.com
   version: 0.10.0
-digest: sha256:eb6cb0dd4e7c3555a36dfe645d0e59a517c2f08bdf5feb0be253f2166414c07d
-generated: "2025-11-18T20:01:01.181315-03:00"
+- name: dapr
+  repository: https://dapr.github.io/helm-charts/
+  version: 1.14.4
+digest: sha256:80e18beff56bebdd84bc37a95f75a7c0493e48def23741996d682fd889134cc2
+generated: "2025-11-19T03:11:48.857130555Z"
