@@ -296,13 +296,13 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Construir a referência completa da imagem com o digest
 	imageWithDigest := function.Spec.Build.Image + "@" + imageDigest
 	function.Status.ImageDigest = imageWithDigest
-	buildSucceededCondition := metav1.Condition{
-		Type:    "Ready", // Tipo de condição padrão
-		Status:  metav1.ConditionFalse,
-		Reason:  "BuildSucceeded",
-		Message: "Imagem gerada com sucesso",
+	deployingCondition := metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionUnknown,
+		Reason:  "Deploying",
+		Message: "Build succeeded, deploying to Knative Service",
 	}
-	meta.SetStatusCondition(&function.Status.Conditions, buildSucceededCondition)
+	meta.SetStatusCondition(&function.Status.Conditions, deployingCondition)
 	function.Status.ObservedGeneration = function.Generation
 
 	if err := r.Status().Update(ctx, &function); err != nil {
@@ -403,6 +403,56 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if knativeService.Status.URL != nil {
 		function.Status.URL = knativeService.Status.URL.String()
 	}
+
+	// Verificar o status de readiness do Knative Service antes de prosseguir
+	ksvcReady := meta.FindStatusCondition(knativeService.Status.Conditions, "Ready")
+	if ksvcReady == nil {
+		deployingCondition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionUnknown,
+			Reason:  "Deploying",
+			Message: "Waiting for Knative Service to report readiness",
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, deployingCondition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, &function); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	if ksvcReady.Status == metav1.ConditionFalse {
+		notReadyCondition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  ksvcReady.Reason,
+			Message: "Knative Service not ready: " + ksvcReady.Message,
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, notReadyCondition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, &function); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	if ksvcReady.Status == metav1.ConditionUnknown {
+		deployingCondition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionUnknown,
+			Reason:  "Deploying",
+			Message: "Knative Service is deploying: " + ksvcReady.Message,
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, deployingCondition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, &function); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	// Se chegamos aqui, o Knative Service está Ready=True
+	log.Info("Knative Service is ready")
 
 	// Se 'eventing' não estiver configurado, limpar qualquer Trigger existente e marcar como Ready.
 	if function.Spec.Eventing.Broker == "" {
