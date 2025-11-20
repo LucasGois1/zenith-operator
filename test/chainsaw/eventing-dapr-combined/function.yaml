@@ -1,0 +1,20 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-eventing-dapr
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/eventing-dapr:latest
+  deploy:
+    dapr:
+      enabled: true
+      appID: test-eventing-dapr-app
+      appPort: 8080
+  eventing:
+    broker: default
+    filters:
+      type: com.example.combined.test
+      source: test-source

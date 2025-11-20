@@ -134,7 +134,56 @@ spec:
             timeout: 1m
     
     - name: verify-still-ready
-      description: Verify Function is still Ready after update
+      description: Verify Function is still Ready after filter update
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 1m
+    
+    - name: create-alternate-broker
+      description: Create alternate broker for broker change test
+      try:
+        - apply:
+            file: broker-alternate.yaml
+    
+    - name: update-function-broker
+      description: Update Function to use alternate broker
+      try:
+        - apply:
+            file: function-broker-changed.yaml
+    
+    - name: wait-for-broker-update
+      description: Wait for Trigger broker to be updated
+      try:
+        - script:
+            content: |
+              echo "Waiting for Trigger broker to be updated..."
+              sleep 5
+              
+              INITIAL_BROKER=$(cat /tmp/initial-broker.txt)
+              
+              for i in {1..30}; do
+                CURRENT_BROKER=$(kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o jsonpath='{.spec.broker}')
+                
+                echo "Current broker: $CURRENT_BROKER (initial was: $INITIAL_BROKER)"
+                
+                if [ "$CURRENT_BROKER" = "alternate-broker" ]; then
+                  echo "SUCCESS: Trigger broker updated to 'alternate-broker'"
+                  exit 0
+                fi
+                
+                if [ $i -eq 30 ]; then
+                  echo "ERROR: Trigger broker not updated after 30 seconds"
+                  kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o yaml
+                  exit 1
+                fi
+                
+                sleep 1
+              done
+            timeout: 45s
+    
+    - name: verify-still-ready-after-broker-change
+      description: Verify Function is still Ready after broker change
       try:
         - assert:
             file: function-ready-assert.yaml
@@ -153,3 +202,8 @@ spec:
               apiVersion: eventing.knative.dev/v1
               kind: Broker
               name: test-broker
+        - delete:
+            ref:
+              apiVersion: eventing.knative.dev/v1
+              kind: Broker
+              name: alternate-broker

@@ -1,0 +1,20 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-e2e-event
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: devin/1763653438-add-request-logging
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/e2e-event-delivery:latest
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080
+  eventing:
+    broker: default
+    filters:
+      type: com.zenith.test.ping
+      source: /test/pingsource

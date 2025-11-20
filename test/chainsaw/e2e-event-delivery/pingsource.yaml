@@ -1,0 +1,17 @@
+apiVersion: sources.knative.dev/v1
+kind: PingSource
+metadata:
+  name: test-pingsource
+spec:
+  schedule: "*/1 * * * *"
+  contentType: "application/json"
+  data: '{"message":"test event from pingsource"}'
+  ceOverrides:
+    extensions:
+      type: com.zenith.test.ping
+      source: /test/pingsource
+  sink:
+    ref:
+      apiVersion: eventing.knative.dev/v1
+      kind: Broker
+      name: default
