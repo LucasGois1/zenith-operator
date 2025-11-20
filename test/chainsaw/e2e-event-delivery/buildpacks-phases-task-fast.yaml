@@ -22,18 +22,22 @@ spec:
       description: Digest of the image (fast-path for testing operator behavior)
   steps:
     - name: fast-build
-      image: busybox:1.36
+      image: gcr.io/go-containerregistry/crane:latest
       script: |
         #!/bin/sh
         set -e
         
         echo "Fast-path builder for testing operator behavior"
-        echo "This simulates a successful build and writes a plausible digest"
+        echo "Copying a small test image to local registry"
         
-        TIMESTAMP=$(date +%s)
-        HASH=$(echo -n "$(params.APP_IMAGE)-$TIMESTAMP" | sha256sum | cut -d' ' -f1)
-        DIGEST="sha256:$HASH"
-        echo "Generated digest: $DIGEST"
+        SOURCE_IMAGE="docker.io/library/busybox:1.36"
+        TARGET_IMAGE="$(params.APP_IMAGE)"
+        
+        echo "Copying $SOURCE_IMAGE to $TARGET_IMAGE"
+        crane cp --insecure "$SOURCE_IMAGE" "$TARGET_IMAGE"
+        
+        DIGEST=$(crane digest --insecure "$TARGET_IMAGE")
+        echo "Image digest: $DIGEST"
         
         echo -n "$DIGEST" > "$(results.APP_IMAGE_DIGEST.path)"
         
