@@ -47,20 +47,50 @@ For a deep dive into the architecture, check out the [Architecture Documentation
 
 ### Prerequisites
 
-* Kubernetes Cluster (v1.24+)
-* [Tekton Pipelines](https://tekton.dev/docs/pipelines/install/) installed
-* [Knative Serving](https://knative.dev/docs/install/serving/) installed
-* *(Optional)* [Knative Eventing](https://knative.dev/docs/eventing/install/) and [Dapr](https://docs.dapr.io/getting-started/install-dapr-selfhost/)
+* Kubernetes Cluster (v1.30+)
+* Helm 3.x
+* `kubectl` configured to access your cluster
 
 ### Installation
 
-1. **Install the CRDs and Operator:**
+#### Option 1: Helm (Recommended)
+
+The easiest way to install Zenith Operator with all dependencies:
+
+```sh
+# Add the Helm repository
+helm repo add zenith-operator https://lucasgois1.github.io/zenith-operator
+helm repo update
+
+# Install the operator and all dependencies
+helm install zenith-operator zenith-operator/zenith-operator
+```
+
+This automatically installs:
+- Zenith Operator
+- Tekton Pipelines (for builds)
+- Knative Serving (for deployments)
+- Knative Eventing (for event-driven architectures)
+- Kong Ingress Controller (for routing)
+
+For detailed installation options and configuration, see the [Installation Guide](INSTALLATION.md).
+
+#### Option 2: Manual Installation
+
+If you prefer to install components separately:
+
+1. **Install prerequisites:**
+   - [Tekton Pipelines](https://tekton.dev/docs/pipelines/install/)
+   - [Knative Serving](https://knative.dev/docs/install/serving/)
+   - [Knative Eventing](https://knative.dev/docs/eventing/install/) (optional)
+
+2. **Install the operator:**
 
    ```sh
    kubectl apply -f https://github.com/LucasGois1/zenith-operator/releases/latest/download/install.yaml
    ```
 
-2. **Verify installation:**
+3. **Verify installation:**
 
    ```sh
    kubectl get pods -n zenith-operator-system
