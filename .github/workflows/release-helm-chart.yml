@@ -1,0 +1,92 @@
+name: Release Helm Chart and Website
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add kong https://charts.konghq.com
+          helm repo add dapr https://dapr.github.io/helm-charts/
+          helm repo update
+
+      - name: Update Helm dependencies
+        run: |
+          cd charts/zenith-operator
+          helm dependency update
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.6.0
+        with:
+          charts_dir: charts
+          config: .github/cr.yaml
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CR_SKIP_EXISTING: true
+
+      - name: Checkout gh-pages branch
+        run: |
+          git fetch origin gh-pages || true
+          git checkout gh-pages || git checkout --orphan gh-pages
+
+      - name: Copy website files to gh-pages
+        run: |
+          # Keep the index.yaml and .cr-* files from chart-releaser
+          if [ -f index.yaml ]; then
+            cp index.yaml /tmp/index.yaml
+          fi
+          if [ -d .cr-release-packages ]; then
+            cp -r .cr-release-packages /tmp/.cr-release-packages
+          fi
+          if [ -d .cr-index ]; then
+            cp -r .cr-index /tmp/.cr-index
+          fi
+          
+          # Copy website files
+          cp -r docs/* .
+          
+          # Restore Helm chart files
+          if [ -f /tmp/index.yaml ]; then
+            cp /tmp/index.yaml .
+          fi
+          if [ -d /tmp/.cr-release-packages ]; then
+            cp -r /tmp/.cr-release-packages .
+          fi
+          if [ -d /tmp/.cr-index ]; then
+            cp -r /tmp/.cr-index .
+          fi
+
+      - name: Commit and push website
+        run: |
+          git add .
+          git commit -m "Update website and Helm chart repository" || echo "No changes to commit"
+          git push origin gh-pages

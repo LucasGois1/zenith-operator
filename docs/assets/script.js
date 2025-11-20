@@ -89,13 +89,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const pixInput = document.getElementById('pix-code');
             pixInput.select();
             pixInput.setSelectionRange(0, 99999); /* For mobile devices */
-            
+
             navigator.clipboard.writeText(pixInput.value).then(() => {
                 const originalIcon = pixCopyBtn.innerHTML;
                 pixCopyBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
                 pixCopyBtn.style.background = '#27c93f';
                 pixCopyBtn.style.color = '#fff';
-                
+
                 setTimeout(() => {
                     pixCopyBtn.innerHTML = originalIcon;
                     pixCopyBtn.style.background = '';

@@ -248,12 +248,17 @@
                 <div class="docs-content">
                     <div id="install" class="docs-section active">
                         <h3>Installation</h3>
-                        <p>Deploy Zenith Operator to your Kubernetes cluster.</p>
+                        <p>Deploy Zenith Operator and all dependencies to your Kubernetes cluster using Helm.</p>
                         <div class="code-block">
                             <button class="copy-btn"><i class="fa-regular fa-copy"></i></button>
-                            <code>kubectl apply -f https://github.com/LucasGois1/zenith-operator/releases/latest/download/install.yaml</code>
+                            <pre># Add the Helm repository
+helm repo add zenith-operator https://lucasgois1.github.io/zenith-operator
+helm repo update
+
+# Install the operator and all dependencies
+helm install zenith-operator zenith-operator/zenith-operator</pre>
                         </div>
-                        <p class="note">Note: Ensure you have Tekton and Knative installed in your cluster first.</p>
+                        <p class="note">This automatically installs Tekton, Knative, Kong, and all required dependencies.</p>
                     </div>
 
                     <div id="quickstart" class="docs-section">
