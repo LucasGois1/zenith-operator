@@ -42,10 +42,5 @@ jobs:
       - name: Run chart-testing (lint)
         run: ct lint --config .github/ct.yaml --charts charts/zenith-operator
 
-      - name: Create Kind cluster
-        uses: helm/kind-action@v1.10.0
-        with:
-          cluster_name: chart-testing
-
-      - name: Run chart-testing (install)
-        run: ct install --config .github/ct.yaml --charts charts/zenith-operator
+      # Note: ct install is disabled on PRs because it requires Tekton/Knative/Kong to be pre-installed
+      # Consider moving install tests to a nightly workflow with proper cluster setup

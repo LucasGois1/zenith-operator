@@ -44,6 +44,9 @@ jobs:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
 
+      - name: Download Go modules
+        run: go mod download
+
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
 
