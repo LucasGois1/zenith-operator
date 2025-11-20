@@ -22,5 +22,6 @@ rules:
   document-start: disable
   empty-lines:
     max-start: 1
+    max-end: 1
   truthy:
     allowed-values: ['true', 'false', 'on', 'off']
