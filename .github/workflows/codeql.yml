@@ -18,6 +18,9 @@ jobs:
   analyze:
     name: Analyze Code
     runs-on: ubuntu-latest
+    # Only run when GitHub Advanced Security is enabled
+    # To enable: Settings → Security → Code security and analysis → Enable Code scanning
+    if: vars.ENABLE_CODE_SCANNING == 'true' || github.event_name == 'schedule'
     permissions:
       actions: read
       contents: read
@@ -52,6 +55,5 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        continue-on-error: true
         with:
           category: "/language:${{ matrix.language }}"

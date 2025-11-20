@@ -53,4 +53,4 @@ jobs:
         with:
           config_file: .yamllint.yml
           file_or_dir: config/
-          strict: false
+          strict: true

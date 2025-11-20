@@ -53,8 +53,9 @@ jobs:
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
-        if: always() && !github.event.pull_request.head.repo.fork
-        continue-on-error: true
+        # Only upload SARIF when GitHub Advanced Security is enabled
+        # To enable: Settings → Security → Code security and analysis → Enable Code scanning
+        if: always() && vars.ENABLE_CODE_SCANNING == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
         with:
           sarif_file: 'trivy-results.sarif'
 
