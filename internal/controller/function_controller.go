@@ -54,6 +54,7 @@ type FunctionReconciler struct {
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=serving.knative.dev,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eventing.knative.dev,resources=triggers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=eventing.knative.dev,resources=brokers,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
@@ -403,8 +404,25 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		function.Status.URL = knativeService.Status.URL.String()
 	}
 
-	// Se 'eventing' não estiver configurado, marcar como Ready e parar.
+	// Se 'eventing' não estiver configurado, limpar qualquer Trigger existente e marcar como Ready.
 	if function.Spec.Eventing.Broker == "" {
+		triggerName := function.Name + "-trigger"
+		existingTrigger := &kneventingv1.Trigger{}
+		err := r.Get(ctx, types.NamespacedName{Name: triggerName, Namespace: function.Namespace}, existingTrigger)
+		
+		if err == nil {
+			log.Info("Eventing removido, deletando Trigger existente", "Trigger.Name", triggerName)
+			if err := r.Delete(ctx, existingTrigger); err != nil {
+				log.Error(err, "Falha ao deletar Trigger")
+				return ctrl.Result{}, err
+			}
+			log.Info("Trigger deletado com sucesso")
+			return ctrl.Result{Requeue: true}, nil
+		} else if !errors.IsNotFound(err) {
+			log.Error(err, "Falha ao verificar Trigger existente")
+			return ctrl.Result{}, err
+		}
+		
 		readyCondition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionTrue,
@@ -417,6 +435,33 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
+	}
+
+	// Verificar se o Broker existe antes de criar/atualizar o Trigger
+	brokerName := function.Spec.Eventing.Broker
+	if brokerName == "" {
+		brokerName = "default"
+	}
+	broker := &kneventingv1.Broker{}
+	err = r.Get(ctx, types.NamespacedName{Name: brokerName, Namespace: function.Namespace}, broker)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Error(err, "Broker não encontrado", "Broker.Name", brokerName)
+			brokerNotFoundCondition := metav1.Condition{
+				Type:    "Ready",
+				Status:  metav1.ConditionFalse,
+				Reason:  "BrokerNotFound",
+				Message: "Knative Broker não encontrado: " + brokerName,
+			}
+			meta.SetStatusCondition(&function.Status.Conditions, brokerNotFoundCondition)
+			function.Status.ObservedGeneration = function.Generation
+			if err := r.Status().Update(ctx, &function); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+		}
+		log.Error(err, "Falha ao verificar Broker")
+		return ctrl.Result{}, err
 	}
 
 	triggerName := function.Name + "-trigger"
