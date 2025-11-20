@@ -20,7 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     # Only run when GitHub Advanced Security is enabled
     # To enable: Settings → Security → Code security and analysis → Enable Code scanning
-    if: vars.ENABLE_CODE_SCANNING == 'true' || github.event_name == 'schedule'
+    # Set repository variable ENABLE_CODE_SCANNING to 'true' to enable this workflow
+    if: vars.ENABLE_CODE_SCANNING == 'true'
     permissions:
       actions: read
       contents: read
