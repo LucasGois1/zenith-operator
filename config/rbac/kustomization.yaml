@@ -25,4 +25,3 @@ resources:
 - function_admin_role.yaml
 - function_editor_role.yaml
 - function_viewer_role.yaml
-

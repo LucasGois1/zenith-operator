@@ -2,7 +2,23 @@ name: E2E Tests
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'api/**'
+      - 'internal/**'
+      - 'config/**'
+      - 'charts/**'
+      - '.github/workflows/test-e2e.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-e2e:
