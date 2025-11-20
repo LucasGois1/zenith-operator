@@ -708,7 +708,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 						TaskRef: &tektonv1.TaskRef{
 							Name:       "git-clone", // Refere-se à Task 'git-clone' instalada [5]
 							Kind:       "ClusterTask",
-							APIVersion: "tekton.dev/v1beta1",
+							APIVersion: "tekton.dev/v1",
 						},
 						// 'Workspaces' aqui é um slice de 'WorkspacePipelineTaskBinding'
 						Workspaces: []tektonv1.WorkspacePipelineTaskBinding{
