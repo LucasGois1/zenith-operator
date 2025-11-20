@@ -1,0 +1,10 @@
+---
+remote: origin
+target-branch: main
+chart-dirs:
+  - charts
+chart-repos:
+  - kong=https://charts.konghq.com
+  - dapr=https://dapr.github.io/helm-charts/
+helm-extra-args: --timeout 600s
+validate-maintainers: false

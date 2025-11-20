@@ -6,6 +6,13 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-v1.24+-326ce5.svg?logo=kubernetes)](https://kubernetes.io)
 
+[![Lint](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml)
+[![Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml)
+[![E2E Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml)
+[![codecov](https://codecov.io/gh/LucasGois1/zenith-operator/branch/main/graph/badge.svg)](https://codecov.io/gh/LucasGois1/zenith-operator)
+[![CodeQL](https://github.com/LucasGois1/zenith-operator/actions/workflows/codeql.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/codeql.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/LucasGois1/zenith-operator.svg)](https://pkg.go.dev/github.com/LucasGois1/zenith-operator)
+
 Zenith Operator abstracts the complexity of building and deploying serverless functions on Kubernetes. It orchestrates **Tekton Pipelines** for builds, **Knative Serving** for deployments, and **Knative Eventing** for event-driven invocations — all through a single `Function` Custom Resource Definition (CRD).
 
 ---

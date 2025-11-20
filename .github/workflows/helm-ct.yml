@@ -1,0 +1,51 @@
+name: Helm Chart Testing
+
+on:
+  pull_request:
+    paths:
+      - 'charts/**'
+      - '.github/workflows/helm-ct.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-test:
+    name: Lint and Test Charts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add kong https://charts.konghq.com
+          helm repo add dapr https://dapr.github.io/helm-charts/
+          helm repo update
+
+      - name: Update Helm dependencies
+        run: |
+          cd charts/zenith-operator
+          helm dependency update
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.7.0
+
+      - name: Run chart-testing (lint)
+        run: ct lint --config .github/ct.yaml --charts charts/zenith-operator
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: chart-testing
+
+      - name: Run chart-testing (install)
+        run: ct install --config .github/ct.yaml --charts charts/zenith-operator
