@@ -404,8 +404,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		function.Status.URL = knativeService.Status.URL.String()
 	}
 
-	// Verificar o status de readiness do Knative Service antes de prosseguir
-	ksvcReady := meta.FindStatusCondition(knativeService.Status.Conditions, "Ready")
+	ksvcReady := knativeService.Status.GetCondition("Ready")
 	if ksvcReady == nil {
 		deployingCondition := metav1.Condition{
 			Type:    "Ready",
@@ -421,11 +420,11 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
-	if ksvcReady.Status == metav1.ConditionFalse {
+	if ksvcReady.IsFalse() {
 		notReadyCondition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
-			Reason:  ksvcReady.Reason,
+			Reason:  string(ksvcReady.Reason),
 			Message: "Knative Service not ready: " + ksvcReady.Message,
 		}
 		meta.SetStatusCondition(&function.Status.Conditions, notReadyCondition)
@@ -436,7 +435,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
-	if ksvcReady.Status == metav1.ConditionUnknown {
+	if ksvcReady.IsUnknown() {
 		deployingCondition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionUnknown,
@@ -451,7 +450,6 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
-	// Se chegamos aqui, o Knative Service está Ready=True
 	log.Info("Knative Service is ready")
 
 	// Se 'eventing' não estiver configurado, limpar qualquer Trigger existente e marcar como Ready.
