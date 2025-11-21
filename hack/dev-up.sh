@@ -117,6 +117,42 @@ else
   echo "✅ Gateway API CRDs já instalados"
 fi
 
+if ! kubectl get namespace metallb-system 2>/dev/null; then
+  echo "📦 Instalando MetalLB para LoadBalancer support em kind..."
+  kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
+  
+  echo "⏳ Aguardando MetalLB ficar pronto..."
+  kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s
+  
+  echo "📦 Configurando MetalLB IP address pool..."
+  DOCKER_NETWORK=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' | head -n1)
+  IP_PREFIX=$(echo ${DOCKER_NETWORK} | cut -d'.' -f1-2)
+  
+  cat <<EOF | kubectl apply -f -
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: kind-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - ${IP_PREFIX}.255.200-${IP_PREFIX}.255.250
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: kind-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - kind-pool
+EOF
+  
+  echo "✅ MetalLB configurado com IP pool ${IP_PREFIX}.255.200-${IP_PREFIX}.255.250"
+else
+  echo "✅ MetalLB já instalado"
+fi
+
 if ! command -v helm &> /dev/null; then
   echo "📦 Instalando Helm..."
   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -246,7 +282,7 @@ if ! kubectl get configmap config-network -n knative-serving -o yaml | grep -q "
 fi
 
 if ! kubectl get gatewayclass envoy 2>/dev/null; then
-  echo "📦 Criando GatewayClass e Gateway para Envoy..."
+  echo "📦 Criando GatewayClass e Gateways para Envoy..."
   cat <<EOF | kubectl apply -f -
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
@@ -269,25 +305,47 @@ spec:
     allowedRoutes:
       namespaces:
         from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: knative-local-gateway
+  namespace: knative-serving
+spec:
+  gatewayClassName: envoy
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: All
 EOF
-  echo "⏳ Aguardando Gateway ficar pronto..."
-  sleep 10
+  echo "⏳ Aguardando Gateways ficarem prontos..."
+  sleep 15
   
   ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  
   if [ -n "$ENVOY_SVC" ]; then
-    echo "📍 Envoy Gateway service: envoy-gateway-system/${ENVOY_SVC}"
+    echo "📍 Envoy Gateway (external) service: envoy-gateway-system/${ENVOY_SVC}"
+  fi
+  if [ -n "$LOCAL_ENVOY_SVC" ]; then
+    echo "📍 Envoy Gateway (local) service: envoy-gateway-system/${LOCAL_ENVOY_SVC}"
   fi
 fi
 
 if ! kubectl get configmap config-gateway -n knative-serving -o yaml | grep -q "class: envoy"; then
-  echo "📦 Configurando Knative Gateway para usar Envoy..."
+  echo "📦 Configurando Knative Gateway para usar Envoy (external + local)..."
   
   ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
   
-  if [ -n "$ENVOY_SVC" ]; then
-    kubectl patch configmap/config-gateway -n knative-serving --type merge -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\"}}"
+  if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
+    kubectl patch configmap/config-gateway -n knative-serving --type merge -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\",\"local-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-local-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${LOCAL_ENVOY_SVC}\\\"}]\"}}"
+    echo "✅ Configurado external-gateways e local-gateways"
   else
-    echo "⚠️  Envoy Gateway service not found yet, will be configured on first reconciliation"
+    echo "⚠️  Envoy Gateway services not found yet, will be configured on first reconciliation"
   fi
 fi
 
