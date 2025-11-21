@@ -4,7 +4,7 @@ metadata:
   name: balance-manager
 spec:
   gitRepo: https://github.com/LucasGois1/zenith-test-balance-manager
-  gitRevision: devin/1763687173-implement-balance-manager
+  gitRevision: main
   gitAuthSecretName: github-auth
   build:
     image: registry.registry.svc.cluster.local:5000/zenith-test/balance-manager:latest

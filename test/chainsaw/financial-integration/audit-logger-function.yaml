@@ -4,7 +4,7 @@ metadata:
   name: audit-logger
 spec:
   gitRepo: https://github.com/LucasGois1/zenith-test-audit-logger
-  gitRevision: devin/1763687105-implement-audit-logger
+  gitRevision: main
   gitAuthSecretName: github-auth
   build:
     image: registry.registry.svc.cluster.local:5000/zenith-test/audit-logger:latest
