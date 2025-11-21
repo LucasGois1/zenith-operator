@@ -125,7 +125,6 @@ spec:
               else
                 echo "WARNING: Function became Ready unexpectedly"
               fi
-            timeout: 30s
     
     - name: cleanup
       description: Clean up resources
