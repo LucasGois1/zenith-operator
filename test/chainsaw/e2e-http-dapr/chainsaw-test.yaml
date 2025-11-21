@@ -50,7 +50,7 @@ spec:
             content: |
               FN_NAME=test-function-http-dapr
               for i in $(seq 1 60); do
-                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"\n"}{end}' | tail -n1)
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
                 [ -n "$PR_NAME" ] && break
                 sleep 2
               done
