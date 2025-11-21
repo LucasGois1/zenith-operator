@@ -27,7 +27,6 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
-            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -46,7 +45,6 @@ spec:
       description: Create registry authentication secret
       try:
         - script:
-            timeout: 10m
             content: |
               kubectl create secret docker-registry registry-auth \
                 --docker-server=docker.io \
@@ -60,7 +58,6 @@ spec:
         - apply:
             file: function.yaml
         - script:
-            timeout: 10m
             content: |
               FN_NAME=test-function-idempotent
               for i in $(seq 1 60); do
@@ -90,7 +87,6 @@ spec:
       description: Capture ServiceAccount resourceVersion
       try:
         - script:
-            timeout: 10m
             content: |
               INITIAL_RV=$(kubectl get sa test-function-idempotent-sa -n $NAMESPACE -o jsonpath='{.metadata.resourceVersion}')
               echo "Initial SA resourceVersion: $INITIAL_RV"
@@ -100,7 +96,6 @@ spec:
       description: Trigger reconciliation by updating annotation
       try:
         - script:
-            timeout: 10m
             content: |
               kubectl annotate function test-function-idempotent -n $NAMESPACE test-reconcile="$(date +%s)" --overwrite
     
@@ -108,7 +103,6 @@ spec:
       description: Wait for reconciliation to complete
       try:
         - script:
-            timeout: 10m
             content: |
               echo "Waiting for reconciliation..."
               sleep 5
@@ -117,7 +111,6 @@ spec:
       description: Verify ServiceAccount was not updated (idempotent)
       try:
         - script:
-            timeout: 10m
             content: |
               INITIAL_RV=$(cat /tmp/initial-sa-rv.txt)
               CURRENT_RV=$(kubectl get sa test-function-idempotent-sa -n $NAMESPACE -o jsonpath='{.metadata.resourceVersion}')

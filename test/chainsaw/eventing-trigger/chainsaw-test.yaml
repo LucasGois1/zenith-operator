@@ -26,8 +26,6 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
-            timeout: 10m
-            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -46,8 +44,6 @@ spec:
       description: Create Knative Eventing Broker for the test
       try:
         - script:
-            timeout: 10m
-            timeout: 10m
             content: |
               cat <<'EOF' | kubectl apply -f - -n $NAMESPACE
               apiVersion: eventing.knative.dev/v1
@@ -68,8 +64,6 @@ spec:
       description: Wait for PipelineRun to complete
       try:
         - script:
-            timeout: 10m
-            timeout: 10m
             content: |
               FN_NAME=test-function-eventing
               for i in $(seq 1 60); do
@@ -86,8 +80,6 @@ spec:
       description: Wait for controller to set Function.status.imageDigest after build
       try:
         - script:
-            timeout: 10m
-            timeout: 10m
             content: |
               echo "Waiting for Function.status.imageDigest to be set..."
               for i in $(seq 1 60); do
@@ -106,8 +98,6 @@ spec:
       description: Verify that a Knative Service was created
       try:
         - script:
-            timeout: 10m
-            timeout: 10m
             content: |
               echo "Waiting for Knative Service to be created..."
               for i in $(seq 1 60); do
@@ -125,8 +115,6 @@ spec:
       description: Verify that a Trigger was created with correct broker and subscriber
       try:
         - script:
-            timeout: 10m
-            timeout: 10m
             content: |
               echo "Waiting for Trigger to be created..."
               TRIGGER_NAME="test-function-eventing-trigger"

@@ -27,7 +27,6 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
-            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -108,7 +107,6 @@ spec:
       description: Verify no resource conflicts
       try:
         - script:
-            timeout: 10m
             content: |
               echo "Verifying resource isolation..."
               

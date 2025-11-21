@@ -27,7 +27,6 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
-            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -59,7 +58,6 @@ spec:
       description: Verify KService has no Dapr annotations
       try:
         - script:
-            timeout: 10m
             content: |
               DAPR_ENABLED=$(kubectl get service.serving.knative.dev test-function-dapr-update -n $NAMESPACE -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/enabled}' 2>/dev/null || echo "")
               
@@ -87,7 +85,6 @@ spec:
       description: Wait for KService to be updated with Dapr annotations
       try:
         - script:
-            timeout: 10m
             content: |
               echo "Waiting for Dapr annotations to appear..."
               for i in {1..30}; do
@@ -118,7 +115,6 @@ spec:
       description: Verify container port matches Dapr appPort
       try:
         - script:
-            timeout: 10m
             content: |
               CONTAINER_PORT=$(kubectl get service.serving.knative.dev test-function-dapr-update -n $NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].ports[0].containerPort}')
               
