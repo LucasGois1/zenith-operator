@@ -11,6 +11,5 @@ spec:
         dapr.io/app-port: "8080"
     spec:
       containers:
-        - image: registry.registry.svc.cluster.local:5000*
           ports:
             - containerPort: 8080
