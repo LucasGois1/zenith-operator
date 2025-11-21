@@ -295,18 +295,6 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Construir a referência completa da imagem com o digest
 	imageWithDigest := function.Spec.Build.Image + "@" + imageDigest
 	function.Status.ImageDigest = imageWithDigest
-	buildSucceededCondition := metav1.Condition{
-		Type:    "Ready", // Tipo de condição padrão
-		Status:  metav1.ConditionFalse,
-		Reason:  "BuildSucceeded",
-		Message: "Imagem gerada com sucesso",
-	}
-	meta.SetStatusCondition(&function.Status.Conditions, buildSucceededCondition)
-	function.Status.ObservedGeneration = function.Generation
-
-	if err := r.Status().Update(ctx, &function); err != nil {
-		return ctrl.Result{}, err
-	}
 
 	log.Info("Iniciando Fase 3.4: Reconciliação do Knative Service")
 
