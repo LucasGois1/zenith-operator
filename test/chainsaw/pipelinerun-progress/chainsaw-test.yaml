@@ -75,13 +75,12 @@ spec:
               else
                 echo "ERROR: Unexpected status reason: $STATUS_REASON"
                 exit 1
-              fi
+              fi
         - script:
             content: |
               FN_NAME=test-function-progress
               for i in $(seq 1 60); do
-                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"
-"}{end}' | tail -n1)
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{\"\n\"}{end}' | tail -n1)
                 [ -n "$PR_NAME" ] && break
                 sleep 2
               done
