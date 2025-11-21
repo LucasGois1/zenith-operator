@@ -1,0 +1,15 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: transaction-processor
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-transaction-processor
+  gitRevision: devin/1763687236-implement-transaction-processor
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/transaction-processor:latest
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080
