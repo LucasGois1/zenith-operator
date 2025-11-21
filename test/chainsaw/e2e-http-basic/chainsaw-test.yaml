@@ -98,10 +98,20 @@ spec:
         - script:
             timeout: 10m
             content: |
-              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}')
+              FUNCTION_HOST=$(cat /tmp/function-host.txt)
+              
+              if echo "$FUNCTION_HOST" | grep -q "\.svc\.cluster\.local"; then
+                GATEWAY_NAME="knative-local-gateway"
+                echo "Using local gateway for cluster.local URL"
+              else
+                GATEWAY_NAME="knative-gateway"
+                echo "Using external gateway for public URL"
+              fi
+              
+              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=$GATEWAY_NAME -o jsonpath='{.items[0].metadata.name}')
               
               if [ -z "$ENVOY_SVC" ]; then
-                echo "ERROR: Could not find Envoy Gateway service"
+                echo "ERROR: Could not find Envoy Gateway service for $GATEWAY_NAME"
                 exit 1
               fi
               
