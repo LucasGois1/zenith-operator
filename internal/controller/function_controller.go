@@ -748,6 +748,15 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		containerPort = int32(function.Spec.Deploy.Dapr.AppPort)
 	}
 
+	// Construir variáveis de ambiente
+	envVars := []v1.EnvVar{}
+	for _, e := range function.Spec.Deploy.Env {
+		envVars = append(envVars, v1.EnvVar{
+			Name:  e.Name,
+			Value: e.Value,
+		})
+	}
+
 	// Construir a definição do container
 	container := v1.Container{
 		// Usa o digest do build bem-sucedido da Fase 3.3
@@ -759,6 +768,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 				ContainerPort: containerPort,
 			},
 		},
+		Env: envVars,
 	}
 
 	// Construir o Service object

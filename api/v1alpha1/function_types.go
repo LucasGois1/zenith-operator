@@ -70,6 +70,18 @@ type DeploySpec struct {
 	// Opcional. Configura a injeção do sidecar Dapr.
 	// +kubebuilder:validation:Optional
 	Dapr DaprConfig `json:"dapr,omitempty"`
+
+	// Opcional. Variáveis de ambiente para injetar no container da função.
+	// +kubebuilder:validation:Optional
+	Env []EnvVar `json:"env,omitempty"`
+}
+
+type EnvVar struct {
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// +kubebuilder:validation:Required
+	Value string `json:"value"`
 }
 
 // DaprConfig define os parâmetros de injeção do Dapr
