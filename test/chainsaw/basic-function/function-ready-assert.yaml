@@ -8,4 +8,3 @@ status:
       status: "True"
       reason: Ready
       message: Function deployed and ready to accept requests
-  (imageDigest): "registry.registry.svc.cluster.local:5000*"
