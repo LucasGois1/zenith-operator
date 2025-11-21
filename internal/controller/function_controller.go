@@ -764,9 +764,6 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      function.Name,
 			Namespace: function.Namespace,
-			Labels: map[string]string{
-				"networking.knative.dev/visibility": "cluster-local",
-			},
 		},
 		// O Spec 'v1' do Knative Service [6]
 		Spec: knservingv1.ServiceSpec{
