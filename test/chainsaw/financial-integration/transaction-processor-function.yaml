@@ -4,7 +4,7 @@ metadata:
   name: transaction-processor
 spec:
   gitRepo: https://github.com/LucasGois1/zenith-test-transaction-processor
-  gitRevision: main
+  gitRevision: devin/1763689292-fix-service-url-for-namespace
   gitAuthSecretName: github-auth
   build:
     image: registry.registry.svc.cluster.local:5000/zenith-test/transaction-processor:latest
