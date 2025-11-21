@@ -58,8 +58,19 @@ fi
 echo ""
 
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
-  echo "📦 Criando cluster kind..."
-  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0
+  echo "📦 Criando cluster kind com configuração de registry..."
+  cat <<EOF > /tmp/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.registry.svc.cluster.local:5000"]
+    endpoint = ["http://registry.registry.svc.cluster.local:5000"]
+  [plugins."io.containerd.grpc.v1.cri".registry.configs."registry.registry.svc.cluster.local:5000".tls]
+    insecure_skip_verify = true
+EOF
+  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0 --config /tmp/kind-config.yaml
+  rm /tmp/kind-config.yaml
 else
   echo "✅ Cluster kind '${CLUSTER_NAME}' já existe"
 fi
