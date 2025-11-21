@@ -749,7 +749,16 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	}
 
 	// Construir variáveis de ambiente
-	envVars := []v1.EnvVar{}
+	envVars := []v1.EnvVar{
+		{
+			Name: "POD_NAMESPACE",
+			ValueFrom: &v1.EnvVarSource{
+				FieldRef: &v1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
+		},
+	}
 	for _, e := range function.Spec.Deploy.Env {
 		envVars = append(envVars, v1.EnvVar{
 			Name:  e.Name,
