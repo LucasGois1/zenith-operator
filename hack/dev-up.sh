@@ -30,13 +30,16 @@ else
   echo "✅ kubectl já instalado"
 fi
 
-if ! command -v kind &> /dev/null; then
-  echo "📦 Instalando kind..."
-  curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64"
+REQUIRED_KIND_VERSION="v0.24.0"
+CURRENT_KIND_VERSION=$(kind version 2>/dev/null | grep -oP 'kind \K[^ ]+' || echo "none")
+
+if [ "$CURRENT_KIND_VERSION" != "$REQUIRED_KIND_VERSION" ]; then
+  echo "📦 Instalando kind ${REQUIRED_KIND_VERSION}..."
+  curl -Lo ./kind "https://kind.sigs.k8s.io/dl/${REQUIRED_KIND_VERSION}/kind-linux-amd64"
   chmod +x ./kind
   sudo mv ./kind /usr/local/bin/kind
 else
-  echo "✅ kind já instalado"
+  echo "✅ kind ${REQUIRED_KIND_VERSION} já instalado"
 fi
 
 if ! command -v docker &> /dev/null; then
@@ -58,8 +61,8 @@ fi
 echo ""
 
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
-  echo "📦 Criando cluster kind..."
-  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0
+  echo "📦 Criando cluster kind com Kubernetes 1.33.0..."
+  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.33.0
 else
   echo "✅ Cluster kind '${CLUSTER_NAME}' já existe"
 fi
@@ -77,12 +80,6 @@ if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.se
   echo "📦 Instalando Knative Serving..."
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-crds.yaml
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-core.yaml
-  
-  echo "📦 Configurando Knative Serving para Kubernetes 1.30.0..."
-  kubectl set env deployment/controller -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
-  kubectl set env deployment/autoscaler -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
-  kubectl set env deployment/activator -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
-  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
   
   echo "⏳ Aguardando Knative Serving ficar pronto..."
   kubectl wait --for=condition=ready pod -l app=controller -n knative-serving --timeout=300s
@@ -211,7 +208,8 @@ fi
 
 if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev/null; then
   echo "📦 Instalando Knative net-gateway-api..."
-  kubectl apply -f https://github.com/knative-extensions/net-gateway-api/releases/download/knative-v1.17.0/net-gateway-api.yaml
+  kubectl apply -f https://github.com/knative-extensions/net-gateway-api/releases/download/knative-v1.20.0/net-gateway-api.yaml
+  
   echo "⏳ Aguardando net-gateway-api ficar pronto..."
   kubectl wait --for=condition=ready pod -l app=net-gateway-api-controller -n knative-serving --timeout=300s
 else
