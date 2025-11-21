@@ -87,8 +87,24 @@ containerdConfigPatches:
 EOF
   kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0 --config /tmp/kind-config.yaml
   rm /tmp/kind-config.yaml
+  
+  echo "📦 Criando registry Docker local..."
+  docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --network=kind --name "${REGISTRY_NAME}" registry:2
+  echo "✅ Registry criado em localhost:${REGISTRY_PORT} e conectado à rede kind"
 else
   echo "✅ Cluster kind '${CLUSTER_NAME}' já existe"
+  
+  if ! docker ps | grep -q "${REGISTRY_NAME}"; then
+    echo "📦 Criando registry Docker local..."
+    docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --network=kind --name "${REGISTRY_NAME}" registry:2
+    echo "✅ Registry criado em localhost:${REGISTRY_PORT} e conectado à rede kind"
+  else
+    echo "✅ Registry Docker '${REGISTRY_NAME}' já existe"
+    if ! docker network inspect kind | grep -q "${REGISTRY_NAME}"; then
+      echo "📦 Conectando registry à rede kind..."
+      docker network connect kind "${REGISTRY_NAME}"
+    fi
+  fi
 fi
 
 if ! kubectl get apiservices v1.tekton.dev 2>/dev/null | grep -q "v1.tekton.dev"; then
