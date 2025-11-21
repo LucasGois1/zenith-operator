@@ -98,6 +98,9 @@ spec:
     - name: INSPECT_TOOLS_IMAGE
       description: Image packaging tools like skopeo and jq to inspect the builder images
       default: quay.io/halkyonio/skopeo-jq:0.1.3@sha256:1b3d21ad541227dc9d3e793d18cef9eb00a969c0c01eb09cab88997bc63680c6
+    - name: TEST_SLEEP_SECONDS
+      description: Sleep duration in seconds before starting build (for testing purposes only)
+      default: "25"
 
   results:
     - name: APP_IMAGE_DIGEST
@@ -204,6 +207,21 @@ spec:
         echo -n "$CNB_USER_ID"  | tee "$(step.results.UID.path)"
         echo ""
         echo -n "$CNB_GROUP_ID" | tee "$(step.results.GID.path)"
+
+    - name: test-sleep
+      image: registry.access.redhat.com/ubi8/ubi-minimal@sha256:b2a1bec3dfbc7a14a1d84d98934dfe8fdde6eb822a211286601cf109cbccb075
+      env:
+        - name: SLEEP_SECONDS
+          value: $(params.TEST_SLEEP_SECONDS)
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        
+        if [ "$SLEEP_SECONDS" != "0" ]; then
+          echo "==> TEST MODE: Sleeping for $SLEEP_SECONDS seconds to allow status observation..."
+          sleep "$SLEEP_SECONDS"
+          echo "==> TEST MODE: Sleep completed, continuing with build..."
+        fi
 
     - name: prepare
       image: registry.access.redhat.com/ubi8/ubi-minimal@sha256:b2a1bec3dfbc7a14a1d84d98934dfe8fdde6eb822a211286601cf109cbccb075
