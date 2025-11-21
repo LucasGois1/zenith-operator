@@ -14,5 +14,5 @@ spec:
       appID: ""
       appPort: 8080
     env:
-      - name: AUDIT_LOGGER_URL
-        value: "http://audit-logger.($NAMESPACE).svc.cluster.local"
+      - name: POD_NAMESPACE
+        value: ($NAMESPACE)

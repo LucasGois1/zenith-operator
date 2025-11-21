@@ -14,5 +14,5 @@ spec:
       appID: ""
       appPort: 8080
     env:
-      - name: BALANCE_MANAGER_URL
-        value: "http://balance-manager.($NAMESPACE).svc.cluster.local"
+      - name: POD_NAMESPACE
+        value: ($NAMESPACE)
