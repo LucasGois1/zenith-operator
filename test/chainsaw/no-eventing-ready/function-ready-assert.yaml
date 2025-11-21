@@ -7,4 +7,3 @@ status:
     - type: Ready
       status: "True"
       reason: Ready
-      message: (contains($, 'ready'))
