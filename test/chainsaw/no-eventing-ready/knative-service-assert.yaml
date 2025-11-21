@@ -4,5 +4,3 @@ metadata:
   name: test-function-no-eventing
 spec:
   template:
-    spec:
-      containers:
