@@ -27,6 +27,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -47,6 +48,7 @@ spec:
         - apply:
             file: function.yaml
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-no-eventing
               for i in $(seq 1 60); do
@@ -76,6 +78,7 @@ spec:
       description: Verify that no Trigger was created
       try:
         - script:
+            timeout: 10m
             content: |
               if kubectl get trigger test-function-no-eventing-trigger -n $NAMESPACE 2>/dev/null; then
                 echo "ERROR: Trigger should not exist when eventing is not configured"

@@ -27,6 +27,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -47,6 +48,7 @@ spec:
         - apply:
             file: function.yaml
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-http-dapr
               for i in $(seq 1 60); do
@@ -76,6 +78,7 @@ spec:
       description: Get Function URL from status
       try:
         - script:
+            timeout: 10m
             content: |
               FUNCTION_URL=$(kubectl get function test-function-http-dapr -n $NAMESPACE -o jsonpath='{.status.url}')
               echo "Function URL: $FUNCTION_URL"
@@ -93,6 +96,7 @@ spec:
       description: Get Envoy Gateway LoadBalancer endpoint
       try:
         - script:
+            timeout: 10m
             content: |
               ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}')
               
@@ -119,6 +123,7 @@ spec:
       description: Test HTTP request through Envoy Gateway to Function with Dapr
       try:
         - script:
+            timeout: 10m
             content: |
               FUNCTION_HOST=$(cat /tmp/function-host-dapr.txt)
               ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint-dapr.txt)

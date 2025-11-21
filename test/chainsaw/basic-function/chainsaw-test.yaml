@@ -26,6 +26,7 @@ spec:
       try:
         - script:
             timeout: 10m
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -60,6 +61,7 @@ spec:
         - assert:
             file: function-building-assert.yaml
         - script:
+            timeout: 10m
             timeout: 10m
             content: |
               FN_NAME=test-function
