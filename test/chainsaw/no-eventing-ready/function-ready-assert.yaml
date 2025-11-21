@@ -8,4 +8,4 @@ status:
       status: "True"
       reason: Ready
       message: (contains($, 'ready'))
-  imageDigest: (exists($))
+  imageDigest: registry.registry.svc.cluster.local:5000*

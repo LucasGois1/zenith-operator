@@ -6,4 +6,4 @@ spec:
   template:
     spec:
       containers:
-        - image: (exists($))
+        - image: registry.registry.svc.cluster.local:5000*
