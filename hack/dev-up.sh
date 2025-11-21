@@ -84,6 +84,8 @@ containerdConfigPatches:
     endpoint = ["http://${REGISTRY_NAME}:5000"]
   [plugins."io.containerd.grpc.v1.cri".registry.configs."registry.registry.svc.cluster.local:5000".tls]
     insecure_skip_verify = true
+  [plugins."io.containerd.grpc.v1.cri".registry.configs."${REGISTRY_NAME}:5000".tls]
+    insecure_skip_verify = true
 EOF
   kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0 --config /tmp/kind-config.yaml
   rm /tmp/kind-config.yaml
