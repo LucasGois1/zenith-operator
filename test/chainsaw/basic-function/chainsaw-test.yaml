@@ -103,12 +103,13 @@ spec:
               
               echo "==> Waiting for PipelineRun to complete..."
               kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              echo "✓ PipelineRun completed successfully"
     
-    - name: verify-build-succeeded-status
-      description: Verify Function status shows BuildSucceeded
+    - name: verify-function-ready
+      description: Verify Function status shows Ready after successful build
       try:
         - assert:
-            file: function-build-succeeded-assert.yaml
+            file: function-ready-assert.yaml
     
     - name: verify-knative-service-created
       description: Verify that a Knative Service was created

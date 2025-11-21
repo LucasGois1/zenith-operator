@@ -1,0 +1,11 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Ready
+      message: Function deployed and ready to accept requests
+  imageDigest: registry.registry.svc.cluster.local:5000*
