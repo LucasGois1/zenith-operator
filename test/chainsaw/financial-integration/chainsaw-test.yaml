@@ -45,20 +45,80 @@ spec:
     - name: create-audit-logger
       description: Create audit-logger Function
       try:
-        - apply:
-            file: audit-logger-function.yaml
+        - script:
+            timeout: 1m
+            content: |
+              cat <<EOF | kubectl apply -f - -n $NAMESPACE
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              metadata:
+                name: audit-logger
+              spec:
+                gitRepo: https://github.com/LucasGois1/zenith-test-audit-logger
+                gitRevision: main
+                gitAuthSecretName: github-auth
+                build:
+                  image: registry.registry.svc.cluster.local:5000/zenith-test/audit-logger:latest
+                deploy:
+                  dapr:
+                    enabled: false
+                    appID: ""
+                    appPort: 8080
+              EOF
     
     - name: create-balance-manager
       description: Create balance-manager Function
       try:
-        - apply:
-            file: balance-manager-function.yaml
+        - script:
+            timeout: 1m
+            content: |
+              cat <<EOF | kubectl apply -f - -n $NAMESPACE
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              metadata:
+                name: balance-manager
+              spec:
+                gitRepo: https://github.com/LucasGois1/zenith-test-balance-manager
+                gitRevision: devin/1763689245-fix-service-url-for-namespace
+                gitAuthSecretName: github-auth
+                build:
+                  image: registry.registry.svc.cluster.local:5000/zenith-test/balance-manager:latest
+                deploy:
+                  dapr:
+                    enabled: false
+                    appID: ""
+                    appPort: 8080
+                  env:
+                    - name: POD_NAMESPACE
+                      value: $NAMESPACE
+              EOF
     
     - name: create-transaction-processor
       description: Create transaction-processor Function
       try:
-        - apply:
-            file: transaction-processor-function.yaml
+        - script:
+            timeout: 1m
+            content: |
+              cat <<EOF | kubectl apply -f - -n $NAMESPACE
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              metadata:
+                name: transaction-processor
+              spec:
+                gitRepo: https://github.com/LucasGois1/zenith-test-transaction-processor
+                gitRevision: devin/1763689292-fix-service-url-for-namespace
+                gitAuthSecretName: github-auth
+                build:
+                  image: registry.registry.svc.cluster.local:5000/zenith-test/transaction-processor:latest
+                deploy:
+                  dapr:
+                    enabled: false
+                    appID: ""
+                    appPort: 8080
+                  env:
+                    - name: POD_NAMESPACE
+                      value: $NAMESPACE
+              EOF
     
     - name: wait-for-audit-logger-build
       description: Wait for audit-logger PipelineRun to complete
