@@ -661,8 +661,9 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 					{
 						Name: "fetch-source",
 						TaskRef: &tektonv1.TaskRef{
-							Name: "git-clone", // Refere-se à Task 'git-clone' instalada [5]
-							Kind: "ClusterTask",
+							Name:       "git-clone", // Refere-se à Task 'git-clone' instalada [5]
+							Kind:       "ClusterTask",
+							APIVersion: "tekton.dev/v1beta1",
 						},
 						// 'Workspaces' aqui é um slice de 'WorkspacePipelineTaskBinding'
 						Workspaces: []tektonv1.WorkspacePipelineTaskBinding{
@@ -681,8 +682,9 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 					{
 						Name: "build-and-push",
 						TaskRef: &tektonv1.TaskRef{
-							Name: "buildpacks-phases", // Refere-se à Task 'buildpacks-phases' instalada [5]
-							Kind: "ClusterTask",
+							Name:       "buildpacks-phases", // Refere-se à Task 'buildpacks-phases' instalada [5]
+							Kind:       "ClusterTask",
+							APIVersion: "tekton.dev/v1",
 						},
 						// 'RunAfter' é um slice de 'string' [5]
 						RunAfter: []string{"fetch-source"}, // Garante que o clone termine antes do build começar
