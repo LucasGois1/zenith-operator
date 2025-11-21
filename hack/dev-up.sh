@@ -57,6 +57,22 @@ fi
 
 echo ""
 
+REGISTRY_NAME="kind-registry"
+REGISTRY_PORT="5001"
+
+if ! docker ps | grep -q "${REGISTRY_NAME}"; then
+  echo "📦 Criando registry Docker local..."
+  docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --name "${REGISTRY_NAME}" registry:2
+  echo "✅ Registry criado em localhost:${REGISTRY_PORT}"
+else
+  echo "✅ Registry Docker '${REGISTRY_NAME}' já existe"
+fi
+
+if ! docker network inspect kind | grep -q "${REGISTRY_NAME}"; then
+  echo "📦 Conectando registry à rede kind..."
+  docker network connect kind "${REGISTRY_NAME}" 2>/dev/null || true
+fi
+
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
   echo "📦 Criando cluster kind com configuração de registry..."
   cat <<EOF > /tmp/kind-config.yaml
@@ -65,7 +81,7 @@ apiVersion: kind.x-k8s.io/v1alpha4
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.registry.svc.cluster.local:5000"]
-    endpoint = ["http://registry.registry.svc.cluster.local:5000"]
+    endpoint = ["http://${REGISTRY_NAME}:5000"]
   [plugins."io.containerd.grpc.v1.cri".registry.configs."registry.registry.svc.cluster.local:5000".tls]
     insecure_skip_verify = true
 EOF
@@ -153,49 +169,12 @@ if [ -n "$KONG_NODE_PORT" ] && [ -n "$KONG_NODE_IP" ]; then
 fi
 
 if ! kubectl get namespace registry 2>/dev/null; then
-  echo "📦 Instalando registry local para buildpacks..."
+  echo "📦 Criando namespace e Service para registry..."
   kubectl create namespace registry
+  
+  REGISTRY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind -f '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' "${REGISTRY_NAME}")
+  
   cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: registry-pvc
-  namespace: registry
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: registry
-  namespace: registry
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: registry
-  template:
-    metadata:
-      labels:
-        app: registry
-    spec:
-      containers:
-      - name: registry
-        image: registry:2
-        ports:
-        - containerPort: 5000
-        volumeMounts:
-        - name: registry-storage
-          mountPath: /var/lib/registry
-      volumes:
-      - name: registry-storage
-        persistentVolumeClaim:
-          claimName: registry-pvc
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -206,14 +185,22 @@ spec:
   ports:
   - port: 5000
     targetPort: 5000
-  selector:
-    app: registry
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: registry
+  namespace: registry
+subsets:
+- addresses:
+  - ip: ${REGISTRY_IP}
+  ports:
+  - port: 5000
 EOF
-  echo "⏳ Aguardando registry ficar pronto..."
-  kubectl wait --for=condition=available --timeout=60s deployment/registry -n registry
-  echo "📍 Registry local acessível em: registry.registry.svc.cluster.local:5000"
+  echo "📍 Registry acessível em: registry.registry.svc.cluster.local:5000"
+  echo "📍 Registry também acessível em: localhost:${REGISTRY_PORT}"
 else
-  echo "✅ Registry local já instalado"
+  echo "✅ Registry Service já instalado"
 fi
 
 if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev/null; then
