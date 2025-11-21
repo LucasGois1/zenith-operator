@@ -102,8 +102,8 @@ fi
 
 if ! kubectl get apiservices v1.eventing.knative.dev 2>/dev/null | grep -q "v1.eventing.knative.dev"; then
   echo "📦 Instalando Knative Eventing..."
-  kubectl apply -f https://github.com/knative/eventing/releases/latest/download/eventing-crds.yaml
-  kubectl apply -f https://github.com/knative/eventing/releases/latest/download/eventing-core.yaml
+  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-crds.yaml
+  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-core.yaml
   echo "⏳ Aguardando Knative Eventing ficar pronto..."
   kubectl wait --for=condition=ready pod -l app=eventing-controller -n knative-eventing --timeout=300s
 else
