@@ -4,3 +4,6 @@ metadata:
   name: test-function
 spec:
   template:
+    spec:
+      containers:
+      - name: user-container
