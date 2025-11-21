@@ -4,10 +4,10 @@ metadata:
   name: e2e-http-basic-test
 spec:
   description: |
-    Test end-to-end HTTP request flow through Kong to Function.
+    Test end-to-end HTTP request flow through Envoy Gateway to Function.
     This test verifies:
     1. Function deploys successfully
-    2. Kong proxy is accessible via NodePort
+    2. Envoy Gateway is accessible
     3. HTTP requests with Host header reach the function
     4. Function returns expected JSON response
   timeouts:
@@ -90,37 +90,47 @@ spec:
               echo "$FUNCTION_HOST" > /tmp/function-host.txt
               echo "Function Host: $FUNCTION_HOST"
     
-    - name: get-kong-endpoint
-      description: Get Kong proxy NodePort endpoint
+    - name: get-envoy-endpoint
+      description: Get Envoy Gateway LoadBalancer endpoint
       try:
         - script:
             content: |
-              KONG_NODE_PORT=$(kubectl get svc kong-gateway-proxy -n kong -o jsonpath='{.spec.ports[?(@.name=="kong-proxy")].nodePort}')
-              KONG_NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}')
               
-              if [ -z "$KONG_NODE_PORT" ] || [ -z "$KONG_NODE_IP" ]; then
-                echo "ERROR: Could not get Kong endpoint"
+              if [ -z "$ENVOY_SVC" ]; then
+                echo "ERROR: Could not find Envoy Gateway service"
                 exit 1
               fi
               
-              echo "Kong endpoint: http://${KONG_NODE_IP}:${KONG_NODE_PORT}"
-              echo "${KONG_NODE_IP}:${KONG_NODE_PORT}" > /tmp/kong-endpoint.txt
+              ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+              
+              if [ -z "$ENVOY_IP" ]; then
+                ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.spec.clusterIP}')
+              fi
+              
+              if [ -z "$ENVOY_IP" ]; then
+                echo "ERROR: Could not get Envoy Gateway endpoint"
+                exit 1
+              fi
+              
+              echo "Envoy Gateway endpoint: http://${ENVOY_IP}"
+              echo "${ENVOY_IP}" > /tmp/envoy-endpoint.txt
     
     - name: test-http-request
-      description: Test HTTP request through Kong to Function
+      description: Test HTTP request through Envoy Gateway to Function
       try:
         - script:
             content: |
               FUNCTION_HOST=$(cat /tmp/function-host.txt)
-              KONG_ENDPOINT=$(cat /tmp/kong-endpoint.txt)
+              ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint.txt)
               
               echo "Testing HTTP request..."
-              echo "  Kong: http://${KONG_ENDPOINT}"
+              echo "  Envoy Gateway: http://${ENVOY_ENDPOINT}"
               echo "  Host: ${FUNCTION_HOST}"
               
               sleep 10
               
-              RESPONSE=$(curl -s -H "Host: ${FUNCTION_HOST}" "http://${KONG_ENDPOINT}/" || echo "CURL_FAILED")
+              RESPONSE=$(curl -s -H "Host: ${FUNCTION_HOST}" "http://${ENVOY_ENDPOINT}/" || echo "CURL_FAILED")
               
               if [ "$RESPONSE" = "CURL_FAILED" ]; then
                 echo "ERROR: curl command failed"

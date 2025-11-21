@@ -78,7 +78,7 @@ This automatically installs:
 - Tekton Pipelines (for builds)
 - Knative Serving (for deployments)
 - Knative Eventing (for event-driven architectures)
-- Kong Ingress Controller (for routing)
+- Envoy Gateway (for routing)
 
 For detailed installation options and configuration, see the [Installation Guide](INSTALLATION.md).
 

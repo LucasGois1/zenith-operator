@@ -88,10 +88,8 @@ spec:
           kind: GatewayClass
           metadata:
             name: {{ .Values.gatewayAPI.gateway.className }}
-            annotations:
-              konghq.com/gatewayclass-unmanaged: "true"
           spec:
-            controllerName: konghq.com/kic-gateway-controller
+            controllerName: {{ .Values.envoyGateway.controllerName }}
           EOF
           
           echo "✓ Created GatewayClass"
@@ -115,12 +113,19 @@ spec:
           
           echo "✓ Created Gateway"
           
-          kubectl patch configmap/config-gateway \
-            -n knative-serving \
-            --type merge \
-            -p '{"data":{"local-gateways":"- class: {{ .Values.gatewayAPI.gateway.className }}\n  gateway: {{ .Values.gatewayAPI.gateway.namespace }}/{{ .Values.gatewayAPI.gateway.name }}\n  service: kong/kong-gateway-proxy\n  supported-features:\n  - HTTPRouteRequestTimeout\n"}}'
+          sleep 10
           
-          echo "✓ Configured Knative Gateway"
+          ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name={{ .Values.gatewayAPI.gateway.name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          
+          if [ -n "$ENVOY_SVC" ]; then
+            kubectl patch configmap/config-gateway \
+              -n knative-serving \
+              --type merge \
+              -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"{{ .Values.gatewayAPI.gateway.className }}\\\",\\\"gateway\\\":\\\"{{ .Values.gatewayAPI.gateway.namespace }}/{{ .Values.gatewayAPI.gateway.name }}\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\"}}"
+            echo "✓ Configured Knative Gateway with Envoy service: ${ENVOY_SVC}"
+          else
+            echo "⚠️  Envoy Gateway service not found yet, will be configured on first reconciliation"
+          fi
           {{- end }}
           
           echo "Configuration complete!"

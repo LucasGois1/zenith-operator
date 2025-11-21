@@ -204,7 +204,7 @@ graph TB
         A2[Install Tekton Pipelines<br/>kubectl apply -f tekton.yaml]
         A3[Install Knative Serving<br/>kubectl apply -f knative-serving.yaml]
         A4[Install Knative Eventing<br/>optional]
-        A5[Install Kong Ingress<br/>for Gateway API]
+        A5[Install Envoy Gateway<br/>for Gateway API]
         A6[Install Dapr<br/>optional]
         
         A1 --> A2

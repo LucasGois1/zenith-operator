@@ -124,32 +124,22 @@ else
   echo "✅ Helm já instalado"
 fi
 
-if ! kubectl get namespace kong 2>/dev/null; then
-  echo "📦 Instalando Kong Ingress Controller..."
-  helm repo add kong https://charts.konghq.com
-  helm repo update
-  kubectl create namespace kong
-  helm install kong kong/ingress -n kong \
-    --set controller.ingressController.enabled=true \
-    --set controller.ingressController.installCRDs=false \
-    --set gateway.enabled=true \
-    --set controller.ingressController.gatewayAPI.enabled=true \
-    --set controller.admissionWebhook.enabled=false
-  echo "⏳ Aguardando Kong ficar pronto..."
-  kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=controller -n kong --timeout=300s
-  kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=gateway -n kong --timeout=300s
+if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
+  echo "📦 Instalando Envoy Gateway..."
   
-  echo "📦 Configurando Kong proxy como NodePort para kind..."
-  kubectl patch svc kong-gateway-proxy -n kong -p '{"spec":{"type":"NodePort"}}'
+  curl -sL https://github.com/envoyproxy/gateway/releases/download/v1.6.0/install.yaml > /tmp/envoy-gateway-install.yaml
+  cd /tmp && csplit -s -f envoy-gateway- envoy-gateway-install.yaml '/^---$/' '{*}'
+  
+  for file in envoy-gateway-*; do
+    if ! grep -q "kind: CustomResourceDefinition" "$file"; then
+      kubectl apply -f "$file" 2>&1 | grep -v "unchanged" || true
+    fi
+  done
+  
+  echo "⏳ Aguardando Envoy Gateway ficar pronto..."
+  kubectl wait --for=condition=available --timeout=300s deployment/envoy-gateway -n envoy-gateway-system
 else
-  echo "✅ Kong Ingress Controller já instalado"
-fi
-
-KONG_NODE_PORT=$(kubectl get svc kong-gateway-proxy -n kong -o jsonpath='{.spec.ports[?(@.name=="kong-proxy")].nodePort}')
-KONG_NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-if [ -n "$KONG_NODE_PORT" ] && [ -n "$KONG_NODE_IP" ]; then
-  echo "📍 Kong proxy acessível em: http://${KONG_NODE_IP}:${KONG_NODE_PORT}"
-  echo "   Use com Host header para acessar functions: curl -H 'Host: <function-url>' http://${KONG_NODE_IP}:${KONG_NODE_PORT}"
+  echo "✅ Envoy Gateway já instalado"
 fi
 
 if ! kubectl get namespace registry 2>/dev/null; then
@@ -255,17 +245,15 @@ if ! kubectl get configmap config-network -n knative-serving -o yaml | grep -q "
   kubectl patch configmap/config-network -n knative-serving --type merge -p '{"data":{"ingress-class":"gateway-api.ingress.networking.knative.dev"}}'
 fi
 
-if ! kubectl get gatewayclass kong 2>/dev/null; then
-  echo "📦 Criando GatewayClass e Gateway para Kong..."
+if ! kubectl get gatewayclass envoy 2>/dev/null; then
+  echo "📦 Criando GatewayClass e Gateway para Envoy..."
   cat <<EOF | kubectl apply -f -
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:
-  name: kong
-  annotations:
-    konghq.com/gatewayclass-unmanaged: "true"
+  name: envoy
 spec:
-  controllerName: konghq.com/kic-gateway-controller
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -273,7 +261,7 @@ metadata:
   name: knative-gateway
   namespace: knative-serving
 spec:
-  gatewayClassName: kong
+  gatewayClassName: envoy
   listeners:
   - name: http
     protocol: HTTP
@@ -283,12 +271,24 @@ spec:
         from: All
 EOF
   echo "⏳ Aguardando Gateway ficar pronto..."
-  sleep 5
+  sleep 10
+  
+  ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  if [ -n "$ENVOY_SVC" ]; then
+    echo "📍 Envoy Gateway service: envoy-gateway-system/${ENVOY_SVC}"
+  fi
 fi
 
-if ! kubectl get configmap config-gateway -n knative-serving -o yaml | grep -q "class: kong"; then
-  echo "📦 Configurando Knative Gateway para usar Kong..."
-  kubectl patch configmap/config-gateway -n knative-serving --type merge -p '{"data":{"local-gateways":"- class: kong\n  gateway: knative-serving/knative-gateway\n  service: kong/kong-gateway-proxy\n  supported-features:\n  - HTTPRouteRequestTimeout\n"}}'
+if ! kubectl get configmap config-gateway -n knative-serving -o yaml | grep -q "class: envoy"; then
+  echo "📦 Configurando Knative Gateway para usar Envoy..."
+  
+  ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  
+  if [ -n "$ENVOY_SVC" ]; then
+    kubectl patch configmap/config-gateway -n knative-serving --type merge -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\"}}"
+  else
+    echo "⚠️  Envoy Gateway service not found yet, will be configured on first reconciliation"
+  fi
 fi
 
 echo "🔨 Building operator image..."
