@@ -15,4 +15,4 @@ spec:
       appPort: 8080
     env:
       - name: AUDIT_LOGGER_URL
-        value: "http://audit-logger"
+        value: "http://audit-logger.($NAMESPACE).svc.cluster.local"

@@ -1,214 +1,69 @@
-# 🚀 Zenith Operator
+# Chainsaw
 
-> **Serverless on Kubernetes, Made Simple.**
+[![Lint](https://github.com/kyverno/chainsaw/actions/workflows/lint.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/lint.yaml)
+[![Tests](https://github.com/kyverno/chainsaw/actions/workflows/tests.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/tests.yaml)
+[![Code QL](https://github.com/kyverno/chainsaw/actions/workflows/codeql.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/codeql.yaml)
+[![Dev docs](https://github.com/kyverno/chainsaw/actions/workflows/docs-main.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/docs-main.yaml)
+[![Release](https://github.com/kyverno/chainsaw/actions/workflows/release.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/release.yaml)
+[![Release docs](https://github.com/kyverno/chainsaw/actions/workflows/docs-release.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/docs-release.yaml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kyverno/chainsaw)](https://goreportcard.com/report/github.com/kyverno/chainsaw)
+[![License: Apache-2.0](https://img.shields.io/github/license/kyverno/chainsaw?color=blue)](https://github.com/kyverno/chainsaw/blob/main/LICENSE)
+[![Codecov](https://codecov.io/gh/kyverno/chainsaw/branch/main/graph/badge.svg)](https://app.codecov.io/gh/kyverno/chainsaw/branch/main)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/LucasGois1/zenith-operator)](https://goreportcard.com/report/github.com/LucasGois1/zenith-operator)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Kubernetes](https://img.shields.io/badge/kubernetes-v1.24+-326ce5.svg?logo=kubernetes)](https://kubernetes.io)
+<a href="https://kyverno.github.io/chainsaw" rel="https://kyverno.github.io/chainsaw">![logo](.assets/kyverno-chainsaw-horizontal.png)</a>
 
-[![Lint](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml)
-[![Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml)
-[![E2E Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml)
-[![codecov](https://codecov.io/gh/LucasGois1/zenith-operator/branch/main/graph/badge.svg)](https://codecov.io/gh/LucasGois1/zenith-operator)
-[![CodeQL](https://github.com/LucasGois1/zenith-operator/actions/workflows/codeql.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/codeql.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/LucasGois1/zenith-operator.svg)](https://pkg.go.dev/github.com/LucasGois1/zenith-operator)
+## Overview
 
-Zenith Operator abstracts the complexity of building and deploying serverless functions on Kubernetes. It orchestrates **Tekton Pipelines** for builds, **Knative Serving** for deployments, and **Knative Eventing** for event-driven invocations — all through a single `Function` Custom Resource Definition (CRD).
+Chainsaw provides a declarative approach to test [Kubernetes](https://kubernetes.io) operators and controllers.
 
----
+While Chainsaw is designed for testing operators and controllers, it can declaratively test any Kubernetes objects.
 
-## ✨ Features
+Chainsaw is an open-source tool that was initially developed for defining and running [Kyverno](https://kyverno.io) end-to-end tests.
 
-* **🛠 Automated Builds**: Integrated Cloud Native Buildpacks via Tekton. Source code to container image without a `Dockerfile`.
-* **⚡ Serverless Deployment**: Auto-scaling (including scale-to-zero) powered by Knative Serving.
-* **🔗 Event Driven**: Native subscription to Knative Brokers with attribute filtering.
-* **🕸 Dapr Integration**: First-class support for Dapr sidecars to enable service mesh capabilities (pub/sub, state management).
-* **🔒 Secure by Design**: Secret-based authentication for private Git repos and Container Registries.
+## Resources
 
----
+Built under the Kyverno umbrella, you can use the Kyverno Chainsaw **Slack channels** to discuss anything related to Chainsaw.
 
-## 🏗 Architecture
+### Slack channels
 
-Zenith Operator serves as the glue between powerful CNCF projects:
+- [#kyverno-chainsaw](https://kubernetes.slack.com/archives/C067LUFL43U)
 
-```mermaid
-graph LR
-    DEV[Developer] -->|Apply Function CR| CRD
-    CRD -->|Reconcile| OP[Zenith Operator]
-    
-    OP -->|Create| TEKTON[Tekton Pipeline]
-    TEKTON -->|Build & Push| REGISTRY[(Registry)]
-    
-    OP -->|Deploy| KNATIVE[Knative Service]
-    KNATIVE -->|Pull| REGISTRY
-    
-    OP -->|Subscribe| TRIGGER[Trigger]
-    TRIGGER -->|Route Events| KNATIVE
-```
+### More resources
 
-For a deep dive into the architecture, check out the [Architecture Documentation](zenith-operator-architecture.md).
+- [Kyverno Chainsaw - The ultimate end-to-end testing tool!](https://kyverno.io/blog/2023/12/12/kyverno-chainsaw-the-ultimate-end-to-end-testing-tool/)
+- [Kyverno Chainsaw - Exploring the Power of Assertion Trees!](https://kyverno.io/blog/2023/12/13/kyverno-chainsaw-exploring-the-power-of-assertion-trees/)
+- [Nirmata Office Hours for Kyverno- Episode 9- Demonstrate Kyverno Chainsaw](https://www.youtube.com/watch?v=IrIteTTjlbU)
+- [Kubebuilder Community Meeting - February 1, 2024](https://www.youtube.com/watch?v=Ejof-wtAdQM)
+- [Kyverno Chainsaw 0.1.4 - Awesome new features!](https://kyverno.io/blog/2024/02/15/kyverno-chainsaw-0.1.4-awesome-new-features/)
+- [Mastering Kubernetes Testing with Kyverno Chainsaw!](https://youtu.be/hQJWGzogIiI)
 
----
+## Getting Started
 
-## 🚀 Getting Started
+Please refer to the [Getting Started](https://kyverno.github.io/chainsaw/latest/quick-start/) documentation.
 
-### Prerequisites
+## RoadMap
 
-* Kubernetes Cluster (v1.30+)
-* Helm 3.x
-* `kubectl` configured to access your cluster
+For detailed information on our planned features and upcoming updates, please [view our Roadmap](./ROADMAP.md).
 
-### Installation
+## Community Meetings
 
-#### Option 1: Helm (Recommended)
+To attend our community meetings, join the [Chainsaw group](https://groups.google.com/g/kyverno-chainsaw).
+You will then be sent a meeting invite and will have access to the agenda and meeting notes.
+Any member may suggest topics for discussion.
 
-The easiest way to install Zenith Operator with all dependencies:
+This is a public, weekly meeting for Kyverno-Chainsaw maintainers to make announcements and provide project updates, and request input and feedback.
+This forum allows community members to raise agenda items of any sort, including but not limited to any PRs or issues on which they are working.
 
-```sh
-# Add the Helm repository
-helm repo add zenith-operator https://lucasgois1.github.io/zenith-operator
-helm repo update
+Weekly every Thursday at 2:00 PM UTC
 
-# Install the operator and all dependencies
-helm install zenith-operator zenith-operator/zenith-operator
-```
+- [Chainsaw group](https://groups.google.com/g/kyverno-chainsaw)
+- [Zoom Meeting](https://zoom.us/j/99815137900)
+- [Agenda and meeting notes](https://docs.google.com/document/d/1csszreCpCyPsls4S_GuM0o_D1W-N7vQqQcyd4lxSkJk)
 
-This automatically installs:
-- Zenith Operator
-- Tekton Pipelines (for builds)
-- Knative Serving (for deployments)
-- Knative Eventing (for event-driven architectures)
-- Envoy Gateway (for routing)
+## Contributions
 
-For detailed installation options and configuration, see the [Installation Guide](INSTALLATION.md).
+Please read the [contributing guide](https://github.com/kyverno/kyverno/blob/main/CONTRIBUTING.md) for details around:
 
-#### Option 2: Manual Installation
-
-If you prefer to install components separately:
-
-1. **Install prerequisites:**
-   - [Tekton Pipelines](https://tekton.dev/docs/pipelines/install/)
-   - [Knative Serving](https://knative.dev/docs/install/serving/)
-   - [Knative Eventing](https://knative.dev/docs/eventing/install/) (optional)
-
-2. **Install the operator:**
-
-   ```sh
-   kubectl apply -f https://github.com/LucasGois1/zenith-operator/releases/latest/download/install.yaml
-   ```
-
-3. **Verify installation:**
-
-   ```sh
-   kubectl get pods -n zenith-operator-system
-   ```
-
----
-
-## 📖 Usage
-
-Create a `function.yaml` file to define your function.
-
-### 1. Basic Function (Public Repo)
-
-```yaml
-apiVersion: functions.zenith.com/v1alpha1
-kind: Function
-metadata:
-  name: hello-world
-  namespace: default
-spec:
-  # Source Code
-  gitRepo: https://github.com/LucasGois1/zenith-test-functions
-  gitRevision: main
-  
-  # Build Config
-  build:
-    image: docker.io/your-username/hello-world # Target image
-    registrySecretName: registry-creds # Docker credentials
-    
-  # Runtime Config
-  deploy:
-    dapr:
-      enabled: false
-```
-
-### 2. Event-Driven Function with Dapr
-
-```yaml
-apiVersion: functions.zenith.com/v1alpha1
-kind: Function
-metadata:
-  name: payment-processor
-spec:
-  gitRepo: https://github.com/my-org/payment-service
-  build:
-    image: registry.my-company.com/payment-processor
-    registrySecretName: private-registry-creds
-  deploy:
-    dapr:
-      enabled: true
-      appID: payment-service
-      appPort: 8080
-  eventing:
-    broker: default
-    filters:
-      type: order.created
-```
-
-### Apply the Function
-
-```sh
-kubectl apply -f function.yaml
-```
-
-Check the status:
-
-```sh
-kubectl get function hello-world
-```
-
----
-
-## 🛠 Development
-
-To run the operator locally for development:
-
-1. **Clone the repo:**
-
-   ```sh
-   git clone https://github.com/LucasGois1/zenith-operator.git
-   cd zenith-operator
-   ```
-
-2. **Install dependencies:**
-
-   ```sh
-   go mod download
-   ```
-
-3. **Run against your active cluster:**
-
-   ```sh
-   make install
-   make run
-   ```
-
----
-
-## 📚 Documentation
-
-Visit our [Documentation Website](https://lucasgois1.github.io/zenith-operator/) for full API references and guides.
-
-* [Git Authentication](docs/GIT_AUTHENTICATION.md)
-* [Registry Configuration](docs/REGISTRY_CONFIGURATION.md)
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting a Pull Request.
-
-## 📄 License
-
-This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+1. Code of Conduct
+1. Code Culture
+1. Details on how to contribute
