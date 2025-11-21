@@ -8,3 +8,4 @@ spec:
   gitAuthSecretName: github-auth
   build:
     image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-idempotent
+  deploy: {}
