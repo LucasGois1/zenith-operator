@@ -25,6 +25,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -45,6 +46,7 @@ spec:
         - apply:
             file: function.yaml
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-ownerref
               for i in $(seq 1 60); do
@@ -70,6 +72,7 @@ spec:
       description: Verify that resources have ownerReferences to Function
       try:
         - script:
+            timeout: 10m
             content: |
               SA_OWNER=$(kubectl get serviceaccount test-function-ownerref-sa -n $NAMESPACE -o jsonpath='{.metadata.ownerReferences[0].kind}')
               if [ "$SA_OWNER" != "Function" ]; then
@@ -104,6 +107,7 @@ spec:
       description: Verify that dependent resources were garbage-collected
       try:
         - script:
+            timeout: 10m
             content: |
               sleep 5
               
