@@ -13,3 +13,6 @@ spec:
       enabled: false
       appID: ""
       appPort: 8080
+    env:
+      - name: AUDIT_LOGGER_URL
+        value: "http://audit-logger.($namespace).svc.cluster.local"
