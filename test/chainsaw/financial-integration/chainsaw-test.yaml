@@ -27,6 +27,8 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -63,6 +65,7 @@ spec:
       description: Wait for audit-logger PipelineRun to complete
       try:
         - script:
+            timeout: 10m
             timeout: 12m
             content: |
               FN_NAME=audit-logger
@@ -79,6 +82,7 @@ spec:
       description: Wait for balance-manager PipelineRun to complete
       try:
         - script:
+            timeout: 10m
             timeout: 12m
             content: |
               FN_NAME=balance-manager
@@ -95,6 +99,7 @@ spec:
       description: Wait for transaction-processor PipelineRun to complete
       try:
         - script:
+            timeout: 10m
             timeout: 12m
             content: |
               FN_NAME=transaction-processor
@@ -124,6 +129,8 @@ spec:
       description: Get Function URLs from status
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               AUDIT_URL=$(kubectl get function audit-logger -n $NAMESPACE -o jsonpath='{.status.url}')
               BALANCE_URL=$(kubectl get function balance-manager -n $NAMESPACE -o jsonpath='{.status.url}')
@@ -150,6 +157,8 @@ spec:
       description: Get Envoy Gateway LoadBalancer endpoint (local gateway for cluster.local URLs)
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}')
               
@@ -176,6 +185,8 @@ spec:
       description: Test audit-logger service directly
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               AUDIT_HOST=$(cat /tmp/audit-host.txt)
               ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint.txt)
@@ -209,6 +220,8 @@ spec:
       description: Test balance-manager service directly
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               BALANCE_HOST=$(cat /tmp/balance-host.txt)
               ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint.txt)
@@ -242,6 +255,8 @@ spec:
       description: Test full integration flow through transaction-processor
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               TRANSACTION_HOST=$(cat /tmp/transaction-host.txt)
               ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint.txt)
@@ -304,6 +319,8 @@ spec:
       description: Verify audit-logger received log entries
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               echo "Checking audit-logger logs for audit entries..."
               

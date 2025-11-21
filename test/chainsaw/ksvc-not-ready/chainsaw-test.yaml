@@ -27,6 +27,8 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -47,6 +49,8 @@ spec:
         - apply:
             file: function.yaml
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               FN_NAME=test-function-not-ready
               for i in $(seq 1 60); do
@@ -62,6 +66,8 @@ spec:
       description: Manually create KService with invalid image to simulate not-ready scenario
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               kubectl patch function test-function-not-ready -n $NAMESPACE --type=merge --subresource=status -p '{"status":{"imageDigest":"docker.io/invalid/nonexistent:invalid"}}'
               
@@ -71,6 +77,8 @@ spec:
       description: Wait for KService to be created
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               echo "Waiting for KService to be created..."
               for i in {1..30}; do
@@ -85,6 +93,8 @@ spec:
       description: Verify KService exists but is not Ready
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               sleep 10  # Give time for KService to attempt becoming ready
               
@@ -105,6 +115,8 @@ spec:
       description: Verify Function doesn't reach Ready status
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               sleep 15
               

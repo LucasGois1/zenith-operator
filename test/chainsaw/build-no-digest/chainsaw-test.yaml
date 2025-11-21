@@ -26,6 +26,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -50,6 +51,7 @@ spec:
       description: Wait for PipelineRun to complete successfully (but with empty digest)
       try:
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-no-digest
               for i in $(seq 1 60); do
@@ -68,6 +70,7 @@ spec:
       description: Verify PipelineRun has no IMAGE_DIGEST result
       try:
         - script:
+            timeout: 10m
             content: |
               IMAGE_DIGEST=$(kubectl get pipelinerun test-function-no-digest-build -n $NAMESPACE -o jsonpath='{.status.results[?(@.name=="IMAGE_DIGEST")].value}' 2>/dev/null || echo "")
               
@@ -82,6 +85,7 @@ spec:
       description: Verify Function status shows BuildImageError
       try:
         - script:
+            timeout: 10m
             content: |
               sleep 5  # Give controller time to reconcile
               
@@ -103,6 +107,7 @@ spec:
       description: Verify KService was not created without valid digest
       try:
         - script:
+            timeout: 10m
             content: |
               if kubectl get service.serving.knative.dev test-function-no-digest -n $NAMESPACE 2>/dev/null; then
                 echo "WARNING: KService was created despite missing digest"

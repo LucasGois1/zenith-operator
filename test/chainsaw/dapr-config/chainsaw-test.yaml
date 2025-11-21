@@ -26,6 +26,8 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -46,6 +48,8 @@ spec:
         - apply:
             file: function.yaml
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               FN_NAME=test-function-dapr
               for i in $(seq 1 60); do

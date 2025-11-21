@@ -27,6 +27,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -65,6 +66,7 @@ spec:
       description: Capture initial image digest
       try:
         - script:
+            timeout: 10m
             content: |
               INITIAL_IMAGE=$(kubectl get function test-function-no-rebuild -n $NAMESPACE -o jsonpath='{.status.imageDigest}')
               echo "Initial image: $INITIAL_IMAGE"
@@ -74,6 +76,7 @@ spec:
       description: Count PipelineRuns before update
       try:
         - script:
+            timeout: 10m
             content: |
               INITIAL_COUNT=$(kubectl get pipelineruns -n $NAMESPACE -l functions.zenith.com/function=test-function-no-rebuild --no-headers 2>/dev/null | wc -l)
               echo "Initial PipelineRun count: $INITIAL_COUNT"
@@ -89,6 +92,7 @@ spec:
       description: Wait for reconciliation to complete
       try:
         - script:
+            timeout: 10m
             content: |
               echo "Waiting for reconciliation..."
               sleep 10
@@ -97,6 +101,7 @@ spec:
       description: Verify no new PipelineRun was created
       try:
         - script:
+            timeout: 10m
             content: |
               INITIAL_COUNT=$(cat /tmp/initial-pr-count.txt)
               CURRENT_COUNT=$(kubectl get pipelineruns -n $NAMESPACE -l functions.zenith.com/function=test-function-no-rebuild --no-headers 2>/dev/null | wc -l)
@@ -115,6 +120,7 @@ spec:
       description: Verify image digest hasn't changed
       try:
         - script:
+            timeout: 10m
             content: |
               INITIAL_IMAGE=$(cat /tmp/initial-image.txt)
               CURRENT_IMAGE=$(kubectl get function test-function-no-rebuild -n $NAMESPACE -o jsonpath='{.status.imageDigest}')

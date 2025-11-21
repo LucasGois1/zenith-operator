@@ -27,6 +27,8 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -51,6 +53,8 @@ spec:
       description: Wait for initial PipelineRun to complete
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               FN_NAME=test-function-update-image
               for i in $(seq 1 60); do
@@ -67,6 +71,8 @@ spec:
       description: Wait for controller to set Function.status.imageDigest after build
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               echo "Waiting for Function.status.imageDigest to be set..."
               for i in $(seq 1 60); do
@@ -85,6 +91,8 @@ spec:
       description: Wait for controller to create Knative Service after build
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               echo "Waiting for Knative Service to be created..."
               for i in $(seq 1 60); do
@@ -102,6 +110,8 @@ spec:
       description: Verify that Knative Service was created with correct image from build
       try:
         - script:
+            timeout: 10m
+            timeout: 10m
             content: |
               FUNCTION_DIGEST=$(kubectl get function test-function-update-image -n "$NAMESPACE" -o jsonpath='{.status.imageDigest}')
               KSVC_IMAGE=$(kubectl get service.serving.knative.dev test-function-update-image -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].image}')
