@@ -68,10 +68,8 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 containerdConfigPatches:
 - |-
-  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.registry.svc.cluster.local:5000"]
-    endpoint = ["http://registry.registry.svc.cluster.local:5000"]
-  [plugins."io.containerd.grpc.v1.cri".registry.configs."registry.registry.svc.cluster.local:5000".tls]
-    insecure_skip_verify = true
+  [plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = "/etc/containerd/certs.d"
 EOF
   
   kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.33.0 --config /tmp/kind-config.yaml
@@ -214,6 +212,30 @@ EOF
   echo "⏳ Aguardando registry ficar pronto..."
   kubectl wait --for=condition=available --timeout=60s deployment/registry -n registry
   echo "📍 Registry local acessível em: registry.registry.svc.cluster.local:5000"
+  
+  echo "📦 Configurando containerd para acessar registry via ClusterIP..."
+  REGISTRY_IP=$(kubectl get svc registry -n registry -o jsonpath='{.spec.clusterIP}')
+  echo "   Registry ClusterIP: ${REGISTRY_IP}"
+  
+  for node in $(kind get nodes --name "${CLUSTER_NAME}"); do
+    echo "   Configurando node: ${node}"
+    
+    docker exec "${node}" mkdir -p /etc/containerd/certs.d/registry.registry.svc.cluster.local:5000
+    
+    docker exec "${node}" bash -c "cat > /etc/containerd/certs.d/registry.registry.svc.cluster.local:5000/hosts.toml <<EOF
+server = \"http://${REGISTRY_IP}:5000\"
+
+[host.\"http://${REGISTRY_IP}:5000\"]
+  capabilities = [\"pull\", \"resolve\"]
+  skip_verify = true
+EOF"
+    
+    docker exec "${node}" bash -c "echo '${REGISTRY_IP} registry.registry.svc.cluster.local' >> /etc/hosts"
+    
+    docker exec "${node}" systemctl restart containerd
+  done
+  
+  echo "✅ Containerd configurado para usar registry ClusterIP"
 else
   echo "✅ Registry local já instalado"
 fi
