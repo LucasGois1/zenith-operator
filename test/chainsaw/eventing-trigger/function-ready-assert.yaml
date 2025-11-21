@@ -8,4 +8,3 @@ status:
       status: "True"
       reason: Ready
       message: (contains($, 'eventing'))
-  imageDigest: registry.registry.svc.cluster.local:5000*
