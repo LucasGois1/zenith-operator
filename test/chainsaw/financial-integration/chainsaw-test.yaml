@@ -147,14 +147,14 @@ spec:
               echo "$TRANSACTION_HOST" > /tmp/transaction-host.txt
     
     - name: get-envoy-endpoint
-      description: Get Envoy Gateway LoadBalancer endpoint
+      description: Get Envoy Gateway LoadBalancer endpoint (local gateway for cluster.local URLs)
       try:
         - script:
             content: |
-              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}')
+              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}')
               
               if [ -z "$ENVOY_SVC" ]; then
-                echo "ERROR: Could not find Envoy Gateway service"
+                echo "ERROR: Could not find Envoy Gateway local service"
                 exit 1
               fi
               
@@ -169,7 +169,7 @@ spec:
                 exit 1
               fi
               
-              echo "Envoy Gateway endpoint: http://${ENVOY_IP}"
+              echo "Envoy Gateway local endpoint: http://${ENVOY_IP}"
               echo "${ENVOY_IP}" > /tmp/envoy-endpoint.txt
     
     - name: test-audit-logger-direct
