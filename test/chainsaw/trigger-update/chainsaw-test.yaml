@@ -82,6 +82,7 @@ spec:
       description: Capture initial Trigger spec
       try:
         - script:
+            timeout: 10m
             content: |
               INITIAL_BROKER=$(kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o jsonpath='{.spec.broker}')
               INITIAL_FILTER=$(kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o jsonpath='{.spec.filter.attributes.type}')
@@ -102,6 +103,7 @@ spec:
       description: Wait for Trigger to be updated
       try:
         - script:
+            timeout: 10m
             content: |
               echo "Waiting for Trigger to be updated..."
               sleep 5
