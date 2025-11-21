@@ -90,6 +90,9 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      saName,
 				Namespace: function.Namespace,
+				Labels: map[string]string{
+					"functions.zenith.com/managed-by": "zenith-operator",
+				},
 			},
 		}
 
