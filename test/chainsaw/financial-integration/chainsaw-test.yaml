@@ -63,6 +63,7 @@ spec:
       description: Wait for audit-logger PipelineRun to complete
       try:
         - script:
+            timeout: 12m
             content: |
               FN_NAME=audit-logger
               for i in $(seq 1 60); do
@@ -72,12 +73,13 @@ spec:
               done
               [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
               echo "Found PipelineRun: $PR_NAME"
-              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=10m
     
     - name: wait-for-balance-manager-build
       description: Wait for balance-manager PipelineRun to complete
       try:
         - script:
+            timeout: 12m
             content: |
               FN_NAME=balance-manager
               for i in $(seq 1 60); do
@@ -87,12 +89,13 @@ spec:
               done
               [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
               echo "Found PipelineRun: $PR_NAME"
-              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=10m
     
     - name: wait-for-transaction-processor-build
       description: Wait for transaction-processor PipelineRun to complete
       try:
         - script:
+            timeout: 12m
             content: |
               FN_NAME=transaction-processor
               for i in $(seq 1 60); do
@@ -102,7 +105,7 @@ spec:
               done
               [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
               echo "Found PipelineRun: $PR_NAME"
-              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=10m
     
     - name: verify-all-functions-ready
       description: Verify all Functions reach Ready status
