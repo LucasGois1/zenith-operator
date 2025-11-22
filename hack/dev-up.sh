@@ -193,7 +193,10 @@ if ! kubectl get namespace metallb-system 2>/dev/null; then
   echo "📦 Configurando MetalLB IP address pool..."
   # Extract only the IPv4 subnet (contains dots, not colons)
   DOCKER_NETWORK=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' | grep '\.' | head -n1)
-  IP_PREFIX=$(echo ${DOCKER_NETWORK} | cut -d'.' -f1-2)
+  # Get the network base IP (e.g., 172.19.0.0/24 -> 172.19.0.0)
+  NETWORK_IP=$(echo ${DOCKER_NETWORK} | cut -d'/' -f1)
+  # Get the first three octets to stay within the subnet (e.g., 172.19.0)
+  IP_PREFIX=$(echo ${NETWORK_IP} | cut -d'.' -f1-3)
   
   cat <<EOF | kubectl apply -f -
 apiVersion: metallb.io/v1beta1
@@ -203,7 +206,7 @@ metadata:
   namespace: metallb-system
 spec:
   addresses:
-  - ${IP_PREFIX}.255.200-${IP_PREFIX}.255.250
+  - ${IP_PREFIX}.200-${IP_PREFIX}.250
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
@@ -215,7 +218,7 @@ spec:
   - kind-pool
 EOF
   
-  echo "✅ MetalLB configurado com IP pool ${IP_PREFIX}.255.200-${IP_PREFIX}.255.250"
+  echo "✅ MetalLB configurado com IP pool ${IP_PREFIX}.200-${IP_PREFIX}.250"
 else
   echo "✅ MetalLB já instalado"
 fi
