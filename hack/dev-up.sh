@@ -386,7 +386,12 @@ echo "🔨 Building operator image..."
 make docker-build IMG="${IMG}"
 
 echo "📤 Loading image into kind cluster..."
-kind load docker-image "${IMG}" --name "${CLUSTER_NAME}"
+# Use docker save + ctr import as workaround for kind load issue with Kubernetes 1.33.0
+# See: https://github.com/kubernetes-sigs/kind/issues/3510
+if ! docker save "${IMG}" | docker exec -i "${CLUSTER_NAME}-control-plane" ctr --namespace k8s.io images import - 2>&1 | grep -q "saved"; then
+  echo "⚠️  Warning: Failed to load image using ctr import, trying kind load..."
+  kind load docker-image "${IMG}" --name "${CLUSTER_NAME}"
+fi
 
 echo "🚀 Deploying operator..."
 make deploy IMG="${IMG}"
