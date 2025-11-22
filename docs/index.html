@@ -242,7 +242,9 @@
                     <ul>
                         <li class="active" data-target="install">Installation</li>
                         <li data-target="quickstart">Quick Start</li>
+                        <li data-target="tutorials">Tutorials</li>
                         <li data-target="api">API Reference</li>
+                        <li data-target="guides">Complete Guides</li>
                     </ul>
                 </div>
                 <div class="docs-content">
@@ -279,6 +281,63 @@ spec:
       enabled: true
       appID: hello-world
       appPort: 8080</pre>
+                        </div>
+                    </div>
+
+                    <div id="tutorials" class="docs-section">
+                        <h3>Tutorials</h3>
+                        <p>Step-by-step guides for creating different types of functions with Zenith Operator.</p>
+                        
+                        <div class="tutorial-card">
+                            <h4><i class="fa-solid fa-globe"></i> HTTP Synchronous Functions</h4>
+                            <p>Learn how to create functions that respond to HTTP requests synchronously. Perfect for REST APIs, webhooks, and microservices.</p>
+                            <a href="CREATING_HTTP_FUNCTIONS.html" class="btn btn-sm btn-primary">Read Tutorial →</a>
+                        </div>
+                        
+                        <div class="tutorial-card">
+                            <h4><i class="fa-solid fa-bolt"></i> Event-Driven Asynchronous Functions</h4>
+                            <p>Create functions that process events asynchronously using Knative Eventing. Ideal for data processing, notifications, and event-driven workflows.</p>
+                            <a href="CREATING_EVENT_FUNCTIONS.html" class="btn btn-sm btn-primary">Read Tutorial →</a>
+                        </div>
+                        
+                        <div class="tutorial-card">
+                            <h4><i class="fa-solid fa-network-wired"></i> Inter-Function Communication</h4>
+                            <p>Implement communication between multiple functions via HTTP. Build microservices architectures and distributed systems.</p>
+                            <a href="INTER_FUNCTION_COMMUNICATION.html" class="btn btn-sm btn-primary">Read Tutorial →</a>
+                        </div>
+                    </div>
+
+                    <div id="guides" class="docs-section">
+                        <h3>Complete Guides</h3>
+                        <p>Comprehensive documentation and references for advanced usage.</p>
+                        
+                        <div class="guide-list">
+                            <div class="guide-item">
+                                <i class="fa-solid fa-book"></i>
+                                <div>
+                                    <h4>Operator Reference</h4>
+                                    <p>Complete documentation of all features, parameters, CRD fields, and functionality.</p>
+                                    <a href="OPERATOR_REFERENCE.html">View Reference →</a>
+                                </div>
+                            </div>
+                            
+                            <div class="guide-item">
+                                <i class="fa-brands fa-git-alt"></i>
+                                <div>
+                                    <h4>Git Authentication</h4>
+                                    <p>Configure authentication for private Git repositories (HTTPS and SSH).</p>
+                                    <a href="GIT_AUTHENTICATION.html">View Guide →</a>
+                                </div>
+                            </div>
+                            
+                            <div class="guide-item">
+                                <i class="fa-solid fa-box"></i>
+                                <div>
+                                    <h4>Registry Configuration</h4>
+                                    <p>Setup and configure container registries (Docker Hub, GHCR, private registries).</p>
+                                    <a href="REGISTRY_CONFIGURATION.html">View Guide →</a>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
