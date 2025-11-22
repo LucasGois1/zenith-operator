@@ -1,8 +1,7 @@
-
 profile: standard
 
 global:
-  kubernetesVersion: "1.30.0"
+  kubernetesVersion: "1.33.0"
 
 installStack: true
 
@@ -33,24 +32,21 @@ gatewayAPI:
   gateway:
     name: "knative-gateway"
     namespace: "knative-serving"
-    className: "kong"
+    className: "envoy"
 
 netGatewayAPI:
   enabled: true
-  version: "knative-v1.17.0"
+  version: "knative-v1.20.0"
 
-kong:
+envoyGateway:
   enabled: true
-  controller:
-    ingressController:
-      enabled: true
-      installCRDs: false
-      gatewayAPI:
-        enabled: true
-  gateway:
-    enabled: true
-  proxy:
-    type: LoadBalancer
+  version: "v1.6.0"
+  controllerName: "gateway.envoyproxy.io/gatewayclass-controller"
+
+metallb:
+  enabled: false
+  version: "v0.14.9"
+  addressPool: "172.18.255.200-172.18.255.250"
 
 dapr:
   enabled: false

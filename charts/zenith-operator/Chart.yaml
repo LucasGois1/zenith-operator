@@ -18,11 +18,6 @@ keywords:
   - operator
 
 dependencies:
-  - name: ingress
-    version: "0.10.0"
-    repository: "https://charts.konghq.com"
-    alias: kong
-    condition: kong.enabled
   - name: dapr
     version: "1.14.4"
     repository: "https://dapr.github.io/helm-charts/"

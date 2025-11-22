@@ -26,6 +26,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -44,6 +45,7 @@ spec:
       description: Create Knative Eventing Broker for the test
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | kubectl apply -f - -n $NAMESPACE
               apiVersion: eventing.knative.dev/v1
@@ -64,22 +66,23 @@ spec:
       description: Wait for PipelineRun to complete
       try:
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-eventing
               for i in $(seq 1 60); do
-                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"\n"}{end}' | tail -n1)
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
                 [ -n "$PR_NAME" ] && break
                 sleep 2
               done
               [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
               echo "Found PipelineRun: $PR_NAME"
               kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
-            timeout: 600s
     
     - name: wait-for-image-digest
       description: Wait for controller to set Function.status.imageDigest after build
       try:
         - script:
+            timeout: 10m
             content: |
               echo "Waiting for Function.status.imageDigest to be set..."
               for i in $(seq 1 60); do
@@ -92,12 +95,12 @@ spec:
               done
               echo "ERROR: imageDigest not set after 120 seconds"
               exit 1
-            timeout: 150s
     
     - name: verify-knative-service-created
       description: Verify that a Knative Service was created
       try:
         - script:
+            timeout: 10m
             content: |
               echo "Waiting for Knative Service to be created..."
               for i in $(seq 1 60); do
@@ -109,12 +112,12 @@ spec:
               done
               echo "ERROR: Knative Service not created after 120 seconds"
               exit 1
-            timeout: 150s
     
     - name: verify-trigger-created
       description: Verify that a Trigger was created with correct broker and subscriber
       try:
         - script:
+            timeout: 10m
             content: |
               echo "Waiting for Trigger to be created..."
               TRIGGER_NAME="test-function-eventing-trigger"
@@ -142,7 +145,6 @@ spec:
               done
               echo "ERROR: Trigger not created after 120 seconds"
               exit 1
-            timeout: 150s
     
     - name: cleanup
       description: Clean up resources

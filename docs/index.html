@@ -164,7 +164,7 @@
                         <path d="M-10 -10 L10 -10 L10 10 L-10 10 Z" fill="none" />
                         <!-- User Icon Path -->
                         <path d="M0 -8 C-4.4 -8 -8 -4.4 -8 0 C-8 4.4 -4.4 8 0 8 C4.4 8 8 4.4 8 0 C8 -4.4 4.4 -8 0 -8 Z M0 10 C-5.3 10 -10 12.7 -10 15 V18 H10 V15 C10 12.7 5.3 10 0 10 Z" class="arch-icon" transform="translate(0, -5) scale(1.2)"/>
-                        <text y="35" class="arch-text">Developer</text>
+                        <text y="50" class="arch-text">Developer</text>
                     </g>
 
                     <!-- Path 1: Dev -> CRD -->
@@ -242,7 +242,9 @@
                     <ul>
                         <li class="active" data-target="install">Installation</li>
                         <li data-target="quickstart">Quick Start</li>
+                        <li data-target="tutorials">Tutorials</li>
                         <li data-target="api">API Reference</li>
+                        <li data-target="guides">Complete Guides</li>
                     </ul>
                 </div>
                 <div class="docs-content">
@@ -279,6 +281,63 @@ spec:
       enabled: true
       appID: hello-world
       appPort: 8080</pre>
+                        </div>
+                    </div>
+
+                    <div id="tutorials" class="docs-section">
+                        <h3>Tutorials</h3>
+                        <p>Step-by-step guides for creating different types of functions with Zenith Operator.</p>
+                        
+                        <div class="tutorial-card">
+                            <h4><i class="fa-solid fa-globe"></i> HTTP Synchronous Functions</h4>
+                            <p>Learn how to create functions that respond to HTTP requests synchronously. Perfect for REST APIs, webhooks, and microservices.</p>
+                            <a href="CREATING_HTTP_FUNCTIONS.html" class="btn btn-sm btn-primary">Read Tutorial →</a>
+                        </div>
+                        
+                        <div class="tutorial-card">
+                            <h4><i class="fa-solid fa-bolt"></i> Event-Driven Asynchronous Functions</h4>
+                            <p>Create functions that process events asynchronously using Knative Eventing. Ideal for data processing, notifications, and event-driven workflows.</p>
+                            <a href="CREATING_EVENT_FUNCTIONS.html" class="btn btn-sm btn-primary">Read Tutorial →</a>
+                        </div>
+                        
+                        <div class="tutorial-card">
+                            <h4><i class="fa-solid fa-network-wired"></i> Inter-Function Communication</h4>
+                            <p>Implement communication between multiple functions via HTTP. Build microservices architectures and distributed systems.</p>
+                            <a href="INTER_FUNCTION_COMMUNICATION.html" class="btn btn-sm btn-primary">Read Tutorial →</a>
+                        </div>
+                    </div>
+
+                    <div id="guides" class="docs-section">
+                        <h3>Complete Guides</h3>
+                        <p>Comprehensive documentation and references for advanced usage.</p>
+                        
+                        <div class="guide-list">
+                            <div class="guide-item">
+                                <i class="fa-solid fa-book"></i>
+                                <div>
+                                    <h4>Operator Reference</h4>
+                                    <p>Complete documentation of all features, parameters, CRD fields, and functionality.</p>
+                                    <a href="OPERATOR_REFERENCE.html">View Reference →</a>
+                                </div>
+                            </div>
+                            
+                            <div class="guide-item">
+                                <i class="fa-brands fa-git-alt"></i>
+                                <div>
+                                    <h4>Git Authentication</h4>
+                                    <p>Configure authentication for private Git repositories (HTTPS and SSH).</p>
+                                    <a href="GIT_AUTHENTICATION.html">View Guide →</a>
+                                </div>
+                            </div>
+                            
+                            <div class="guide-item">
+                                <i class="fa-solid fa-box"></i>
+                                <div>
+                                    <h4>Registry Configuration</h4>
+                                    <p>Setup and configure container registries (Docker Hub, GHCR, private registries).</p>
+                                    <a href="REGISTRY_CONFIGURATION.html">View Guide →</a>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -365,20 +424,17 @@ spec:
 
     <section id="support" class="support-section">
         <div class="container">
-            <h2 class="section-title">Buy me a <span class="gradient-text">Coffee</span></h2>
+            <h2 class="section-title">Support the <span class="gradient-text">Project</span></h2>
             <div class="support-card">
-                <div class="qr-container">
-                    <img src="assets/pix.png" alt="PIX QR Code" class="qr-image">
+                <div class="sponsor-avatar">
+                    <img src="https://github.com/LucasGois1.png" alt="LucasGois1">
                 </div>
                 <div class="support-info">
-                    <p>If you find Zenith Operator useful, consider supporting its development!</p>
-                    <div class="pix-copy-box">
-                        <span class="pix-label">PIX Copy & Paste</span>
-                        <div class="input-group">
-                            <input type="text" id="pix-code" readonly value="00020126770014BR.GOV.BCB.PIX01361a729ad7-9855-4b08-aabe-46597add81ff0215Muito obrigado!5204000053039865802BR5921Lucas Sampaio de Gois6009SAO PAULO62140510CGARqsJPy06304046A">
-                            <button class="btn btn-primary copy-pix-btn"><i class="fa-regular fa-copy"></i></button>
-                        </div>
-                    </div>
+                    <h3>LucasGois1</h3>
+                    <p>If you find Zenith Operator useful, consider supporting my work on Open Source!</p>
+                    <a href="https://github.com/sponsors/LucasGois1" target="_blank" class="btn btn-primary">
+                        <i class="fa-regular fa-heart"></i> Sponsor
+                    </a>
                 </div>
             </div>
         </div>

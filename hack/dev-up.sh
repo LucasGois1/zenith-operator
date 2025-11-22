@@ -30,13 +30,16 @@ else
   echo "✅ kubectl já instalado"
 fi
 
-if ! command -v kind &> /dev/null; then
-  echo "📦 Instalando kind..."
-  curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64"
+REQUIRED_KIND_VERSION="v0.24.0"
+CURRENT_KIND_VERSION=$(kind version 2>/dev/null | grep -oP 'kind \K[^ ]+' || echo "none")
+
+if [ "$CURRENT_KIND_VERSION" != "$REQUIRED_KIND_VERSION" ]; then
+  echo "📦 Instalando kind ${REQUIRED_KIND_VERSION}..."
+  curl -Lo ./kind "https://kind.sigs.k8s.io/dl/${REQUIRED_KIND_VERSION}/kind-linux-amd64"
   chmod +x ./kind
   sudo mv ./kind /usr/local/bin/kind
 else
-  echo "✅ kind já instalado"
+  echo "✅ kind ${REQUIRED_KIND_VERSION} já instalado"
 fi
 
 if ! command -v docker &> /dev/null; then
@@ -129,6 +132,8 @@ if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.se
   
   echo "⏳ Aguardando Knative Serving ficar pronto..."
   kubectl wait --for=condition=ready pod -l app=controller -n knative-serving --timeout=300s
+  kubectl wait --for=condition=ready pod -l app=autoscaler -n knative-serving --timeout=300s
+  kubectl wait --for=condition=ready pod -l app=activator -n knative-serving --timeout=300s
   kubectl wait --for=condition=ready pod -l app=webhook -n knative-serving --timeout=300s
 else
   echo "✅ Knative Serving já instalado"
@@ -136,8 +141,8 @@ fi
 
 if ! kubectl get apiservices v1.eventing.knative.dev 2>/dev/null | grep -q "v1.eventing.knative.dev"; then
   echo "📦 Instalando Knative Eventing..."
-  kubectl apply -f https://github.com/knative/eventing/releases/latest/download/eventing-crds.yaml
-  kubectl apply -f https://github.com/knative/eventing/releases/latest/download/eventing-core.yaml
+  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-crds.yaml
+  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-core.yaml
   echo "⏳ Aguardando Knative Eventing ficar pronto..."
   kubectl wait --for=condition=ready pod -l app=eventing-controller -n knative-eventing --timeout=300s
 else
@@ -151,6 +156,42 @@ else
   echo "✅ Gateway API CRDs já instalados"
 fi
 
+if ! kubectl get namespace metallb-system 2>/dev/null; then
+  echo "📦 Instalando MetalLB para LoadBalancer support em kind..."
+  kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
+  
+  echo "⏳ Aguardando MetalLB ficar pronto..."
+  kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s
+  
+  echo "📦 Configurando MetalLB IP address pool..."
+  DOCKER_NETWORK=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' | head -n1)
+  IP_PREFIX=$(echo ${DOCKER_NETWORK} | cut -d'.' -f1-2)
+  
+  cat <<EOF | kubectl apply -f -
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: kind-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - ${IP_PREFIX}.255.200-${IP_PREFIX}.255.250
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: kind-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - kind-pool
+EOF
+  
+  echo "✅ MetalLB configurado com IP pool ${IP_PREFIX}.255.200-${IP_PREFIX}.255.250"
+else
+  echo "✅ MetalLB já instalado"
+fi
+
 if ! command -v helm &> /dev/null; then
   echo "📦 Instalando Helm..."
   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -158,32 +199,22 @@ else
   echo "✅ Helm já instalado"
 fi
 
-if ! kubectl get namespace kong 2>/dev/null; then
-  echo "📦 Instalando Kong Ingress Controller..."
-  helm repo add kong https://charts.konghq.com
-  helm repo update
-  kubectl create namespace kong
-  helm install kong kong/ingress -n kong \
-    --set controller.ingressController.enabled=true \
-    --set controller.ingressController.installCRDs=false \
-    --set gateway.enabled=true \
-    --set controller.ingressController.gatewayAPI.enabled=true \
-    --set controller.admissionWebhook.enabled=false
-  echo "⏳ Aguardando Kong ficar pronto..."
-  kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=controller -n kong --timeout=300s
-  kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=gateway -n kong --timeout=300s
+if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
+  echo "📦 Instalando Envoy Gateway..."
   
-  echo "📦 Configurando Kong proxy como NodePort para kind..."
-  kubectl patch svc kong-gateway-proxy -n kong -p '{"spec":{"type":"NodePort"}}'
+  curl -sL https://github.com/envoyproxy/gateway/releases/download/v1.6.0/install.yaml > /tmp/envoy-gateway-install.yaml
+  cd /tmp && csplit -s -f envoy-gateway- envoy-gateway-install.yaml '/^---$/' '{*}'
+  
+  for file in envoy-gateway-*; do
+    if ! grep -q "kind: CustomResourceDefinition" "$file"; then
+      kubectl apply -f "$file" 2>&1 | grep -v "unchanged" || true
+    fi
+  done
+  
+  echo "⏳ Aguardando Envoy Gateway ficar pronto..."
+  kubectl wait --for=condition=available --timeout=300s deployment/envoy-gateway -n envoy-gateway-system
 else
-  echo "✅ Kong Ingress Controller já instalado"
-fi
-
-KONG_NODE_PORT=$(kubectl get svc kong-gateway-proxy -n kong -o jsonpath='{.spec.ports[?(@.name=="kong-proxy")].nodePort}')
-KONG_NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-if [ -n "$KONG_NODE_PORT" ] && [ -n "$KONG_NODE_IP" ]; then
-  echo "📍 Kong proxy acessível em: http://${KONG_NODE_IP}:${KONG_NODE_PORT}"
-  echo "   Use com Host header para acessar functions: curl -H 'Host: <function-url>' http://${KONG_NODE_IP}:${KONG_NODE_PORT}"
+  echo "✅ Envoy Gateway já instalado"
 fi
 
 if ! kubectl get namespace registry 2>/dev/null; then
@@ -223,7 +254,8 @@ fi
 
 if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev/null; then
   echo "📦 Instalando Knative net-gateway-api..."
-  kubectl apply -f https://github.com/knative-extensions/net-gateway-api/releases/download/knative-v1.17.0/net-gateway-api.yaml
+  kubectl apply -f https://github.com/knative-extensions/net-gateway-api/releases/download/knative-v1.20.0/net-gateway-api.yaml
+  
   echo "⏳ Aguardando net-gateway-api ficar pronto..."
   kubectl wait --for=condition=ready pod -l app=net-gateway-api-controller -n knative-serving --timeout=300s
 else
@@ -235,17 +267,15 @@ if ! kubectl get configmap config-network -n knative-serving -o yaml | grep -q "
   kubectl patch configmap/config-network -n knative-serving --type merge -p '{"data":{"ingress-class":"gateway-api.ingress.networking.knative.dev"}}'
 fi
 
-if ! kubectl get gatewayclass kong 2>/dev/null; then
-  echo "📦 Criando GatewayClass e Gateway para Kong..."
+if ! kubectl get gatewayclass envoy 2>/dev/null; then
+  echo "📦 Criando GatewayClass e Gateways para Envoy..."
   cat <<EOF | kubectl apply -f -
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:
-  name: kong
-  annotations:
-    konghq.com/gatewayclass-unmanaged: "true"
+  name: envoy
 spec:
-  controllerName: konghq.com/kic-gateway-controller
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -253,7 +283,22 @@ metadata:
   name: knative-gateway
   namespace: knative-serving
 spec:
-  gatewayClassName: kong
+  gatewayClassName: envoy
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: knative-local-gateway
+  namespace: knative-serving
+spec:
+  gatewayClassName: envoy
   listeners:
   - name: http
     protocol: HTTP
@@ -262,13 +307,32 @@ spec:
       namespaces:
         from: All
 EOF
-  echo "⏳ Aguardando Gateway ficar pronto..."
-  sleep 5
+  echo "⏳ Aguardando Gateways ficarem prontos..."
+  sleep 15
+  
+  ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  
+  if [ -n "$ENVOY_SVC" ]; then
+    echo "📍 Envoy Gateway (external) service: envoy-gateway-system/${ENVOY_SVC}"
+  fi
+  if [ -n "$LOCAL_ENVOY_SVC" ]; then
+    echo "📍 Envoy Gateway (local) service: envoy-gateway-system/${LOCAL_ENVOY_SVC}"
+  fi
 fi
 
-if ! kubectl get configmap config-gateway -n knative-serving -o yaml | grep -q "class: kong"; then
-  echo "📦 Configurando Knative Gateway para usar Kong..."
-  kubectl patch configmap/config-gateway -n knative-serving --type merge -p '{"data":{"local-gateways":"- class: kong\n  gateway: knative-serving/knative-gateway\n  service: kong/kong-gateway-proxy\n  supported-features:\n  - HTTPRouteRequestTimeout\n"}}'
+if ! kubectl get configmap config-gateway -n knative-serving -o yaml | grep -q "class: envoy"; then
+  echo "📦 Configurando Knative Gateway para usar Envoy (external + local)..."
+  
+  ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  
+  if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
+    kubectl patch configmap/config-gateway -n knative-serving --type merge -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\",\"local-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-local-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${LOCAL_ENVOY_SVC}\\\"}]\"}}"
+    echo "✅ Configurado external-gateways e local-gateways"
+  else
+    echo "⚠️  Envoy Gateway services not found yet, will be configured on first reconciliation"
+  fi
 fi
 
 echo "🔨 Building operator image..."

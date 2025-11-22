@@ -8,4 +8,4 @@ status:
       status: "False"
       reason: BuildSucceeded
       message: Imagem gerada com sucesso
-  imageDigest: (exists($))
+  imageDigest: registry.registry.svc.cluster.local:5000*

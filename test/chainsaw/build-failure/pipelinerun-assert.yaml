@@ -3,4 +3,4 @@ kind: PipelineRun
 metadata:
   name: test-function-build-fail-build
 status:
-  (exists($)): true
+  registry.registry.svc.cluster.local:5000*: true

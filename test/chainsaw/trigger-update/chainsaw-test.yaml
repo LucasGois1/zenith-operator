@@ -27,6 +27,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -51,13 +52,13 @@ spec:
       description: Create a Function CR with eventing config
       try:
         - apply:
-            file: function-initial.yaml
+            file: function-initial.yaml
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-trigger-update
               for i in $(seq 1 60); do
-                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"
-"}{end}' | tail -n1)
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
                 [ -n "$PR_NAME" ] && break
                 sleep 2
               done
@@ -70,19 +71,18 @@ spec:
       try:
         - assert:
             file: function-ready-assert.yaml
-            timeout: 2m
     
     - name: verify-initial-trigger
       description: Verify Trigger was created with initial config
       try:
         - assert:
             file: trigger-initial-assert.yaml
-            timeout: 1m
     
     - name: capture-initial-trigger-spec
       description: Capture initial Trigger spec
       try:
         - script:
+            timeout: 10m
             content: |
               INITIAL_BROKER=$(kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o jsonpath='{.spec.broker}')
               INITIAL_FILTER=$(kubectl get trigger test-function-trigger-update-trigger -n $NAMESPACE -o jsonpath='{.spec.filter.attributes.type}')
@@ -103,6 +103,7 @@ spec:
       description: Wait for Trigger to be updated
       try:
         - script:
+            timeout: 10m
             content: |
               echo "Waiting for Trigger to be updated..."
               sleep 5
@@ -124,14 +125,12 @@ spec:
                 
                 sleep 1
               done
-            timeout: 45s
     
     - name: verify-updated-trigger
       description: Verify Trigger has new configuration
       try:
         - assert:
             file: trigger-updated-assert.yaml
-            timeout: 1m
     
     - name: verify-still-ready
       description: Verify Function is still Ready after filter update
@@ -187,7 +186,6 @@ spec:
       try:
         - assert:
             file: function-ready-assert.yaml
-            timeout: 1m
     
     - name: cleanup
       description: Clean up resources

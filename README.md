@@ -1,207 +1,227 @@
-# 🚀 Zenith Operator
+# Zenith Operator
 
-> **Serverless on Kubernetes, Made Simple.**
+[![Lint](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml)
+[![Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml)
+[![E2E Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/LucasGois1/zenith-operator)](https://goreportcard.com/report/github.com/LucasGois1/zenith-operator)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Kubernetes](https://img.shields.io/badge/kubernetes-v1.24+-326ce5.svg?logo=kubernetes)](https://kubernetes.io)
+Zenith Operator é um operador Kubernetes que fornece uma plataforma serverless para funções, orquestrando builds (Tekton Pipelines), deployments (Knative Serving) e invocações orientadas a eventos (Knative Eventing) através de um único Custom Resource `Function`.
 
-Zenith Operator abstracts the complexity of building and deploying serverless functions on Kubernetes. It orchestrates **Tekton Pipelines** for builds, **Knative Serving** for deployments, and **Knative Eventing** for event-driven invocations — all through a single `Function` Custom Resource Definition (CRD).
+## 🚀 Visão Geral
 
----
+O Zenith Operator abstrai a complexidade de integrar Tekton, Knative e Dapr, permitindo que desenvolvedores definam funções serverless de forma declarativa usando apenas um Custom Resource.
 
-## ✨ Features
+### Principais Características
 
-* **🛠 Automated Builds**: Integrated Cloud Native Buildpacks via Tekton. Source code to container image without a `Dockerfile`.
-* **⚡ Serverless Deployment**: Auto-scaling (including scale-to-zero) powered by Knative Serving.
-* **🔗 Event Driven**: Native subscription to Knative Brokers with attribute filtering.
-* **🕸 Dapr Integration**: First-class support for Dapr sidecars to enable service mesh capabilities (pub/sub, state management).
-* **🔒 Secure by Design**: Secret-based authentication for private Git repos and Container Registries.
+- **Build Automático**: Clona repositórios Git e constrói imagens de container usando Tekton Pipelines e Buildpacks
+- **Serverless Deployment**: Deploy automático como Knative Services com scale-to-zero
+- **Event-Driven**: Subscrição a eventos via Knative Eventing com filtros baseados em atributos
+- **Service Mesh**: Integração opcional com Dapr para service discovery, pub/sub e state management
+- **Comunicação entre Funções**: Suporte nativo para comunicação HTTP entre funções
+- **Imagens Imutáveis**: Rastreamento de image digests para reprodutibilidade e segurança
 
----
+## 📚 Documentação
 
-## 🏗 Architecture
+### Guias de Uso
 
-Zenith Operator serves as the glue between powerful CNCF projects:
+- **[Criando Funções HTTP Síncronas](docs/CREATING_HTTP_FUNCTIONS.md)** - Como criar funções que respondem a requisições HTTP
+- **[Criando Funções Assíncronas com Eventos](docs/CREATING_EVENT_FUNCTIONS.md)** - Como criar funções que processam eventos assíncronos
+- **[Comunicação entre Funções](docs/INTER_FUNCTION_COMMUNICATION.md)** - Como implementar comunicação entre múltiplas funções
 
-```mermaid
-graph LR
-    DEV[Developer] -->|Apply Function CR| CRD
-    CRD -->|Reconcile| OP[Zenith Operator]
-    
-    OP -->|Create| TEKTON[Tekton Pipeline]
-    TEKTON -->|Build & Push| REGISTRY[(Registry)]
-    
-    OP -->|Deploy| KNATIVE[Knative Service]
-    KNATIVE -->|Pull| REGISTRY
-    
-    OP -->|Subscribe| TRIGGER[Trigger]
-    TRIGGER -->|Route Events| KNATIVE
-```
+### Referência Técnica
 
-For a deep dive into the architecture, check out the [Architecture Documentation](zenith-operator-architecture.md).
+- **[Referência Completa do Operator](docs/OPERATOR_REFERENCE.md)** - Documentação completa de todas as features, parâmetros e funcionalidades
+- **[Configuração de Autenticação Git](docs/GIT_AUTHENTICATION.md)** - Como configurar autenticação para repositórios Git privados
+- **[Configuração de Registry](docs/REGISTRY_CONFIGURATION.md)** - Como configurar registries de container
 
----
+## 🎯 Casos de Uso
 
-## 🚀 Getting Started
+### 1. Funções HTTP Síncronas
 
-### Prerequisites
-
-* Kubernetes Cluster (v1.30+)
-* Helm 3.x
-* `kubectl` configured to access your cluster
-
-### Installation
-
-#### Option 1: Helm (Recommended)
-
-The easiest way to install Zenith Operator with all dependencies:
-
-```sh
-# Add the Helm repository
-helm repo add zenith-operator https://lucasgois1.github.io/zenith-operator
-helm repo update
-
-# Install the operator and all dependencies
-helm install zenith-operator zenith-operator/zenith-operator
-```
-
-This automatically installs:
-- Zenith Operator
-- Tekton Pipelines (for builds)
-- Knative Serving (for deployments)
-- Knative Eventing (for event-driven architectures)
-- Kong Ingress Controller (for routing)
-
-For detailed installation options and configuration, see the [Installation Guide](INSTALLATION.md).
-
-#### Option 2: Manual Installation
-
-If you prefer to install components separately:
-
-1. **Install prerequisites:**
-   - [Tekton Pipelines](https://tekton.dev/docs/pipelines/install/)
-   - [Knative Serving](https://knative.dev/docs/install/serving/)
-   - [Knative Eventing](https://knative.dev/docs/eventing/install/) (optional)
-
-2. **Install the operator:**
-
-   ```sh
-   kubectl apply -f https://github.com/LucasGois1/zenith-operator/releases/latest/download/install.yaml
-   ```
-
-3. **Verify installation:**
-
-   ```sh
-   kubectl get pods -n zenith-operator-system
-   ```
-
----
-
-## 📖 Usage
-
-Create a `function.yaml` file to define your function.
-
-### 1. Basic Function (Public Repo)
+Funções que respondem a requisições HTTP síncronas, ideais para APIs REST, webhooks e microserviços.
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
 kind: Function
 metadata:
-  name: hello-world
-  namespace: default
+  name: hello-api
 spec:
-  # Source Code
-  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRepo: https://github.com/myorg/hello-function
   gitRevision: main
-  
-  # Build Config
   build:
-    image: docker.io/your-username/hello-world # Target image
-    registrySecretName: registry-creds # Docker credentials
-    
-  # Runtime Config
-  deploy:
-    dapr:
-      enabled: false
+    image: registry.example.com/hello-api:latest
+  deploy: {}
 ```
 
-### 2. Event-Driven Function with Dapr
+### 2. Funções Assíncronas com Eventos
+
+Funções que processam eventos de forma assíncrona, ideais para processamento de dados, notificações e workflows event-driven.
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
 kind: Function
 metadata:
-  name: payment-processor
+  name: order-processor
 spec:
-  gitRepo: https://github.com/my-org/payment-service
+  gitRepo: https://github.com/myorg/order-processor
+  gitRevision: main
   build:
-    image: registry.my-company.com/payment-processor
-    registrySecretName: private-registry-creds
-  deploy:
-    dapr:
-      enabled: true
-      appID: payment-service
-      appPort: 8080
+    image: registry.example.com/order-processor:latest
+  deploy: {}
   eventing:
     broker: default
     filters:
-      type: order.created
+      type: com.example.order.created
+      source: payment-service
 ```
 
-### Apply the Function
+### 3. Comunicação entre Funções
 
-```sh
-kubectl apply -f function.yaml
+Múltiplas funções que se comunicam via HTTP, ideais para arquiteturas de microserviços e sistemas distribuídos.
+
+```yaml
+# transaction-processor chama balance-manager que chama audit-logger
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: transaction-processor
+spec:
+  gitRepo: https://github.com/myorg/transaction-processor
+  gitRevision: main
+  build:
+    image: registry.example.com/transaction-processor:latest
+  deploy:
+    env:
+      - name: BALANCE_MANAGER_URL
+        value: http://balance-manager.default.svc.cluster.local
 ```
 
-Check the status:
+## 🛠️ Instalação
 
-```sh
-kubectl get function hello-world
+### Pré-requisitos
+
+- Kubernetes 1.28+
+- Tekton Pipelines v0.50+
+- Knative Serving v1.20+
+- Knative Eventing v1.20+ (opcional, para event-driven functions)
+- Envoy Gateway v1.6+ (para ingress)
+
+### Instalação via Helm
+
+```bash
+# Adicionar o repositório Helm
+helm repo add zenith https://lucasgois1.github.io/zenith-operator
+
+# Instalar o operator
+helm install zenith-operator zenith/zenith-operator \
+  --namespace zenith-operator-system \
+  --create-namespace
 ```
 
----
+### Instalação via Kustomize
 
-## 🛠 Development
+```bash
+# Instalar CRDs
+make install
 
-To run the operator locally for development:
+# Deploy do operator
+make deploy IMG=ghcr.io/lucasgois1/zenith-operator:latest
+```
 
-1. **Clone the repo:**
+## 🚦 Quick Start
 
-   ```sh
-   git clone https://github.com/LucasGois1/zenith-operator.git
-   cd zenith-operator
-   ```
+1. **Criar um Secret para autenticação Git** (se usar repositório privado):
 
-2. **Install dependencies:**
+```bash
+kubectl create secret generic github-auth \
+  --from-literal=username=myuser \
+  --from-literal=password=mytoken \
+  --type=kubernetes.io/basic-auth
 
-   ```sh
-   go mod download
-   ```
+kubectl annotate secret github-auth \
+  tekton.dev/git-0=https://github.com
+```
 
-3. **Run against your active cluster:**
+2. **Criar sua primeira função**:
 
-   ```sh
-   make install
-   make run
-   ```
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: my-first-function
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.example.com/my-first-function:latest
+  deploy: {}
+EOF
+```
 
----
+3. **Verificar o status**:
 
-## 📚 Documentation
+```bash
+kubectl get functions
+kubectl describe function my-first-function
+```
 
-Visit our [Documentation Website](https://lucasgois1.github.io/zenith-operator/) for full API references and guides.
+4. **Acessar a função**:
 
-* [Git Authentication](docs/GIT_AUTHENTICATION.md)
-* [Registry Configuration](docs/REGISTRY_CONFIGURATION.md)
+```bash
+# Obter a URL da função
+FUNCTION_URL=$(kubectl get function my-first-function -o jsonpath='{.status.url}')
+echo "Function URL: $FUNCTION_URL"
 
----
+# Fazer uma requisição
+curl $FUNCTION_URL
+```
 
-## 🤝 Contributing
+## 🧪 Desenvolvimento
 
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting a Pull Request.
+### Executar testes localmente
 
-## 📄 License
+```bash
+# Testes unitários
+make test
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+# Testes E2E
+make test-e2e
+
+# Testes Chainsaw específicos
+make test-chainsaw-basic        # Teste básico de função
+make test-chainsaw-eventing     # Teste de eventing
+make test-chainsaw-integration  # Teste de integração entre funções
+```
+
+### Desenvolvimento local
+
+```bash
+# Setup do ambiente de desenvolvimento
+make dev-up
+
+# Rebuild e redeploy rápido
+make dev-redeploy
+
+# Limpar ambiente
+make dev-down
+```
+
+## 📖 Exemplos
+
+Veja o diretório [config/samples/](config/samples/) para exemplos completos de Functions.
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Por favor, abra issues e pull requests no GitHub.
+
+## 📄 Licença
+
+Este projeto está licenciado sob a Apache License 2.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 🔗 Links Úteis
+
+- [Documentação Completa](docs/)
+- [Exemplos](config/samples/)
+- [Testes Chainsaw](test/chainsaw/)
+- [Issues](https://github.com/LucasGois1/zenith-operator/issues)

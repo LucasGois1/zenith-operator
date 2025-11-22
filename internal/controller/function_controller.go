@@ -91,6 +91,9 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      saName,
 				Namespace: function.Namespace,
+				Labels: map[string]string{
+					"functions.zenith.com/managed-by": "zenith-operator",
+				},
 			},
 		}
 
@@ -839,6 +842,15 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		containerPort = int32(function.Spec.Deploy.Dapr.AppPort)
 	}
 
+	// Construir variáveis de ambiente
+	envVars := []v1.EnvVar{}
+	for _, e := range function.Spec.Deploy.Env {
+		envVars = append(envVars, v1.EnvVar{
+			Name:  e.Name,
+			Value: e.Value,
+		})
+	}
+
 	// Construir a definição do container
 	container := v1.Container{
 		// Usa o digest do build bem-sucedido da Fase 3.3
@@ -850,6 +862,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 				ContainerPort: containerPort,
 			},
 		},
+		Env: envVars,
 	}
 
 	// Construir o Service object
@@ -857,6 +870,9 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      function.Name,
 			Namespace: function.Namespace,
+			Labels: map[string]string{
+				"networking.knative.dev/visibility": "cluster-local",
+			},
 		},
 		// O Spec 'v1' do Knative Service [6]
 		Spec: knservingv1.ServiceSpec{

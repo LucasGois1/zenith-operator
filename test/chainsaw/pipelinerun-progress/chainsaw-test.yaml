@@ -26,6 +26,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -64,6 +65,7 @@ spec:
       description: Wait to verify status persists (controller requeues)
       try:
         - script:
+            timeout: 10m
             content: |
               echo "Waiting 35 seconds to verify Building status persists..."
               sleep 35
@@ -75,13 +77,13 @@ spec:
               else
                 echo "ERROR: Unexpected status reason: $STATUS_REASON"
                 exit 1
-              fi
+              fi
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-progress
               for i in $(seq 1 60); do
-                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"
-"}{end}' | tail -n1)
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
                 [ -n "$PR_NAME" ] && break
                 sleep 2
               done

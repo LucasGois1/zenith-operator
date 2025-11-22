@@ -1,6 +1,6 @@
 # Zenith Operator Helm Chart
 
-A comprehensive Helm chart for deploying the Zenith Operator and all its dependencies (Tekton Pipelines, Knative Serving, Knative Eventing, Kong Ingress Controller, Gateway API, and optional Dapr) in a single installation.
+A comprehensive Helm chart for deploying the Zenith Operator and all its dependencies (Tekton Pipelines, Knative Serving, Knative Eventing, Envoy Gateway, Gateway API, and optional Dapr) in a single installation.
 
 ## Overview
 
@@ -8,7 +8,7 @@ The Zenith Operator provides a serverless function platform on Kubernetes by orc
 - **Tekton Pipelines**: Building function images from Git repositories
 - **Knative Serving**: Deploying functions with auto-scaling
 - **Knative Eventing**: Event-driven function invocations
-- **Kong + Gateway API**: Ingress and routing
+- **Envoy Gateway + Gateway API**: Ingress and routing
 - **Dapr** (optional): Service mesh capabilities
 
 This Helm chart simplifies installation by automatically deploying all required dependencies with proper configuration and ordering.
@@ -75,9 +75,8 @@ helm install zenith-operator ./charts/zenith-operator \
 ### Development Profile (`values-dev.yaml`)
 
 Optimized for local development with Kind/Minikube:
-- ✅ All dependencies enabled (Tekton, Knative, Kong, Dapr)
+- ✅ All dependencies enabled (Tekton, Knative, Envoy Gateway, Dapr)
 - ✅ Local container registry included
-- ✅ NodePort service type for Kong
 - ✅ Insecure registry configuration
 - ✅ Smaller resource requests
 
@@ -93,7 +92,6 @@ helm install zenith-operator ./charts/zenith-operator \
 Production-ready defaults:
 - ✅ All dependencies enabled
 - ❌ Local registry disabled (use external registry)
-- ✅ LoadBalancer service type for Kong
 - ✅ Production resource limits
 - ❌ Dapr disabled by default
 
@@ -128,8 +126,8 @@ helm install zenith-operator ./charts/zenith-operator \
 | `knativeServing.version` | Knative Serving version | `v0.41.2` | `v0.41.2` |
 | `knativeEventing.enabled` | Install Knative Eventing | `true` | `true` |
 | `knativeEventing.version` | Knative Eventing version | `v0.41.7` | `v0.41.7` |
-| `kong.enabled` | Install Kong Ingress | `true` | `true` |
-| `kong.proxy.type` | Kong service type | `LoadBalancer` | `NodePort` |
+| `envoyGateway.enabled` | Install Envoy Gateway | `true` | `true` |
+| `envoyGateway.version` | Envoy Gateway version | `v1.6.0` | `v1.6.0` |
 | `dapr.enabled` | Install Dapr | `false` | `true` |
 | `registry.enabled` | Install local registry | `false` | `true` |
 | `operator.image.repository` | Operator image | `ghcr.io/lucasgois1/zenith-operator` | same |
@@ -173,24 +171,16 @@ gatewayAPI:
   gateway:
     name: "knative-gateway"
     namespace: "knative-serving"
-    className: "kong"
+    className: "envoy"
 ```
 
-### Kong Configuration
+### Envoy Gateway Configuration
 
 ```yaml
-kong:
+envoyGateway:
   enabled: true
-  controller:
-    ingressController:
-      enabled: true
-      installCRDs: false
-      gatewayAPI:
-        enabled: true
-  gateway:
-    enabled: true
-  proxy:
-    type: LoadBalancer  # or NodePort for dev
+  version: "v1.6.0"
+  controllerName: "gateway.envoyproxy.io/gatewayclass-controller"
 ```
 
 ### Dapr Configuration
@@ -262,8 +252,8 @@ preflight:
 | Knative Serving | v0.41.2 | v0.41.2 |
 | Knative Eventing | v0.41.7 | v0.41.7 |
 | Gateway API | v1.3.0 | v1.3.0 |
-| net-gateway-api | knative-v1.17.0 | knative-v1.17.0 |
-| Kong Ingress | 0.10.0 | 0.10.0 |
+| net-gateway-api | knative-v1.20.0 | knative-v1.20.0 |
+| Envoy Gateway | v1.6.0 | v1.6.0 |
 | Dapr | 1.14.0 | 1.14.0 |
 
 ## Installation Order
@@ -280,7 +270,7 @@ The Helm chart uses hooks to ensure proper installation ordering:
    - Knative Eventing CRDs
    - Knative Eventing Core
    - net-gateway-api
-   - Kong (via dependency)
+   - Envoy Gateway
    - Dapr (via dependency)
    - Local Registry
    - Tekton ClusterTasks
@@ -361,7 +351,7 @@ kubectl logs -n zenith-operator-system -l app.kubernetes.io/name=zenith-operator
 kubectl get pods -n tekton-pipelines
 kubectl get pods -n knative-serving
 kubectl get pods -n knative-eventing
-kubectl get pods -n kong
+kubectl get pods -n envoy-gateway-system
 
 # Check CRDs
 kubectl get crds | grep -E "tekton|knative|gateway|functions"
@@ -444,12 +434,12 @@ kubectl logs -n <namespace> <pod-name>
 # - Ingress not configured: Verify Kong and Gateway API
 ```
 
-### Kong Ingress Issues
+### Envoy Gateway Issues
 
 ```bash
-# Check Kong status
-kubectl get pods -n kong
-kubectl logs -n kong -l app=kong
+# Check Envoy Gateway status
+kubectl get pods -n envoy-gateway-system
+kubectl logs -n envoy-gateway-system -l control-plane=envoy-gateway
 
 # Check Gateway
 kubectl get gateway -n knative-serving
@@ -457,11 +447,11 @@ kubectl describe gateway knative-gateway -n knative-serving
 
 # Check GatewayClass
 kubectl get gatewayclass
-kubectl describe gatewayclass kong
+kubectl describe gatewayclass envoy
 
 # Common issues:
-# - Gateway not ready: Wait for Kong to be ready
-# - No external IP: Use NodePort or configure LoadBalancer
+# - Gateway not ready: Wait for Envoy Gateway to be ready
+# - HTTPRoutes not created: Check net-gateway-api controller logs
 ```
 
 ## Upgrading
@@ -508,7 +498,7 @@ kubectl delete namespace zenith-operator-system
 kubectl delete namespace tekton-pipelines
 kubectl delete namespace knative-serving
 kubectl delete namespace knative-eventing
-kubectl delete namespace kong
+kubectl delete namespace envoy-gateway-system
 kubectl delete namespace registry
 kubectl delete namespace dapr-system  # if Dapr was installed
 ```
@@ -543,7 +533,6 @@ helm install zenith-operator ./charts/zenith-operator \
 helm dependency update ./charts/zenith-operator
 
 # This downloads:
-# - Kong Ingress chart
 # - Dapr chart
 ```
 
@@ -561,5 +550,5 @@ Apache License 2.0 - See [LICENSE](../../LICENSE) for details.
 - Documentation: https://github.com/LucasGois1/zenith-operator
 - Tekton: https://tekton.dev
 - Knative: https://knative.dev
-- Kong: https://docs.konghq.com
+- Envoy Gateway: https://gateway.envoyproxy.io
 - Dapr: https://dapr.io

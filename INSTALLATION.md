@@ -31,7 +31,7 @@ This will install the operator along with all required dependencies:
 - Tekton Pipelines (for building functions)
 - Knative Serving (for serverless deployments)
 - Knative Eventing (for event-driven architectures)
-- Kong Ingress Controller (for routing)
+- Envoy Gateway (for routing)
 - Gateway API CRDs
 
 ### Step 3: Verify Installation
@@ -51,8 +51,8 @@ kubectl get pods -n knative-serving
 # Check Knative Eventing
 kubectl get pods -n knative-eventing
 
-# Check Kong
-kubectl get pods -n kong
+# Check Envoy Gateway
+kubectl get pods -n envoy-gateway-system
 ```
 
 ## Configuration Options
