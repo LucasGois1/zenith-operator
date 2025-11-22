@@ -1,69 +1,227 @@
-# Chainsaw
+# Zenith Operator
 
-[![Lint](https://github.com/kyverno/chainsaw/actions/workflows/lint.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/lint.yaml)
-[![Tests](https://github.com/kyverno/chainsaw/actions/workflows/tests.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/tests.yaml)
-[![Code QL](https://github.com/kyverno/chainsaw/actions/workflows/codeql.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/codeql.yaml)
-[![Dev docs](https://github.com/kyverno/chainsaw/actions/workflows/docs-main.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/docs-main.yaml)
-[![Release](https://github.com/kyverno/chainsaw/actions/workflows/release.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/release.yaml)
-[![Release docs](https://github.com/kyverno/chainsaw/actions/workflows/docs-release.yaml/badge.svg)](https://github.com/kyverno/chainsaw/actions/workflows/docs-release.yaml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/kyverno/chainsaw)](https://goreportcard.com/report/github.com/kyverno/chainsaw)
-[![License: Apache-2.0](https://img.shields.io/github/license/kyverno/chainsaw?color=blue)](https://github.com/kyverno/chainsaw/blob/main/LICENSE)
-[![Codecov](https://codecov.io/gh/kyverno/chainsaw/branch/main/graph/badge.svg)](https://app.codecov.io/gh/kyverno/chainsaw/branch/main)
+[![Lint](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml)
+[![Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml)
+[![E2E Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml)
 
-<a href="https://kyverno.github.io/chainsaw" rel="https://kyverno.github.io/chainsaw">![logo](.assets/kyverno-chainsaw-horizontal.png)</a>
+Zenith Operator é um operador Kubernetes que fornece uma plataforma serverless para funções, orquestrando builds (Tekton Pipelines), deployments (Knative Serving) e invocações orientadas a eventos (Knative Eventing) através de um único Custom Resource `Function`.
 
-## Overview
+## 🚀 Visão Geral
 
-Chainsaw provides a declarative approach to test [Kubernetes](https://kubernetes.io) operators and controllers.
+O Zenith Operator abstrai a complexidade de integrar Tekton, Knative e Dapr, permitindo que desenvolvedores definam funções serverless de forma declarativa usando apenas um Custom Resource.
 
-While Chainsaw is designed for testing operators and controllers, it can declaratively test any Kubernetes objects.
+### Principais Características
 
-Chainsaw is an open-source tool that was initially developed for defining and running [Kyverno](https://kyverno.io) end-to-end tests.
+- **Build Automático**: Clona repositórios Git e constrói imagens de container usando Tekton Pipelines e Buildpacks
+- **Serverless Deployment**: Deploy automático como Knative Services com scale-to-zero
+- **Event-Driven**: Subscrição a eventos via Knative Eventing com filtros baseados em atributos
+- **Service Mesh**: Integração opcional com Dapr para service discovery, pub/sub e state management
+- **Comunicação entre Funções**: Suporte nativo para comunicação HTTP entre funções
+- **Imagens Imutáveis**: Rastreamento de image digests para reprodutibilidade e segurança
 
-## Resources
+## 📚 Documentação
 
-Built under the Kyverno umbrella, you can use the Kyverno Chainsaw **Slack channels** to discuss anything related to Chainsaw.
+### Guias de Uso
 
-### Slack channels
+- **[Criando Funções HTTP Síncronas](docs/CREATING_HTTP_FUNCTIONS.md)** - Como criar funções que respondem a requisições HTTP
+- **[Criando Funções Assíncronas com Eventos](docs/CREATING_EVENT_FUNCTIONS.md)** - Como criar funções que processam eventos assíncronos
+- **[Comunicação entre Funções](docs/INTER_FUNCTION_COMMUNICATION.md)** - Como implementar comunicação entre múltiplas funções
 
-- [#kyverno-chainsaw](https://kubernetes.slack.com/archives/C067LUFL43U)
+### Referência Técnica
 
-### More resources
+- **[Referência Completa do Operator](docs/OPERATOR_REFERENCE.md)** - Documentação completa de todas as features, parâmetros e funcionalidades
+- **[Configuração de Autenticação Git](docs/GIT_AUTHENTICATION.md)** - Como configurar autenticação para repositórios Git privados
+- **[Configuração de Registry](docs/REGISTRY_CONFIGURATION.md)** - Como configurar registries de container
 
-- [Kyverno Chainsaw - The ultimate end-to-end testing tool!](https://kyverno.io/blog/2023/12/12/kyverno-chainsaw-the-ultimate-end-to-end-testing-tool/)
-- [Kyverno Chainsaw - Exploring the Power of Assertion Trees!](https://kyverno.io/blog/2023/12/13/kyverno-chainsaw-exploring-the-power-of-assertion-trees/)
-- [Nirmata Office Hours for Kyverno- Episode 9- Demonstrate Kyverno Chainsaw](https://www.youtube.com/watch?v=IrIteTTjlbU)
-- [Kubebuilder Community Meeting - February 1, 2024](https://www.youtube.com/watch?v=Ejof-wtAdQM)
-- [Kyverno Chainsaw 0.1.4 - Awesome new features!](https://kyverno.io/blog/2024/02/15/kyverno-chainsaw-0.1.4-awesome-new-features/)
-- [Mastering Kubernetes Testing with Kyverno Chainsaw!](https://youtu.be/hQJWGzogIiI)
+## 🎯 Casos de Uso
 
-## Getting Started
+### 1. Funções HTTP Síncronas
 
-Please refer to the [Getting Started](https://kyverno.github.io/chainsaw/latest/quick-start/) documentation.
+Funções que respondem a requisições HTTP síncronas, ideais para APIs REST, webhooks e microserviços.
 
-## RoadMap
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: hello-api
+spec:
+  gitRepo: https://github.com/myorg/hello-function
+  gitRevision: main
+  build:
+    image: registry.example.com/hello-api:latest
+  deploy: {}
+```
 
-For detailed information on our planned features and upcoming updates, please [view our Roadmap](./ROADMAP.md).
+### 2. Funções Assíncronas com Eventos
 
-## Community Meetings
+Funções que processam eventos de forma assíncrona, ideais para processamento de dados, notificações e workflows event-driven.
 
-To attend our community meetings, join the [Chainsaw group](https://groups.google.com/g/kyverno-chainsaw).
-You will then be sent a meeting invite and will have access to the agenda and meeting notes.
-Any member may suggest topics for discussion.
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: order-processor
+spec:
+  gitRepo: https://github.com/myorg/order-processor
+  gitRevision: main
+  build:
+    image: registry.example.com/order-processor:latest
+  deploy: {}
+  eventing:
+    broker: default
+    filters:
+      type: com.example.order.created
+      source: payment-service
+```
 
-This is a public, weekly meeting for Kyverno-Chainsaw maintainers to make announcements and provide project updates, and request input and feedback.
-This forum allows community members to raise agenda items of any sort, including but not limited to any PRs or issues on which they are working.
+### 3. Comunicação entre Funções
 
-Weekly every Thursday at 2:00 PM UTC
+Múltiplas funções que se comunicam via HTTP, ideais para arquiteturas de microserviços e sistemas distribuídos.
 
-- [Chainsaw group](https://groups.google.com/g/kyverno-chainsaw)
-- [Zoom Meeting](https://zoom.us/j/99815137900)
-- [Agenda and meeting notes](https://docs.google.com/document/d/1csszreCpCyPsls4S_GuM0o_D1W-N7vQqQcyd4lxSkJk)
+```yaml
+# transaction-processor chama balance-manager que chama audit-logger
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: transaction-processor
+spec:
+  gitRepo: https://github.com/myorg/transaction-processor
+  gitRevision: main
+  build:
+    image: registry.example.com/transaction-processor:latest
+  deploy:
+    env:
+      - name: BALANCE_MANAGER_URL
+        value: http://balance-manager.default.svc.cluster.local
+```
 
-## Contributions
+## 🛠️ Instalação
 
-Please read the [contributing guide](https://github.com/kyverno/kyverno/blob/main/CONTRIBUTING.md) for details around:
+### Pré-requisitos
 
-1. Code of Conduct
-1. Code Culture
-1. Details on how to contribute
+- Kubernetes 1.28+
+- Tekton Pipelines v0.50+
+- Knative Serving v1.20+
+- Knative Eventing v1.20+ (opcional, para event-driven functions)
+- Envoy Gateway v1.6+ (para ingress)
+
+### Instalação via Helm
+
+```bash
+# Adicionar o repositório Helm
+helm repo add zenith https://lucasgois1.github.io/zenith-operator
+
+# Instalar o operator
+helm install zenith-operator zenith/zenith-operator \
+  --namespace zenith-operator-system \
+  --create-namespace
+```
+
+### Instalação via Kustomize
+
+```bash
+# Instalar CRDs
+make install
+
+# Deploy do operator
+make deploy IMG=ghcr.io/lucasgois1/zenith-operator:latest
+```
+
+## 🚦 Quick Start
+
+1. **Criar um Secret para autenticação Git** (se usar repositório privado):
+
+```bash
+kubectl create secret generic github-auth \
+  --from-literal=username=myuser \
+  --from-literal=password=mytoken \
+  --type=kubernetes.io/basic-auth
+
+kubectl annotate secret github-auth \
+  tekton.dev/git-0=https://github.com
+```
+
+2. **Criar sua primeira função**:
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: my-first-function
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.example.com/my-first-function:latest
+  deploy: {}
+EOF
+```
+
+3. **Verificar o status**:
+
+```bash
+kubectl get functions
+kubectl describe function my-first-function
+```
+
+4. **Acessar a função**:
+
+```bash
+# Obter a URL da função
+FUNCTION_URL=$(kubectl get function my-first-function -o jsonpath='{.status.url}')
+echo "Function URL: $FUNCTION_URL"
+
+# Fazer uma requisição
+curl $FUNCTION_URL
+```
+
+## 🧪 Desenvolvimento
+
+### Executar testes localmente
+
+```bash
+# Testes unitários
+make test
+
+# Testes E2E
+make test-e2e
+
+# Testes Chainsaw específicos
+make test-chainsaw-basic        # Teste básico de função
+make test-chainsaw-eventing     # Teste de eventing
+make test-chainsaw-integration  # Teste de integração entre funções
+```
+
+### Desenvolvimento local
+
+```bash
+# Setup do ambiente de desenvolvimento
+make dev-up
+
+# Rebuild e redeploy rápido
+make dev-redeploy
+
+# Limpar ambiente
+make dev-down
+```
+
+## 📖 Exemplos
+
+Veja o diretório [config/samples/](config/samples/) para exemplos completos de Functions.
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Por favor, abra issues e pull requests no GitHub.
+
+## 📄 Licença
+
+Este projeto está licenciado sob a Apache License 2.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 🔗 Links Úteis
+
+- [Documentação Completa](docs/)
+- [Exemplos](config/samples/)
+- [Testes Chainsaw](test/chainsaw/)
+- [Issues](https://github.com/LucasGois1/zenith-operator/issues)
