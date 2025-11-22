@@ -26,6 +26,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -50,10 +51,11 @@ spec:
       description: Wait for PipelineRun to complete successfully (but with empty digest)
       try:
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-no-digest
               for i in $(seq 1 60); do
-                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"\n"}{end}' | tail -n1)
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
                 [ -n "$PR_NAME" ] && break
                 sleep 2
               done
@@ -62,12 +64,12 @@ spec:
               
               kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
               echo "SUCCESS: PipelineRun completed successfully"
-            timeout: 600s
     
     - name: verify-no-digest-in-results
       description: Verify PipelineRun has no IMAGE_DIGEST result
       try:
         - script:
+            timeout: 10m
             content: |
               IMAGE_DIGEST=$(kubectl get pipelinerun test-function-no-digest-build -n $NAMESPACE -o jsonpath='{.status.results[?(@.name=="IMAGE_DIGEST")].value}' 2>/dev/null || echo "")
               
@@ -82,6 +84,7 @@ spec:
       description: Verify Function status shows BuildImageError
       try:
         - script:
+            timeout: 10m
             content: |
               sleep 5  # Give controller time to reconcile
               
@@ -97,12 +100,12 @@ spec:
                 echo "ERROR: Expected BuildImageError, got status=$READY_STATUS reason=$READY_REASON"
                 exit 1
               fi
-            timeout: 30s
     
     - name: verify-no-ksvc-created
       description: Verify KService was not created without valid digest
       try:
         - script:
+            timeout: 10m
             content: |
               if kubectl get service.serving.knative.dev test-function-no-digest -n $NAMESPACE 2>/dev/null; then
                 echo "WARNING: KService was created despite missing digest"

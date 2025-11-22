@@ -6,4 +6,5 @@ spec:
   template:
     spec:
       containers:
-        - image: "?*"
+        - ports:
+            - containerPort: 8080

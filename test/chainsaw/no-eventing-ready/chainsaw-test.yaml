@@ -27,6 +27,7 @@ spec:
       description: Create Git authentication secret
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -45,13 +46,13 @@ spec:
       description: Create a Function CR without eventing configuration
       try:
         - apply:
-            file: function.yaml
+            file: function.yaml
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-no-eventing
               for i in $(seq 1 60); do
-                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"
-"}{end}' | tail -n1)
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
                 [ -n "$PR_NAME" ] && break
                 sleep 2
               done
@@ -77,6 +78,7 @@ spec:
       description: Verify that no Trigger was created
       try:
         - script:
+            timeout: 10m
             content: |
               if kubectl get trigger test-function-no-eventing-trigger -n $NAMESPACE 2>/dev/null; then
                 echo "ERROR: Trigger should not exist when eventing is not configured"

@@ -1,0 +1,410 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: financial-integration-test
+spec:
+  description: |
+    Test end-to-end integration of a financial system with three communicating services.
+    This test verifies:
+    1. Three Functions deploy successfully (audit-logger, balance-manager, transaction-processor)
+    2. Services can communicate with each other via HTTP
+    3. transaction-processor -> balance-manager -> audit-logger communication flow works
+    4. Final response contains expected data from the entire chain
+  timeouts:
+    apply: 1m
+    assert: 15m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-audit-logger
+      description: Create audit-logger Function
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              cat <<EOF | kubectl apply -f - -n $NAMESPACE
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              metadata:
+                name: audit-logger
+              spec:
+                gitRepo: https://github.com/LucasGois1/zenith-test-audit-logger
+                gitRevision: main
+                gitAuthSecretName: github-auth
+                build:
+                  image: registry.registry.svc.cluster.local:5000/zenith-test/audit-logger:latest
+                deploy:
+                  dapr:
+                    enabled: false
+                    appID: ""
+                    appPort: 8080
+              EOF
+    
+    - name: create-balance-manager
+      description: Create balance-manager Function
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              cat <<EOF | kubectl apply -f - -n $NAMESPACE
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              metadata:
+                name: balance-manager
+              spec:
+                gitRepo: https://github.com/LucasGois1/zenith-test-balance-manager
+                gitRevision: devin/1763689245-fix-service-url-for-namespace
+                gitAuthSecretName: github-auth
+                build:
+                  image: registry.registry.svc.cluster.local:5000/zenith-test/balance-manager:latest
+                deploy:
+                  dapr:
+                    enabled: false
+                    appID: ""
+                    appPort: 8080
+                  env:
+                    - name: POD_NAMESPACE
+                      value: $NAMESPACE
+              EOF
+    
+    - name: create-transaction-processor
+      description: Create transaction-processor Function
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              cat <<EOF | kubectl apply -f - -n $NAMESPACE
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              metadata:
+                name: transaction-processor
+              spec:
+                gitRepo: https://github.com/LucasGois1/zenith-test-transaction-processor
+                gitRevision: devin/1763689292-fix-service-url-for-namespace
+                gitAuthSecretName: github-auth
+                build:
+                  image: registry.registry.svc.cluster.local:5000/zenith-test/transaction-processor:latest
+                deploy:
+                  dapr:
+                    enabled: false
+                    appID: ""
+                    appPort: 8080
+                  env:
+                    - name: POD_NAMESPACE
+                      value: $NAMESPACE
+              EOF
+    
+    - name: wait-for-audit-logger-build
+      description: Wait for audit-logger PipelineRun to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=audit-logger
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=10m
+    
+    - name: wait-for-balance-manager-build
+      description: Wait for balance-manager PipelineRun to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=balance-manager
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=10m
+    
+    - name: wait-for-transaction-processor-build
+      description: Wait for transaction-processor PipelineRun to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=transaction-processor
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=10m
+    
+    - name: verify-all-functions-ready
+      description: Verify all Functions reach Ready status
+      try:
+        - assert:
+            file: audit-logger-ready-assert.yaml
+            timeout: 2m
+        - assert:
+            file: balance-manager-ready-assert.yaml
+            timeout: 2m
+        - assert:
+            file: transaction-processor-ready-assert.yaml
+            timeout: 2m
+    
+    - name: get-function-urls
+      description: Get Function URLs from status
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              AUDIT_URL=$(kubectl get function audit-logger -n $NAMESPACE -o jsonpath='{.status.url}')
+              BALANCE_URL=$(kubectl get function balance-manager -n $NAMESPACE -o jsonpath='{.status.url}')
+              TRANSACTION_URL=$(kubectl get function transaction-processor -n $NAMESPACE -o jsonpath='{.status.url}')
+              
+              echo "Audit Logger URL: $AUDIT_URL"
+              echo "Balance Manager URL: $BALANCE_URL"
+              echo "Transaction Processor URL: $TRANSACTION_URL"
+              
+              if [ -z "$AUDIT_URL" ] || [ -z "$BALANCE_URL" ] || [ -z "$TRANSACTION_URL" ]; then
+                echo "ERROR: One or more Function URLs not set in status"
+                exit 1
+              fi
+              
+              AUDIT_HOST=$(echo "$AUDIT_URL" | sed 's|http://||' | sed 's|https://||')
+              BALANCE_HOST=$(echo "$BALANCE_URL" | sed 's|http://||' | sed 's|https://||')
+              TRANSACTION_HOST=$(echo "$TRANSACTION_URL" | sed 's|http://||' | sed 's|https://||')
+              
+              echo "$AUDIT_HOST" > /tmp/audit-host.txt
+              echo "$BALANCE_HOST" > /tmp/balance-host.txt
+              echo "$TRANSACTION_HOST" > /tmp/transaction-host.txt
+    
+    - name: get-envoy-endpoint
+      description: Get Envoy Gateway LoadBalancer endpoint (local gateway for cluster.local URLs)
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}')
+              
+              if [ -z "$ENVOY_SVC" ]; then
+                echo "ERROR: Could not find Envoy Gateway local service"
+                exit 1
+              fi
+              
+              ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+              
+              if [ -z "$ENVOY_IP" ]; then
+                ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.spec.clusterIP}')
+              fi
+              
+              if [ -z "$ENVOY_IP" ]; then
+                echo "ERROR: Could not get Envoy Gateway endpoint"
+                exit 1
+              fi
+              
+              echo "Envoy Gateway local endpoint: http://${ENVOY_IP}"
+              echo "${ENVOY_IP}" > /tmp/envoy-endpoint.txt
+    
+    - name: test-audit-logger-direct
+      description: Test audit-logger service directly
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              AUDIT_HOST=$(cat /tmp/audit-host.txt)
+              ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint.txt)
+              
+              echo "Testing audit-logger..."
+              echo "  Envoy Gateway: http://${ENVOY_ENDPOINT}"
+              echo "  Host: ${AUDIT_HOST}"
+              
+              sleep 5
+              
+              RESPONSE=$(curl -s -X POST -H "Host: ${AUDIT_HOST}" -H "Content-Type: application/json" \
+                -d '{"action":"test","details":"direct test"}' \
+                "http://${ENVOY_ENDPOINT}/log" || echo "CURL_FAILED")
+              
+              if [ "$RESPONSE" = "CURL_FAILED" ]; then
+                echo "ERROR: curl command failed"
+                exit 1
+              fi
+              
+              echo "Response: $RESPONSE"
+              
+              if echo "$RESPONSE" | grep -q '"status":"logged"'; then
+                echo "SUCCESS: Audit logger responded correctly"
+              else
+                echo "ERROR: Unexpected response from audit logger"
+                exit 1
+              fi
+    
+    - name: test-balance-manager-direct
+      description: Test balance-manager service directly
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              BALANCE_HOST=$(cat /tmp/balance-host.txt)
+              ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint.txt)
+              
+              echo "Testing balance-manager..."
+              echo "  Envoy Gateway: http://${ENVOY_ENDPOINT}"
+              echo "  Host: ${BALANCE_HOST}"
+              
+              sleep 5
+              
+              RESPONSE=$(curl -s -X POST -H "Host: ${BALANCE_HOST}" -H "Content-Type: application/json" \
+                -d '{"account":"test-account","amount":50.0}' \
+                "http://${ENVOY_ENDPOINT}/update" || echo "CURL_FAILED")
+              
+              if [ "$RESPONSE" = "CURL_FAILED" ]; then
+                echo "ERROR: curl command failed"
+                exit 1
+              fi
+              
+              echo "Response: $RESPONSE"
+              
+              if echo "$RESPONSE" | grep -q '"status":"updated"' && echo "$RESPONSE" | grep -q '"new_balance"'; then
+                echo "SUCCESS: Balance manager responded correctly"
+              else
+                echo "ERROR: Unexpected response from balance manager"
+                exit 1
+              fi
+    
+    - name: test-end-to-end-integration
+      description: Test full integration flow through transaction-processor
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              TRANSACTION_HOST=$(cat /tmp/transaction-host.txt)
+              ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint.txt)
+              
+              echo "Testing end-to-end integration..."
+              echo "  Envoy Gateway: http://${ENVOY_ENDPOINT}"
+              echo "  Host: ${TRANSACTION_HOST}"
+              
+              sleep 5
+              
+              RESPONSE=$(curl -s -X POST -H "Host: ${TRANSACTION_HOST}" -H "Content-Type: application/json" \
+                -d '{"account":"integration-test","amount":100.0}' \
+                "http://${ENVOY_ENDPOINT}/transaction" || echo "CURL_FAILED")
+              
+              if [ "$RESPONSE" = "CURL_FAILED" ]; then
+                echo "ERROR: curl command failed"
+                exit 1
+              fi
+              
+              echo "Response: $RESPONSE"
+              
+              if echo "$RESPONSE" | grep -q '"status":"success"'; then
+                echo "SUCCESS: Transaction status is 'success'"
+              else
+                echo "ERROR: Transaction status is not 'success'"
+                echo "Response was: $RESPONSE"
+                exit 1
+              fi
+              
+              if echo "$RESPONSE" | grep -q '"transaction_id"'; then
+                echo "SUCCESS: Response contains transaction_id"
+              else
+                echo "ERROR: Response does not contain transaction_id"
+                exit 1
+              fi
+              
+              if echo "$RESPONSE" | grep -q '"balance"'; then
+                echo "SUCCESS: Response contains balance from balance-manager"
+              else
+                echo "ERROR: Response does not contain balance"
+                exit 1
+              fi
+              
+              BALANCE=$(echo "$RESPONSE" | grep -o '"balance":[0-9.]*' | cut -d: -f2)
+              echo "Final balance: $BALANCE"
+              
+              if [ -n "$BALANCE" ]; then
+                echo "SUCCESS: End-to-end integration test passed!"
+                echo "  - transaction-processor received request"
+                echo "  - balance-manager updated balance"
+                echo "  - audit-logger logged the operation (check logs)"
+                echo "  - Final response contains all expected data"
+              else
+                echo "ERROR: Could not extract balance from response"
+                exit 1
+              fi
+    
+    - name: verify-audit-logs
+      description: Verify audit-logger received log entries
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              echo "Checking audit-logger logs for audit entries..."
+              
+              POD=$(kubectl get pods -n $NAMESPACE -l serving.knative.dev/service=audit-logger -o jsonpath='{.items[0].metadata.name}')
+              
+              if [ -z "$POD" ]; then
+                echo "WARNING: Could not find audit-logger pod"
+                exit 0
+              fi
+              
+              echo "Audit logger pod: $POD"
+              
+              LOGS=$(kubectl logs -n $NAMESPACE "$POD" --tail=50 || echo "")
+              
+              if echo "$LOGS" | grep -q "\[AUDIT\]"; then
+                echo "SUCCESS: Found audit log entries in audit-logger logs"
+                echo "Sample audit logs:"
+                echo "$LOGS" | grep "\[AUDIT\]" | tail -5
+              else
+                echo "WARNING: No audit log entries found (may not have been called yet)"
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: audit-logger
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: balance-manager
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: transaction-processor

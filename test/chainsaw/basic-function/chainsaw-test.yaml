@@ -25,6 +25,7 @@ spec:
       description: Create Git authentication secret (requires GITHUB_TOKEN env var)
       try:
         - script:
+            timeout: 10m
             content: |
               cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
               apiVersion: v1
@@ -54,28 +55,61 @@ spec:
             file: pipelinerun-assert.yaml
     
     - name: verify-building-status
-      description: Verify Function status shows Building
+      description: Verify Function status shows Building while PipelineRun is in progress
       try:
-        - assert:
-            file: function-building-assert.yaml
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function
+              
+              echo "==> Finding PipelineRun for $FN_NAME..."
               for i in $(seq 1 60); do
-                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"
-"}{end}' | tail -n1)
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
                 [ -n "$PR_NAME" ] && break
                 sleep 2
               done
-              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found for $FN_NAME"; exit 1; }
               echo "Found PipelineRun: $PR_NAME"
+              
+              echo "==> Polling Function status while PipelineRun is in progress..."
+              BUILDING_OBSERVED=false
+              for i in $(seq 1 60); do
+                PR_SUCCEEDED=$(kubectl get pipelinerun "$PR_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}' 2>/dev/null || echo "Unknown")
+                
+                FN_READY_STATUS=$(kubectl get function "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+                FN_READY_REASON=$(kubectl get function "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+                
+                echo "Iteration $i: PR Succeeded=$PR_SUCCEEDED, Function Ready=$FN_READY_STATUS, Reason=$FN_READY_REASON"
+                
+                if [ "$PR_SUCCEEDED" != "True" ] && [ "$FN_READY_STATUS" = "False" ] && [ "$FN_READY_REASON" = "Building" ]; then
+                  echo "✓ SUCCESS: Observed Function in 'Building' state while PipelineRun is in progress"
+                  BUILDING_OBSERVED=true
+                  break
+                fi
+                
+                if [ "$PR_SUCCEEDED" = "True" ]; then
+                  echo "PipelineRun completed before we could observe Building status"
+                  break
+                fi
+                
+                sleep 2
+              done
+              
+              if [ "$BUILDING_OBSERVED" = "false" ]; then
+                echo "ERROR: Could not observe 'Building' status during PipelineRun execution"
+                echo "This indicates the operator may not be setting the Building status correctly"
+                exit 1
+              fi
+              
+              echo "==> Waiting for PipelineRun to complete..."
               kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              echo "✓ PipelineRun completed successfully"
     
-    - name: verify-build-succeeded-status
-      description: Verify Function status shows BuildSucceeded
+    - name: verify-function-ready
+      description: Verify Function status shows Ready after successful build
       try:
         - assert:
-            file: function-build-succeeded-assert.yaml
+            file: function-ready-assert.yaml
     
     - name: verify-knative-service-created
       description: Verify that a Knative Service was created

@@ -90,6 +90,9 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      saName,
 				Namespace: function.Namespace,
+				Labels: map[string]string{
+					"functions.zenith.com/managed-by": "zenith-operator",
+				},
 			},
 		}
 
@@ -295,18 +298,6 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Construir a referência completa da imagem com o digest
 	imageWithDigest := function.Spec.Build.Image + "@" + imageDigest
 	function.Status.ImageDigest = imageWithDigest
-	buildSucceededCondition := metav1.Condition{
-		Type:    "Ready", // Tipo de condição padrão
-		Status:  metav1.ConditionFalse,
-		Reason:  "BuildSucceeded",
-		Message: "Imagem gerada com sucesso",
-	}
-	meta.SetStatusCondition(&function.Status.Conditions, buildSucceededCondition)
-	function.Status.ObservedGeneration = function.Generation
-
-	if err := r.Status().Update(ctx, &function); err != nil {
-		return ctrl.Result{}, err
-	}
 
 	log.Info("Iniciando Fase 3.4: Reconciliação do Knative Service")
 
@@ -662,7 +653,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 						Name: "fetch-source",
 						TaskRef: &tektonv1.TaskRef{
 							Name: "git-clone", // Refere-se à Task 'git-clone' instalada [5]
-							Kind: "ClusterTask",
+							Kind: "Task",
 						},
 						// 'Workspaces' aqui é um slice de 'WorkspacePipelineTaskBinding'
 						Workspaces: []tektonv1.WorkspacePipelineTaskBinding{
@@ -682,7 +673,7 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 						Name: "build-and-push",
 						TaskRef: &tektonv1.TaskRef{
 							Name: "buildpacks-phases", // Refere-se à Task 'buildpacks-phases' instalada [5]
-							Kind: "ClusterTask",
+							Kind: "Task",
 						},
 						// 'RunAfter' é um slice de 'string' [5]
 						RunAfter: []string{"fetch-source"}, // Garante que o clone termine antes do build começar
@@ -748,6 +739,15 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		containerPort = int32(function.Spec.Deploy.Dapr.AppPort)
 	}
 
+	// Construir variáveis de ambiente
+	envVars := []v1.EnvVar{}
+	for _, e := range function.Spec.Deploy.Env {
+		envVars = append(envVars, v1.EnvVar{
+			Name:  e.Name,
+			Value: e.Value,
+		})
+	}
+
 	// Construir a definição do container
 	container := v1.Container{
 		// Usa o digest do build bem-sucedido da Fase 3.3
@@ -759,6 +759,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 				ContainerPort: containerPort,
 			},
 		},
+		Env: envVars,
 	}
 
 	// Construir o Service object
@@ -766,6 +767,9 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      function.Name,
 			Namespace: function.Namespace,
+			Labels: map[string]string{
+				"networking.knative.dev/visibility": "cluster-local",
+			},
 		},
 		// O Spec 'v1' do Knative Service [6]
 		Spec: knservingv1.ServiceSpec{

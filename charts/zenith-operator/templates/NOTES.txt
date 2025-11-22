@@ -33,8 +33,8 @@ Components Installed:
   {{- if .Values.netGatewayAPI.enabled }}
   ✓ net-gateway-api ({{ .Values.netGatewayAPI.version }})
   {{- end }}
-  {{- if .Values.kong.enabled }}
-  ✓ Kong Ingress Controller
+  {{- if .Values.envoyGateway.enabled }}
+  ✓ Envoy Gateway ({{ .Values.envoyGateway.version }})
   {{- end }}
   {{- if .Values.dapr.enabled }}
   ✓ Dapr ({{ .Values.dapr.version }})
@@ -57,7 +57,7 @@ Getting Started
    kubectl get pods -n tekton-pipelines
    kubectl get pods -n knative-serving
    kubectl get pods -n knative-eventing
-   kubectl get pods -n kong
+   kubectl get pods -n envoy-gateway-system
    {{- if .Values.dapr.enabled }}
    kubectl get pods -n dapr-system
    {{- end }}
@@ -112,31 +112,25 @@ To use the local registry with your Functions:
 
 {{- end }}
 
-{{- if .Values.kong.enabled }}
+{{- if .Values.envoyGateway.enabled }}
 
 ========================================
-Kong Ingress Configuration
+Envoy Gateway Configuration
 ========================================
 
-Kong Ingress Controller has been installed with Gateway API support.
+Envoy Gateway has been installed with Gateway API support.
 
-{{- if eq .Values.kong.proxy.type "NodePort" }}
-To access your Functions via Kong (NodePort):
+To access your Functions via Envoy Gateway:
 
-1. Get the NodePort:
-   kubectl get svc -n kong kong-gateway-proxy -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}'
-
-2. Access your Function:
-   curl http://<node-ip>:<nodeport> -H "Host: hello-world.default.example.com"
-{{- else }}
-To access your Functions via Kong (LoadBalancer):
-
-1. Get the LoadBalancer IP:
-   kubectl get svc -n kong kong-gateway-proxy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+1. Get the Gateway address:
+   kubectl get gateway knative-gateway -n knative-serving -o jsonpath='{.status.addresses[0].value}'
 
 2. Access your Function:
-   curl http://<loadbalancer-ip> -H "Host: hello-world.default.example.com"
-{{- end }}
+   curl http://<gateway-address> -H "Host: hello-world.default.example.com"
+
+Note: If using kind without MetalLB, the Gateway may not have an external address.
+In that case, use port-forwarding:
+   kubectl port-forward -n envoy-gateway-system svc/<envoy-service> 8080:80
 
 {{- end }}
 
@@ -164,7 +158,7 @@ For more information:
 - Operator Docs: https://github.com/LucasGois1/zenith-operator
 - Tekton: https://tekton.dev
 - Knative: https://knative.dev
-- Kong: https://docs.konghq.com
+- Envoy Gateway: https://gateway.envoyproxy.io
 
 ========================================
 Troubleshooting
@@ -182,7 +176,7 @@ If you encounter issues:
    kubectl logs -n <namespace> <pipelinerun-name> --all-containers
 
 4. Verify all dependencies are running:
-   kubectl get pods --all-namespaces | grep -E "tekton|knative|kong|dapr"
+   kubectl get pods --all-namespaces | grep -E "tekton|knative|envoy|dapr"
 
 For more help, visit: https://github.com/LucasGois1/zenith-operator/issues
 

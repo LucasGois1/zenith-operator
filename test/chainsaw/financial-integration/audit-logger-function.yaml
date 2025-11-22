@@ -1,0 +1,15 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: audit-logger
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-audit-logger
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/audit-logger:latest
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080

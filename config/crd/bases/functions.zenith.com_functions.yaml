@@ -76,6 +76,20 @@ spec:
                     - appPort
                     - enabled
                     type: object
+                  env:
+                    description: Opcional. Variáveis de ambiente para injetar no container
+                      da função.
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        value:
+                          type: string
+                      required:
+                      - name
+                      - value
+                      type: object
+                    type: array
                 type: object
               eventing:
                 description: Opcional. Configurações de Eventing (Knative Eventing)
