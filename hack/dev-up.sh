@@ -191,7 +191,8 @@ if ! kubectl get namespace metallb-system 2>/dev/null; then
   kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s
   
   echo "📦 Configurando MetalLB IP address pool..."
-  DOCKER_NETWORK=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' | head -n1)
+  # Extract only the IPv4 subnet (contains dots, not colons)
+  DOCKER_NETWORK=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' | grep '\.' | head -n1)
   IP_PREFIX=$(echo ${DOCKER_NETWORK} | cut -d'.' -f1-2)
   
   cat <<EOF | kubectl apply -f -
