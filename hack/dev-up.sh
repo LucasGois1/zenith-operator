@@ -113,6 +113,13 @@ if ! kubectl get apiservices v1.tekton.dev 2>/dev/null | grep -q "v1.tekton.dev"
   echo "📦 Instalando Tekton Pipelines..."
   kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
   echo "⏳ Aguardando Tekton Pipelines ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=tekton-pipelines-controller -n tekton-pipelines 2>/dev/null | grep -q tekton; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=tekton-pipelines-controller -n tekton-pipelines --timeout=300s
 else
   echo "✅ Tekton Pipelines já instalado"
@@ -128,6 +135,13 @@ if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.se
   kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
   
   echo "⏳ Aguardando Knative Serving ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=controller -n knative-serving 2>/dev/null | grep -q controller; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=controller -n knative-serving --timeout=300s
   kubectl wait --for=condition=ready pod -l app=autoscaler -n knative-serving --timeout=300s
   kubectl wait --for=condition=ready pod -l app=activator -n knative-serving --timeout=300s
@@ -141,6 +155,13 @@ if ! kubectl get apiservices v1.eventing.knative.dev 2>/dev/null | grep -q "v1.e
   kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-crds.yaml
   kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-core.yaml
   echo "⏳ Aguardando Knative Eventing ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=eventing-controller -n knative-eventing 2>/dev/null | grep -q eventing; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=eventing-controller -n knative-eventing --timeout=300s
 else
   echo "✅ Knative Eventing já instalado"
@@ -158,6 +179,13 @@ if ! kubectl get namespace metallb-system 2>/dev/null; then
   kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
   
   echo "⏳ Aguardando MetalLB ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=metallb -n metallb-system 2>/dev/null | grep -q metallb; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s
   
   echo "📦 Configurando MetalLB IP address pool..."
@@ -209,6 +237,13 @@ if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
   done
   
   echo "⏳ Aguardando Envoy Gateway ficar pronto..."
+  # Wait for deployment to be created before waiting for it to be available
+  for i in {1..30}; do
+    if kubectl get deployment envoy-gateway -n envoy-gateway-system 2>/dev/null | grep -q envoy-gateway; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=available --timeout=300s deployment/envoy-gateway -n envoy-gateway-system
 else
   echo "✅ Envoy Gateway já instalado"
@@ -254,6 +289,13 @@ if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev
   kubectl apply -f https://github.com/knative-extensions/net-gateway-api/releases/download/knative-v1.20.0/net-gateway-api.yaml
   
   echo "⏳ Aguardando net-gateway-api ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=net-gateway-api-controller -n knative-serving 2>/dev/null | grep -q net-gateway; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=net-gateway-api-controller -n knative-serving --timeout=300s
 else
   echo "✅ Knative net-gateway-api já instalado"
