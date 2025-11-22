@@ -194,6 +194,11 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil && errors.IsNotFound(err) {
 		log.Info("PipelineRun não encontrado. Criando um novo...", "PipelineRun.Name", pipelineRunName)
 
+		// Validate environment variable references before creating PipelineRun
+		if result, err := r.validateEnvReferences(ctx, &function); err != nil || !result.IsZero() {
+			return result, err
+		}
+
 		// 1. Construir o objeto PipelineRun em Go
 		newPipelineRun := r.buildPipelineRun(&function)
 
