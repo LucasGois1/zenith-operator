@@ -63,19 +63,22 @@ echo ""
 REGISTRY_NAME="kind-registry"
 REGISTRY_PORT="5001"
 
-if ! docker ps | grep -q "${REGISTRY_NAME}"; then
+# Ensure registry container exists (idempotent)
+if docker inspect "${REGISTRY_NAME}" >/dev/null 2>&1; then
+  # Container exists, check if it's running
+  if [ "$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}")" != "true" ]; then
+    echo "📦 Iniciando registry Docker existente..."
+    docker start "${REGISTRY_NAME}"
+  fi
+  echo "✅ Registry Docker '${REGISTRY_NAME}' já existe"
+else
+  # Container doesn't exist, create it
   echo "📦 Criando registry Docker local..."
   docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --name "${REGISTRY_NAME}" registry:2
   echo "✅ Registry criado em localhost:${REGISTRY_PORT}"
-else
-  echo "✅ Registry Docker '${REGISTRY_NAME}' já existe"
 fi
 
-if ! docker network inspect kind | grep -q "${REGISTRY_NAME}"; then
-  echo "📦 Conectando registry à rede kind..."
-  docker network connect kind "${REGISTRY_NAME}" 2>/dev/null || true
-fi
-
+# Create kind cluster if it doesn't exist
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
   echo "📦 Criando cluster kind com configuração de registry..."
   cat <<EOF > /tmp/kind-config.yaml
@@ -92,24 +95,18 @@ containerdConfigPatches:
 EOF
   kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0 --config /tmp/kind-config.yaml
   rm /tmp/kind-config.yaml
-  
-  echo "📦 Criando registry Docker local..."
-  docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --network=kind --name "${REGISTRY_NAME}" registry:2
-  echo "✅ Registry criado em localhost:${REGISTRY_PORT} e conectado à rede kind"
+  echo "✅ Cluster kind '${CLUSTER_NAME}' criado"
 else
   echo "✅ Cluster kind '${CLUSTER_NAME}' já existe"
-  
-  if ! docker ps | grep -q "${REGISTRY_NAME}"; then
-    echo "📦 Criando registry Docker local..."
-    docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --network=kind --name "${REGISTRY_NAME}" registry:2
-    echo "✅ Registry criado em localhost:${REGISTRY_PORT} e conectado à rede kind"
-  else
-    echo "✅ Registry Docker '${REGISTRY_NAME}' já existe"
-    if ! docker network inspect kind | grep -q "${REGISTRY_NAME}"; then
-      echo "📦 Conectando registry à rede kind..."
-      docker network connect kind "${REGISTRY_NAME}"
-    fi
-  fi
+fi
+
+# Connect registry to kind network (idempotent)
+if ! docker network inspect kind 2>/dev/null | grep -q "${REGISTRY_NAME}"; then
+  echo "📦 Conectando registry à rede kind..."
+  docker network connect kind "${REGISTRY_NAME}"
+  echo "✅ Registry conectado à rede kind"
+else
+  echo "✅ Registry já está conectado à rede kind"
 fi
 
 if ! kubectl get apiservices v1.tekton.dev 2>/dev/null | grep -q "v1.tekton.dev"; then
