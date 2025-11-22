@@ -46,7 +46,7 @@ jobs:
 
       - name: Validate manifests with kubeconform
         run: |
-          ./bin/kustomize build config/default | kubeconform -strict -ignore-missing-schemas -summary -output text -kubernetes-version 1.30.0
+          ./bin/kustomize build config/default | kubeconform -strict -ignore-missing-schemas -summary -output text -kubernetes-version 1.33.0
 
       - name: Lint YAML files
         uses: ibiqlik/action-yamllint@v3

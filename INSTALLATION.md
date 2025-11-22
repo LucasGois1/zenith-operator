@@ -4,7 +4,7 @@ This guide explains how to install the Zenith Operator using Helm.
 
 ## Prerequisites
 
-- Kubernetes cluster (v1.30.0 or later recommended)
+- Kubernetes cluster (v1.33.0 or later required)
 - Helm 3.x installed
 - `kubectl` configured to access your cluster
 

@@ -93,7 +93,7 @@ containerdConfigPatches:
   [plugins."io.containerd.grpc.v1.cri".registry.configs."${REGISTRY_NAME}:5000".tls]
     insecure_skip_verify = true
 EOF
-  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0 --config /tmp/kind-config.yaml
+  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.33.0 --config /tmp/kind-config.yaml
   rm /tmp/kind-config.yaml
   echo "✅ Cluster kind '${CLUSTER_NAME}' criado"
 else
@@ -130,9 +130,11 @@ if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.se
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-crds.yaml
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-core.yaml
   
-  echo "📦 Configurando Knative para Kubernetes 1.30.0..."
-  kubectl set env deployment/controller -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
-  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
+  echo "📦 Configurando Knative para Kubernetes 1.33.0..."
+  kubectl set env deployment/controller -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
+  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
+  kubectl set env deployment/activator -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
+  kubectl set env deployment/autoscaler -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
   
   echo "⏳ Aguardando Knative Serving ficar pronto..."
   # Wait for pods to be created before waiting for them to be ready
