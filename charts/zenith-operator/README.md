@@ -15,7 +15,7 @@ This Helm chart simplifies installation by automatically deploying all required 
 
 ## Prerequisites
 
-- Kubernetes 1.30.0 or higher
+- Kubernetes 1.33.0 or higher
 - Helm 3.8.0 or higher
 - kubectl configured to access your cluster
 - Cluster-admin RBAC permissions
@@ -247,7 +247,7 @@ preflight:
 
 | Component | Version | Tested With |
 |-----------|---------|-------------|
-| Kubernetes | 1.30.0+ | 1.30.0, 1.31.0 |
+| Kubernetes | 1.33.0+ | 1.33.0, 1.34.0 |
 | Tekton Pipelines | v0.68.0 | v0.68.0 |
 | Knative Serving | v0.41.2 | v0.41.2 |
 | Knative Eventing | v0.41.7 | v0.41.7 |
@@ -396,7 +396,7 @@ kubectl logs -n zenith-operator-system -l app.kubernetes.io/name=zenith-prefligh
 
 # Common issues:
 # - Insufficient RBAC: Ensure you have cluster-admin permissions
-# - Kubernetes version: Upgrade to 1.30.0+
+# - Kubernetes version: Upgrade to 1.33.0+
 # - No default StorageClass: Create one or specify in values
 ```
 

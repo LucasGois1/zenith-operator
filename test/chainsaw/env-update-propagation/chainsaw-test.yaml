@@ -1,0 +1,192 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: env-update-propagation-test
+spec:
+  description: |
+    Test that Function spec env changes trigger KService updates.
+    This test verifies:
+    1. Function deploys successfully with initial env vars
+    2. Updating env vars in Function spec triggers new KService revision
+    3. New env vars are available in the updated container
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: ../e2e-http-basic/git-clone-task.yaml
+        - apply:
+            file: ../e2e-http-basic/buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function-initial
+      description: Create a Function CR with initial env vars
+      try:
+        - apply:
+            file: function-initial.yaml
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-env-update
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-function-ready-initial
+      description: Verify Function reaches Ready status with initial config
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-initial-env-vars
+      description: Verify initial env vars are available
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FUNCTION_URL=$(kubectl get function test-function-env-update -n $NAMESPACE -o jsonpath='{.status.url}')
+              FUNCTION_HOST=$(echo "$FUNCTION_URL" | sed 's|http://||' | sed 's|https://||')
+              
+              if echo "$FUNCTION_HOST" | grep -q "\.svc\.cluster\.local"; then
+                GATEWAY_NAME="knative-local-gateway"
+              else
+                GATEWAY_NAME="knative-gateway"
+              fi
+              
+              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=$GATEWAY_NAME -o jsonpath='{.items[0].metadata.name}')
+              ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+              
+              if [ -z "$ENVOY_IP" ]; then
+                ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.spec.clusterIP}')
+              fi
+              
+              sleep 10
+              
+              RESPONSE=$(curl -s -H "Host: ${FUNCTION_HOST}" "http://${ENVOY_IP}/env?var=VERSION" || echo "CURL_FAILED")
+              
+              if [ "$RESPONSE" = "CURL_FAILED" ]; then
+                echo "ERROR: curl command failed"
+                exit 1
+              fi
+              
+              echo "Initial Response: $RESPONSE"
+              
+              if echo "$RESPONSE" | grep -q '"VERSION":"v1"'; then
+                echo "SUCCESS: Initial VERSION is v1"
+              else
+                echo "ERROR: Initial VERSION is not v1"
+                exit 1
+              fi
+    
+    - name: update-function-env
+      description: Update Function env vars to trigger new revision
+      try:
+        - apply:
+            file: function-updated.yaml
+    
+    - name: wait-for-new-revision
+      description: Wait for new KService revision to be ready
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              # Wait for the KService to update
+              sleep 30
+              
+              # Verify Function is still Ready
+              STATUS=$(kubectl get function test-function-env-update -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+              
+              if [ "$STATUS" != "True" ]; then
+                echo "ERROR: Function not Ready after update"
+                exit 1
+              fi
+              
+              echo "SUCCESS: Function still Ready after env update"
+    
+    - name: verify-updated-env-vars
+      description: Verify updated env vars are available
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FUNCTION_URL=$(kubectl get function test-function-env-update -n $NAMESPACE -o jsonpath='{.status.url}')
+              FUNCTION_HOST=$(echo "$FUNCTION_URL" | sed 's|http://||' | sed 's|https://||')
+              
+              if echo "$FUNCTION_HOST" | grep -q "\.svc\.cluster\.local"; then
+                GATEWAY_NAME="knative-local-gateway"
+              else
+                GATEWAY_NAME="knative-gateway"
+              fi
+              
+              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=$GATEWAY_NAME -o jsonpath='{.items[0].metadata.name}')
+              ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+              
+              if [ -z "$ENVOY_IP" ]; then
+                ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.spec.clusterIP}')
+              fi
+              
+              sleep 10
+              
+              RESPONSE=$(curl -s -H "Host: ${FUNCTION_HOST}" "http://${ENVOY_IP}/env?var=VERSION&var=NEW_VAR" || echo "CURL_FAILED")
+              
+              if [ "$RESPONSE" = "CURL_FAILED" ]; then
+                echo "ERROR: curl command failed"
+                exit 1
+              fi
+              
+              echo "Updated Response: $RESPONSE"
+              
+              # Verify VERSION changed to v2
+              if echo "$RESPONSE" | grep -q '"VERSION":"v2"'; then
+                echo "SUCCESS: VERSION updated to v2"
+              else
+                echo "ERROR: VERSION not updated to v2"
+                echo "Response was: $RESPONSE"
+                exit 1
+              fi
+              
+              # Verify NEW_VAR is present
+              if echo "$RESPONSE" | grep -q '"NEW_VAR":"added"'; then
+                echo "SUCCESS: NEW_VAR is present"
+              else
+                echo "ERROR: NEW_VAR is not present"
+                echo "Response was: $RESPONSE"
+                exit 1
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-env-update

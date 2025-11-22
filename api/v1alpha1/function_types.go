@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -72,16 +73,14 @@ type DeploySpec struct {
 	Dapr DaprConfig `json:"dapr,omitempty"`
 
 	// Opcional. Variáveis de ambiente para injetar no container da função.
+	// Suporta valores estáticos, referências a Secrets/ConfigMaps, e referências a campos do Pod.
 	// +kubebuilder:validation:Optional
-	Env []EnvVar `json:"env,omitempty"`
-}
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
-type EnvVar struct {
-	// +kubebuilder:validation:Required
-	Name string `json:"name"`
-
-	// +kubebuilder:validation:Required
-	Value string `json:"value"`
+	// Opcional. Lista de fontes para popular variáveis de ambiente no container.
+	// As chaves definidas em um ConfigMap ou Secret serão expostas como variáveis de ambiente.
+	// +kubebuilder:validation:Optional
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 }
 
 // DaprConfig define os parâmetros de injeção do Dapr

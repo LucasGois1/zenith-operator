@@ -93,7 +93,7 @@ containerdConfigPatches:
   [plugins."io.containerd.grpc.v1.cri".registry.configs."${REGISTRY_NAME}:5000".tls]
     insecure_skip_verify = true
 EOF
-  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0 --config /tmp/kind-config.yaml
+  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.33.0 --config /tmp/kind-config.yaml
   rm /tmp/kind-config.yaml
   echo "✅ Cluster kind '${CLUSTER_NAME}' criado"
 else
@@ -130,9 +130,11 @@ if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.se
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-crds.yaml
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-core.yaml
   
-  echo "📦 Configurando Knative para Kubernetes 1.30.0..."
-  kubectl set env deployment/controller -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
-  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
+  echo "📦 Configurando Knative para Kubernetes 1.33.0..."
+  kubectl set env deployment/controller -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
+  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
+  kubectl set env deployment/activator -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
+  kubectl set env deployment/autoscaler -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
   
   echo "⏳ Aguardando Knative Serving ficar pronto..."
   # Wait for pods to be created before waiting for them to be ready
@@ -189,8 +191,12 @@ if ! kubectl get namespace metallb-system 2>/dev/null; then
   kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s
   
   echo "📦 Configurando MetalLB IP address pool..."
-  DOCKER_NETWORK=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' | head -n1)
-  IP_PREFIX=$(echo ${DOCKER_NETWORK} | cut -d'.' -f1-2)
+  # Extract only the IPv4 subnet (contains dots, not colons)
+  DOCKER_NETWORK=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' | grep '\.' | head -n1)
+  # Get the network base IP (e.g., 172.19.0.0/24 -> 172.19.0.0)
+  NETWORK_IP=$(echo ${DOCKER_NETWORK} | cut -d'/' -f1)
+  # Get the first three octets to stay within the subnet (e.g., 172.19.0)
+  IP_PREFIX=$(echo ${NETWORK_IP} | cut -d'.' -f1-3)
   
   cat <<EOF | kubectl apply -f -
 apiVersion: metallb.io/v1beta1
@@ -200,7 +206,7 @@ metadata:
   namespace: metallb-system
 spec:
   addresses:
-  - ${IP_PREFIX}.255.200-${IP_PREFIX}.255.250
+  - ${IP_PREFIX}.200-${IP_PREFIX}.250
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
@@ -212,7 +218,7 @@ spec:
   - kind-pool
 EOF
   
-  echo "✅ MetalLB configurado com IP pool ${IP_PREFIX}.255.200-${IP_PREFIX}.255.250"
+  echo "✅ MetalLB configurado com IP pool ${IP_PREFIX}.200-${IP_PREFIX}.250"
 else
   echo "✅ MetalLB já instalado"
 fi
@@ -227,6 +233,9 @@ fi
 if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
   echo "📦 Instalando Envoy Gateway..."
   
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  
   curl -sL https://github.com/envoyproxy/gateway/releases/download/v1.6.0/install.yaml > /tmp/envoy-gateway-install.yaml
   cd /tmp && csplit -s -f envoy-gateway- envoy-gateway-install.yaml '/^---$/' '{*}'
   
@@ -235,6 +244,8 @@ if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
       kubectl apply -f "$file" 2>&1 | grep -v "unchanged" || true
     fi
   done
+  
+  cd "${PROJECT_ROOT}"
   
   echo "⏳ Aguardando Envoy Gateway ficar pronto..."
   # Wait for deployment to be created before waiting for it to be available
@@ -378,7 +389,12 @@ echo "🔨 Building operator image..."
 make docker-build IMG="${IMG}"
 
 echo "📤 Loading image into kind cluster..."
-kind load docker-image "${IMG}" --name "${CLUSTER_NAME}"
+# Use docker save + ctr import as workaround for kind load issue with Kubernetes 1.33.0
+# See: https://github.com/kubernetes-sigs/kind/issues/3510
+if ! docker save "${IMG}" | docker exec -i "${CLUSTER_NAME}-control-plane" ctr --namespace k8s.io images import - 2>&1 | grep -q "saved"; then
+  echo "⚠️  Warning: Failed to load image using ctr import, trying kind load..."
+  kind load docker-image "${IMG}" --name "${CLUSTER_NAME}"
+fi
 
 echo "🚀 Deploying operator..."
 make deploy IMG="${IMG}"

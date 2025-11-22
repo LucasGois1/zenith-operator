@@ -95,8 +95,8 @@ spec:
           K8S_MINOR=$(echo "$K8S_VERSION" | cut -d. -f2)
           
           if [ -n "$K8S_MAJOR" ] && [ -n "$K8S_MINOR" ]; then
-            if [ "$K8S_MAJOR" -lt 1 ] || ([ "$K8S_MAJOR" -eq 1 ] && [ "$K8S_MINOR" -lt 30 ]); then
-              echo "❌ ERROR: Kubernetes version $K8S_VERSION is not supported. Minimum version is 1.30.0"
+            if [ "$K8S_MAJOR" -lt 1 ] || ([ "$K8S_MAJOR" -eq 1 ] && [ "$K8S_MINOR" -lt 33 ]); then
+              echo "❌ ERROR: Kubernetes version $K8S_VERSION is not supported. Minimum version is 1.33.0"
               ERRORS=$((ERRORS + 1))
             else
               echo "✓ Kubernetes version $K8S_VERSION is supported"

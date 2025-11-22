@@ -99,7 +99,7 @@ spec:
 
 ### Pré-requisitos
 
-- Kubernetes 1.28+
+- Kubernetes 1.33.0+
 - Tekton Pipelines v0.50+
 - Knative Serving v1.20+
 - Knative Eventing v1.20+ (opcional, para event-driven functions)

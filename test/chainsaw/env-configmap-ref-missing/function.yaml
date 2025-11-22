@@ -1,0 +1,17 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-env-configmap-missing
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: add-env-echo-endpoint
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-env-configmap-missing
+  deploy:
+    env:
+      - name: APP_CONFIG
+        valueFrom:
+          configMapKeyRef:
+            name: missing-config
+            key: config

@@ -324,28 +324,203 @@ dapr:
 
 #### deploy.env (Optional)
 
-**Type**: `[]EnvVar`
+**Type**: `[]corev1.EnvVar`
 
-**Description**: Lista de variáveis de ambiente para injetar no container.
+**Description**: Lista de variáveis de ambiente para injetar no container da função. Suporta valores estáticos, referências a Secrets/ConfigMaps, e referências a campos do Pod.
 
 **EnvVar Fields**:
-- `name` (string, required): Nome da variável
-- `value` (string, required): Valor da variável
+- `name` (string, required): Nome da variável de ambiente
+- `value` (string, optional): Valor estático da variável
+- `valueFrom` (object, optional): Fonte para o valor da variável (não pode ser usado com `value`)
+  - `secretKeyRef`: Referência a uma chave em um Secret
+    - `name` (string): Nome do Secret
+    - `key` (string): Chave dentro do Secret
+    - `optional` (boolean): Se true, não falha se o Secret não existir
+  - `configMapKeyRef`: Referência a uma chave em um ConfigMap
+    - `name` (string): Nome do ConfigMap
+    - `key` (string): Chave dentro do ConfigMap
+    - `optional` (boolean): Se true, não falha se o ConfigMap não existir
+  - `fieldRef`: Referência a um campo do Pod
+    - `fieldPath` (string): Caminho do campo (ex: metadata.name, metadata.namespace)
+  - `resourceFieldRef`: Referência a recursos do container
+    - `resource` (string): Nome do recurso (ex: limits.cpu, requests.memory)
 
 **Examples**:
+
+**Valores estáticos**:
 ```yaml
 env:
   - name: DATABASE_URL
     value: postgres://db.example.com/mydb
-  - name: API_KEY
-    value: secret-key-123
   - name: LOG_LEVEL
     value: debug
   - name: FEATURE_FLAG_X
     value: "true"
 ```
 
-**Note**: Para secrets sensíveis, considere usar Kubernetes Secrets e referenciá-los via `valueFrom`.
+**Referências a Secrets**:
+```yaml
+env:
+  - name: API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: api-credentials
+        key: api-key
+  - name: DATABASE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: db-credentials
+        key: password
+  - name: OPTIONAL_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: optional-secret
+        key: token
+        optional: true
+```
+
+**Referências a ConfigMaps**:
+```yaml
+env:
+  - name: APP_CONFIG
+    valueFrom:
+      configMapKeyRef:
+        name: app-config
+        key: config.json
+  - name: FEATURE_FLAGS
+    valueFrom:
+      configMapKeyRef:
+        name: feature-flags
+        key: flags
+```
+
+**Referências a campos do Pod**:
+```yaml
+env:
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+  - name: POD_IP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+```
+
+**Referências a recursos**:
+```yaml
+env:
+  - name: CPU_LIMIT
+    valueFrom:
+      resourceFieldRef:
+        resource: limits.cpu
+  - name: MEMORY_REQUEST
+    valueFrom:
+      resourceFieldRef:
+        resource: requests.memory
+```
+
+**Exemplo combinado**:
+```yaml
+env:
+  - name: APP_ENV
+    value: production
+  - name: DATABASE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: db-credentials
+        key: password
+  - name: CONFIG_PATH
+    valueFrom:
+      configMapKeyRef:
+        name: app-config
+        key: config-path
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+```
+
+**Important Notes**:
+- O operator valida que Secrets e ConfigMaps referenciados existem antes de deployar a função
+- Se um Secret ou ConfigMap não existir, a função ficará com status `Ready=False` e reason `SecretNotFound` ou `ConfigMapNotFound`
+- Use `optional: true` para recursos que podem não existir
+- Mudanças nas variáveis de ambiente disparam uma nova revisão do Knative Service
+
+#### deploy.envFrom (Optional)
+
+**Type**: `[]corev1.EnvFromSource`
+
+**Description**: Lista de fontes para popular variáveis de ambiente no container. Todas as chaves do Secret ou ConfigMap serão expostas como variáveis de ambiente.
+
+**EnvFromSource Fields**:
+- `secretRef`: Referência a um Secret
+  - `name` (string): Nome do Secret
+  - `optional` (boolean): Se true, não falha se o Secret não existir
+- `configMapRef`: Referência a um ConfigMap
+  - `name` (string): Nome do ConfigMap
+  - `optional` (boolean): Se true, não falha se o ConfigMap não existir
+- `prefix` (string, optional): Prefixo para adicionar aos nomes das variáveis
+
+**Examples**:
+
+**Injetar todas as chaves de um Secret**:
+```yaml
+envFrom:
+  - secretRef:
+      name: api-credentials
+```
+
+**Injetar todas as chaves de um ConfigMap**:
+```yaml
+envFrom:
+  - configMapRef:
+      name: app-config
+```
+
+**Com prefixo**:
+```yaml
+envFrom:
+  - prefix: DB_
+    secretRef:
+      name: database-credentials
+  - prefix: CACHE_
+    configMapRef:
+      name: redis-config
+```
+
+**Múltiplas fontes**:
+```yaml
+envFrom:
+  - secretRef:
+      name: api-credentials
+  - configMapRef:
+      name: app-config
+  - secretRef:
+      name: optional-secrets
+      optional: true
+```
+
+**Exemplo combinado com env**:
+```yaml
+deploy:
+  env:
+    - name: APP_ENV
+      value: production
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+  envFrom:
+    - secretRef:
+        name: api-credentials
+    - configMapRef:
+        name: app-config
+```
 
 ### eventing (Optional)
 
