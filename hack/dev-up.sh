@@ -229,6 +229,9 @@ fi
 if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
   echo "📦 Instalando Envoy Gateway..."
   
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  
   curl -sL https://github.com/envoyproxy/gateway/releases/download/v1.6.0/install.yaml > /tmp/envoy-gateway-install.yaml
   cd /tmp && csplit -s -f envoy-gateway- envoy-gateway-install.yaml '/^---$/' '{*}'
   
@@ -237,6 +240,8 @@ if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
       kubectl apply -f "$file" 2>&1 | grep -v "unchanged" || true
     fi
   done
+  
+  cd "${PROJECT_ROOT}"
   
   echo "⏳ Aguardando Envoy Gateway ficar pronto..."
   # Wait for deployment to be created before waiting for it to be available
