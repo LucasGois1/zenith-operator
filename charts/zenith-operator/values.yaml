@@ -1,7 +1,7 @@
 profile: standard
 
 global:
-  kubernetesVersion: "1.30.0"
+  kubernetesVersion: "1.33.0"
 
 installStack: true
 
@@ -42,6 +42,11 @@ envoyGateway:
   enabled: true
   version: "v1.6.0"
   controllerName: "gateway.envoyproxy.io/gatewayclass-controller"
+
+metallb:
+  enabled: false
+  version: "v0.14.9"
+  addressPool: "172.18.255.200-172.18.255.250"
 
 dapr:
   enabled: false

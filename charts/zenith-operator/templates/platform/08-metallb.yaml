@@ -1,0 +1,118 @@
+{{- if and .Values.installStack .Values.metallb.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: metallb-system
+  labels:
+    app.kubernetes.io/name: metallb
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+---
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metallb-installer
+  namespace: metallb-system
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metallb-installer
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metallb-installer
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metallb-installer
+subjects:
+- kind: ServiceAccount
+  name: metallb-installer
+  namespace: metallb-system
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: metallb-installer-{{ .Release.Revision }}
+  namespace: metallb-system
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "6"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/name: metallb-installer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: metallb-installer
+    spec:
+      serviceAccountName: metallb-installer
+      restartPolicy: OnFailure
+      containers:
+      - name: installer
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          echo "Installing MetalLB {{ .Values.metallb.version }}..."
+          
+          kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/{{ .Values.metallb.version }}/config/manifests/metallb-native.yaml
+          
+          echo "✓ MetalLB installed"
+          
+          echo "Waiting for MetalLB to be ready..."
+          kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s || true
+          
+          echo "✓ MetalLB is ready"
+          
+          echo "Configuring MetalLB IP address pool..."
+          
+          cat <<EOF | kubectl apply -f -
+          apiVersion: metallb.io/v1beta1
+          kind: IPAddressPool
+          metadata:
+            name: kind-pool
+            namespace: metallb-system
+          spec:
+            addresses:
+            - {{ .Values.metallb.addressPool }}
+          ---
+          apiVersion: metallb.io/v1beta1
+          kind: L2Advertisement
+          metadata:
+            name: kind-l2
+            namespace: metallb-system
+          spec:
+            ipAddressPools:
+            - kind-pool
+          EOF
+          
+          echo "✓ MetalLB configured with IP pool {{ .Values.metallb.addressPool }}"
+{{- end }}

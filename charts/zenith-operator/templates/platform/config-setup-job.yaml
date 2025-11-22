@@ -113,18 +113,23 @@ spec:
           
           echo "✓ Created Gateway"
           
-          sleep 10
+          sleep 15
           
           ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name={{ .Values.gatewayAPI.gateway.name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
           
-          if [ -n "$ENVOY_SVC" ]; then
+          if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
             kubectl patch configmap/config-gateway \
               -n knative-serving \
               --type merge \
-              -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"{{ .Values.gatewayAPI.gateway.className }}\\\",\\\"gateway\\\":\\\"{{ .Values.gatewayAPI.gateway.namespace }}/{{ .Values.gatewayAPI.gateway.name }}\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\"}}"
-            echo "✓ Configured Knative Gateway with Envoy service: ${ENVOY_SVC}"
+              -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"{{ .Values.gatewayAPI.gateway.className }}\\\",\\\"gateway\\\":\\\"{{ .Values.gatewayAPI.gateway.namespace }}/{{ .Values.gatewayAPI.gateway.name }}\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\",\"local-gateways\":\"[{\\\"class\\\":\\\"{{ .Values.gatewayAPI.gateway.className }}\\\",\\\"gateway\\\":\\\"{{ .Values.gatewayAPI.gateway.namespace }}/knative-local-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${LOCAL_ENVOY_SVC}\\\"}]\"}}"
+            echo "✓ Configured Knative Gateway with Envoy services:"
+            echo "  - External: envoy-gateway-system/${ENVOY_SVC}"
+            echo "  - Local: envoy-gateway-system/${LOCAL_ENVOY_SVC}"
           else
-            echo "⚠️  Envoy Gateway service not found yet, will be configured on first reconciliation"
+            echo "⚠️  Envoy Gateway services not found yet, will be configured on first reconciliation"
+            [ -z "$ENVOY_SVC" ] && echo "  - Missing external gateway service"
+            [ -z "$LOCAL_ENVOY_SVC" ] && echo "  - Missing local gateway service"
           fi
           {{- end }}
           

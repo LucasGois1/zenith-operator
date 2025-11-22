@@ -41,6 +41,11 @@ envoyGateway:
   version: "v1.6.0"
   controllerName: "gateway.envoyproxy.io/gatewayclass-controller"
 
+metallb:
+  enabled: true
+  version: "v0.14.9"
+  addressPool: "172.18.255.200-172.18.255.250"
+
 dapr:
   enabled: true
   version: "1.14.0"
