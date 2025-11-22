@@ -1026,6 +1026,9 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 
 	// Construir a definição do container
 	// Usa diretamente os campos nativos do Kubernetes para Env e EnvFrom
+	// IMPORTANTE: Knative não suporta fieldRef/resourceFieldRef, então resolvemos esses valores aqui
+	resolvedEnv := r.resolveEnvVars(function)
+	
 	container := v1.Container{
 		// Usa o digest do build bem-sucedido da Fase 3.3
 		Image: function.Status.ImageDigest,
@@ -1036,7 +1039,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 				ContainerPort: containerPort,
 			},
 		},
-		Env:     function.Spec.Deploy.Env,
+		Env:     resolvedEnv,
 		EnvFrom: function.Spec.Deploy.EnvFrom,
 	}
 
@@ -1087,6 +1090,71 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	}
 
 	return ksvc
+}
+
+// resolveEnvVars resolve fieldRef e resourceFieldRef para valores estáticos
+// porque Knative não suporta esses tipos de referências.
+// Secret e ConfigMap refs são mantidos pois Knative os suporta nativamente.
+func (r *FunctionReconciler) resolveEnvVars(function *functionsv1alpha1.Function) []v1.EnvVar {
+	resolved := make([]v1.EnvVar, 0, len(function.Spec.Deploy.Env))
+	
+	for _, envVar := range function.Spec.Deploy.Env {
+		// Se não tem valueFrom, ou se tem secretKeyRef/configMapKeyRef, manter como está
+		if envVar.ValueFrom == nil ||
+			envVar.ValueFrom.SecretKeyRef != nil ||
+			envVar.ValueFrom.ConfigMapKeyRef != nil {
+			resolved = append(resolved, envVar)
+			continue
+		}
+		
+		// Resolver fieldRef
+		if envVar.ValueFrom.FieldRef != nil {
+			fieldPath := envVar.ValueFrom.FieldRef.FieldPath
+			var value string
+			
+			switch fieldPath {
+			case "metadata.name":
+				value = function.Name
+			case "metadata.namespace":
+				value = function.Namespace
+			case "metadata.uid":
+				value = string(function.UID)
+			case "metadata.labels":
+				// Não é possível resolver labels como string única
+				value = ""
+			case "metadata.annotations":
+				// Não é possível resolver annotations como string única
+				value = ""
+			default:
+				// Para campos não suportados, deixar vazio
+				value = ""
+			}
+			
+			resolved = append(resolved, v1.EnvVar{
+				Name:  envVar.Name,
+				Value: value,
+			})
+			continue
+		}
+		
+		// Resolver resourceFieldRef
+		if envVar.ValueFrom.ResourceFieldRef != nil {
+			// ResourceFieldRef requer acesso ao Pod real para obter valores de recursos
+			// Como estamos criando o Knative Service antes do Pod existir,
+			// não podemos resolver esses valores aqui.
+			// A melhor abordagem é deixar vazio ou usar um valor padrão.
+			resolved = append(resolved, v1.EnvVar{
+				Name:  envVar.Name,
+				Value: "", // Knative não suporta, então deixamos vazio
+			})
+			continue
+		}
+		
+		// Se chegou aqui, manter o envVar original
+		resolved = append(resolved, envVar)
+	}
+	
+	return resolved
 }
 
 func (r *FunctionReconciler) buildKnativeTrigger(function *functionsv1alpha1.Function) *kneventingv1.Trigger {
