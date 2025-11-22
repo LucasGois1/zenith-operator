@@ -427,7 +427,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		notReadyCondition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
-			Reason:  string(ksvcReady.Reason),
+			Reason:  ksvcReady.Reason,
 			Message: "Knative Service not ready: " + ksvcReady.Message,
 		}
 		meta.SetStatusCondition(&function.Status.Conditions, notReadyCondition)
@@ -460,7 +460,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		triggerName := function.Name + "-trigger"
 		existingTrigger := &kneventingv1.Trigger{}
 		err := r.Get(ctx, types.NamespacedName{Name: triggerName, Namespace: function.Namespace}, existingTrigger)
-		
+
 		if err == nil {
 			log.Info("Eventing removido, deletando Trigger existente", "Trigger.Name", triggerName)
 			if err := r.Delete(ctx, existingTrigger); err != nil {
@@ -473,7 +473,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			log.Error(err, "Falha ao verificar Trigger existente")
 			return ctrl.Result{}, err
 		}
-		
+
 		readyCondition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionTrue,
