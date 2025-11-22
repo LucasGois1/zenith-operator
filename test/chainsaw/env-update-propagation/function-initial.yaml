@@ -4,7 +4,7 @@ metadata:
   name: test-function-env-update
 spec:
   gitRepo: https://github.com/LucasGois1/zenith-test-functions
-  gitRevision: main
+  gitRevision: add-env-echo-endpoint
   gitAuthSecretName: github-auth
   build:
     image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-env-update
