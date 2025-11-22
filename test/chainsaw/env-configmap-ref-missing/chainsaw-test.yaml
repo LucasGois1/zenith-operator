@@ -1,0 +1,95 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: env-configmap-ref-missing-test
+spec:
+  description: |
+    Test ConfigMap reference when ConfigMap does not exist.
+    This test verifies:
+    1. Function does NOT reach Ready status when ConfigMap is missing
+    2. Status condition shows ConfigMapNotFound reason
+    3. Error message is clear and helpful
+  timeouts:
+    apply: 1m
+    assert: 5m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: ../e2e-http-basic/git-clone-task.yaml
+        - apply:
+            file: ../e2e-http-basic/buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR with missing ConfigMap reference
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-function-not-ready
+      description: Verify Function does NOT reach Ready status
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              # Wait a bit for reconciliation
+              sleep 30
+              
+              # Get Function status
+              STATUS=$(kubectl get function test-function-env-configmap-missing -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+              REASON=$(kubectl get function test-function-env-configmap-missing -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}')
+              MESSAGE=$(kubectl get function test-function-env-configmap-missing -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}')
+              
+              echo "Status: $STATUS"
+              echo "Reason: $REASON"
+              echo "Message: $MESSAGE"
+              
+              # Verify status is False
+              if [ "$STATUS" != "False" ]; then
+                echo "ERROR: Expected status to be False, got: $STATUS"
+                exit 1
+              fi
+              
+              # Verify reason is ConfigMapNotFound
+              if [ "$REASON" != "ConfigMapNotFound" ]; then
+                echo "ERROR: Expected reason to be ConfigMapNotFound, got: $REASON"
+                exit 1
+              fi
+              
+              # Verify message contains the ConfigMap name
+              if ! echo "$MESSAGE" | grep -q "missing-config"; then
+                echo "ERROR: Expected message to contain 'missing-config', got: $MESSAGE"
+                exit 1
+              fi
+              
+              echo "SUCCESS: Function correctly reports ConfigMapNotFound"
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-env-configmap-missing

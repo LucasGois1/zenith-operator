@@ -1,0 +1,28 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-env-mixed
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-env-mixed
+  deploy:
+    env:
+      - name: APP_ENV
+        value: production
+      - name: API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: mixed-credentials
+            key: api-key
+      - name: APP_CONFIG
+        valueFrom:
+          configMapKeyRef:
+            name: mixed-config
+            key: config
+      - name: POD_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace

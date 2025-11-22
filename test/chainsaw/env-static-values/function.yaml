@@ -1,0 +1,18 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-env-static
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-env-static
+  deploy:
+    env:
+      - name: APP_ENV
+        value: production
+      - name: LOG_LEVEL
+        value: debug
+      - name: FEATURE_FLAG
+        value: "true"

@@ -1,0 +1,8 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-env-configmap-exists
+status:
+  conditions:
+    - type: Ready
+      status: "True"
