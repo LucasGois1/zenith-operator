@@ -54,6 +54,7 @@ type FunctionReconciler struct {
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=serving.knative.dev,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eventing.knative.dev,resources=triggers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=eventing.knative.dev,resources=brokers,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
@@ -298,6 +299,18 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Construir a referência completa da imagem com o digest
 	imageWithDigest := function.Spec.Build.Image + "@" + imageDigest
 	function.Status.ImageDigest = imageWithDigest
+	deployingCondition := metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionUnknown,
+		Reason:  "Deploying",
+		Message: "Build succeeded, deploying to Knative Service",
+	}
+	meta.SetStatusCondition(&function.Status.Conditions, deployingCondition)
+	function.Status.ObservedGeneration = function.Generation
+
+	if err := r.Status().Update(ctx, &function); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	log.Info("Iniciando Fase 3.4: Reconciliação do Knative Service")
 
@@ -394,8 +407,73 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		function.Status.URL = knativeService.Status.URL.String()
 	}
 
-	// Se 'eventing' não estiver configurado, marcar como Ready e parar.
+	ksvcReady := knativeService.Status.GetCondition("Ready")
+	if ksvcReady == nil {
+		deployingCondition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionUnknown,
+			Reason:  "Deploying",
+			Message: "Waiting for Knative Service to report readiness",
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, deployingCondition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, &function); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	if ksvcReady.IsFalse() {
+		notReadyCondition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  ksvcReady.Reason,
+			Message: "Knative Service not ready: " + ksvcReady.Message,
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, notReadyCondition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, &function); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	if ksvcReady.IsUnknown() {
+		deployingCondition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionUnknown,
+			Reason:  "Deploying",
+			Message: "Knative Service is deploying: " + ksvcReady.Message,
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, deployingCondition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, &function); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	log.Info("Knative Service is ready")
+
+	// Se 'eventing' não estiver configurado, limpar qualquer Trigger existente e marcar como Ready.
 	if function.Spec.Eventing.Broker == "" {
+		triggerName := function.Name + "-trigger"
+		existingTrigger := &kneventingv1.Trigger{}
+		err := r.Get(ctx, types.NamespacedName{Name: triggerName, Namespace: function.Namespace}, existingTrigger)
+
+		if err == nil {
+			log.Info("Eventing removido, deletando Trigger existente", "Trigger.Name", triggerName)
+			if err := r.Delete(ctx, existingTrigger); err != nil {
+				log.Error(err, "Falha ao deletar Trigger")
+				return ctrl.Result{}, err
+			}
+			log.Info("Trigger deletado com sucesso")
+			return ctrl.Result{Requeue: true}, nil
+		} else if !errors.IsNotFound(err) {
+			log.Error(err, "Falha ao verificar Trigger existente")
+			return ctrl.Result{}, err
+		}
+
 		readyCondition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionTrue,
@@ -408,6 +486,33 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
+	}
+
+	// Verificar se o Broker existe antes de criar/atualizar o Trigger
+	brokerName := function.Spec.Eventing.Broker
+	if brokerName == "" {
+		brokerName = "default"
+	}
+	broker := &kneventingv1.Broker{}
+	err = r.Get(ctx, types.NamespacedName{Name: brokerName, Namespace: function.Namespace}, broker)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Error(err, "Broker não encontrado", "Broker.Name", brokerName)
+			brokerNotFoundCondition := metav1.Condition{
+				Type:    "Ready",
+				Status:  metav1.ConditionFalse,
+				Reason:  "BrokerNotFound",
+				Message: "Knative Broker não encontrado: " + brokerName,
+			}
+			meta.SetStatusCondition(&function.Status.Conditions, brokerNotFoundCondition)
+			function.Status.ObservedGeneration = function.Generation
+			if err := r.Status().Update(ctx, &function); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+		}
+		log.Error(err, "Falha ao verificar Broker")
+		return ctrl.Result{}, err
 	}
 
 	triggerName := function.Name + "-trigger"
@@ -653,7 +758,6 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 						Name: "fetch-source",
 						TaskRef: &tektonv1.TaskRef{
 							Name: "git-clone", // Refere-se à Task 'git-clone' instalada [5]
-							Kind: "Task",
 						},
 						// 'Workspaces' aqui é um slice de 'WorkspacePipelineTaskBinding'
 						Workspaces: []tektonv1.WorkspacePipelineTaskBinding{
@@ -673,7 +777,6 @@ func (r *FunctionReconciler) buildPipelineRun(function *functionsv1alpha1.Functi
 						Name: "build-and-push",
 						TaskRef: &tektonv1.TaskRef{
 							Name: "buildpacks-phases", // Refere-se à Task 'buildpacks-phases' instalada [5]
-							Kind: "Task",
 						},
 						// 'RunAfter' é um slice de 'string' [5]
 						RunAfter: []string{"fetch-source"}, // Garante que o clone termine antes do build começar

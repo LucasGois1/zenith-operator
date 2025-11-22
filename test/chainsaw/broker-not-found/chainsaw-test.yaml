@@ -1,0 +1,112 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: broker-not-found-test
+spec:
+  description: |
+    Test that Function handles non-existent broker correctly.
+    This test verifies:
+    1. Function with non-existent broker sets Ready=False
+    2. Status condition has reason "BrokerNotFound"
+    3. Trigger is not created when broker doesn't exist
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create Function with non-existent broker
+      try:
+        - apply:
+            file: function.yaml
+        - script:
+            content: |
+              FN_NAME=test-function-broker-not-found
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"\n"}{end}' | tail -n1)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-broker-not-found-status
+      description: Verify Function has BrokerNotFound status
+      try:
+        - script:
+            content: |
+              echo "Waiting for Function to set BrokerNotFound status..."
+              for i in $(seq 1 60); do
+                READY=$(kubectl get function test-function-broker-not-found -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+                REASON=$(kubectl get function test-function-broker-not-found -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}')
+                MESSAGE=$(kubectl get function test-function-broker-not-found -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}')
+                
+                echo "Ready: $READY, Reason: $REASON"
+                
+                if [ "$READY" = "False" ] && [ "$REASON" = "BrokerNotFound" ]; then
+                  echo "SUCCESS: Function has BrokerNotFound status"
+                  echo "Message: $MESSAGE"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: Function did not set BrokerNotFound status after 120 seconds"
+              kubectl get function test-function-broker-not-found -n "$NAMESPACE" -o yaml
+              exit 1
+            timeout: 150s
+    
+    - name: verify-trigger-not-created
+      description: Verify Trigger was not created
+      try:
+        - script:
+            content: |
+              echo "Verifying Trigger was not created..."
+              TRIGGER_NAME="test-function-broker-not-found-trigger"
+              
+              sleep 5
+              
+              if kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" 2>/dev/null; then
+                echo "ERROR: Trigger should not exist when broker is missing"
+                kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" -o yaml
+                exit 1
+              else
+                echo "SUCCESS: Trigger was not created (as expected)"
+                exit 0
+              fi
+            timeout: 30s
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-broker-not-found

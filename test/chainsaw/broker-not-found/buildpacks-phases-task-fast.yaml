@@ -1,0 +1,40 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: buildpacks-phases
+spec:
+  params:
+    - name: APP_IMAGE
+      type: string
+    - name: SOURCE_SUBPATH
+      type: string
+      default: ""
+    - name: CNB_BUILDER_IMAGE
+      type: string
+      default: "paketobuildpacks/builder-jammy-base:latest"
+    - name: CNB_PROCESS_TYPE
+      type: string
+      default: ""
+  workspaces:
+    - name: source
+  results:
+    - name: APP_IMAGE_DIGEST
+      description: Digest of the image (fast-path for testing operator behavior)
+  steps:
+    - name: fast-build
+      image: busybox:1.36
+      script: |
+        #!/bin/sh
+        set -e
+        
+        echo "Fast-path builder for testing operator behavior"
+        echo "This simulates a successful build and writes a plausible digest"
+        
+        TIMESTAMP=$(date +%s)
+        HASH=$(echo -n "$(params.APP_IMAGE)-$TIMESTAMP" | sha256sum | cut -d' ' -f1)
+        DIGEST="sha256:$HASH"
+        echo "Generated digest: $DIGEST"
+        
+        echo -n "$DIGEST" > "$(results.APP_IMAGE_DIGEST.path)"
+        
+        echo "Fast build completed successfully"

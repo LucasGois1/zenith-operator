@@ -60,27 +60,66 @@ fi
 
 echo ""
 
+REGISTRY_NAME="kind-registry"
+REGISTRY_PORT="5001"
+
+# Ensure registry container exists (idempotent)
+if docker inspect "${REGISTRY_NAME}" >/dev/null 2>&1; then
+  # Container exists, check if it's running
+  if [ "$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}")" != "true" ]; then
+    echo "📦 Iniciando registry Docker existente..."
+    docker start "${REGISTRY_NAME}"
+  fi
+  echo "✅ Registry Docker '${REGISTRY_NAME}' já existe"
+else
+  # Container doesn't exist, create it
+  echo "📦 Criando registry Docker local..."
+  docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --name "${REGISTRY_NAME}" registry:2
+  echo "✅ Registry criado em localhost:${REGISTRY_PORT}"
+fi
+
+# Create kind cluster if it doesn't exist
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
-  echo "📦 Criando cluster kind com Kubernetes 1.33.0..."
-  
+  echo "📦 Criando cluster kind com configuração de registry..."
   cat <<EOF > /tmp/kind-config.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 containerdConfigPatches:
 - |-
-  [plugins."io.containerd.grpc.v1.cri".registry]
-    config_path = "/etc/containerd/certs.d"
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.registry.svc.cluster.local:5000"]
+    endpoint = ["http://${REGISTRY_NAME}:5000"]
+  [plugins."io.containerd.grpc.v1.cri".registry.configs."registry.registry.svc.cluster.local:5000".tls]
+    insecure_skip_verify = true
+  [plugins."io.containerd.grpc.v1.cri".registry.configs."${REGISTRY_NAME}:5000".tls]
+    insecure_skip_verify = true
 EOF
-  
-  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.33.0 --config /tmp/kind-config.yaml
+  kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.30.0 --config /tmp/kind-config.yaml
+  rm /tmp/kind-config.yaml
+  echo "✅ Cluster kind '${CLUSTER_NAME}' criado"
 else
   echo "✅ Cluster kind '${CLUSTER_NAME}' já existe"
+fi
+
+# Connect registry to kind network (idempotent)
+if ! docker network inspect kind 2>/dev/null | grep -q "${REGISTRY_NAME}"; then
+  echo "📦 Conectando registry à rede kind..."
+  docker network connect kind "${REGISTRY_NAME}"
+  echo "✅ Registry conectado à rede kind"
+else
+  echo "✅ Registry já está conectado à rede kind"
 fi
 
 if ! kubectl get apiservices v1.tekton.dev 2>/dev/null | grep -q "v1.tekton.dev"; then
   echo "📦 Instalando Tekton Pipelines..."
   kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
   echo "⏳ Aguardando Tekton Pipelines ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=tekton-pipelines-controller -n tekton-pipelines 2>/dev/null | grep -q tekton; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=tekton-pipelines-controller -n tekton-pipelines --timeout=300s
 else
   echo "✅ Tekton Pipelines já instalado"
@@ -91,7 +130,18 @@ if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.se
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-crds.yaml
   kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-core.yaml
   
+  echo "📦 Configurando Knative para Kubernetes 1.30.0..."
+  kubectl set env deployment/controller -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
+  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.30.0
+  
   echo "⏳ Aguardando Knative Serving ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=controller -n knative-serving 2>/dev/null | grep -q controller; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=controller -n knative-serving --timeout=300s
   kubectl wait --for=condition=ready pod -l app=autoscaler -n knative-serving --timeout=300s
   kubectl wait --for=condition=ready pod -l app=activator -n knative-serving --timeout=300s
@@ -105,6 +155,13 @@ if ! kubectl get apiservices v1.eventing.knative.dev 2>/dev/null | grep -q "v1.e
   kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-crds.yaml
   kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-core.yaml
   echo "⏳ Aguardando Knative Eventing ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=eventing-controller -n knative-eventing 2>/dev/null | grep -q eventing; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=eventing-controller -n knative-eventing --timeout=300s
 else
   echo "✅ Knative Eventing já instalado"
@@ -122,6 +179,13 @@ if ! kubectl get namespace metallb-system 2>/dev/null; then
   kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
   
   echo "⏳ Aguardando MetalLB ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=metallb -n metallb-system 2>/dev/null | grep -q metallb; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s
   
   echo "📦 Configurando MetalLB IP address pool..."
@@ -173,55 +237,25 @@ if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
   done
   
   echo "⏳ Aguardando Envoy Gateway ficar pronto..."
+  # Wait for deployment to be created before waiting for it to be available
+  for i in {1..30}; do
+    if kubectl get deployment envoy-gateway -n envoy-gateway-system 2>/dev/null | grep -q envoy-gateway; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=available --timeout=300s deployment/envoy-gateway -n envoy-gateway-system
 else
   echo "✅ Envoy Gateway já instalado"
 fi
 
 if ! kubectl get namespace registry 2>/dev/null; then
-  echo "📦 Instalando registry local para buildpacks..."
+  echo "📦 Criando namespace e Service para registry..."
   kubectl create namespace registry
+  
+  REGISTRY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind -f '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' "${REGISTRY_NAME}")
+  
   cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: registry-pvc
-  namespace: registry
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: registry
-  namespace: registry
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: registry
-  template:
-    metadata:
-      labels:
-        app: registry
-    spec:
-      containers:
-      - name: registry
-        image: registry:2
-        ports:
-        - containerPort: 5000
-        volumeMounts:
-        - name: registry-storage
-          mountPath: /var/lib/registry
-      volumes:
-      - name: registry-storage
-        persistentVolumeClaim:
-          claimName: registry-pvc
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -232,38 +266,22 @@ spec:
   ports:
   - port: 5000
     targetPort: 5000
-  selector:
-    app: registry
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: registry
+  namespace: registry
+subsets:
+- addresses:
+  - ip: ${REGISTRY_IP}
+  ports:
+  - port: 5000
 EOF
-  echo "⏳ Aguardando registry ficar pronto..."
-  kubectl wait --for=condition=available --timeout=60s deployment/registry -n registry
-  echo "📍 Registry local acessível em: registry.registry.svc.cluster.local:5000"
-  
-  echo "📦 Configurando containerd para acessar registry via ClusterIP..."
-  REGISTRY_IP=$(kubectl get svc registry -n registry -o jsonpath='{.spec.clusterIP}')
-  echo "   Registry ClusterIP: ${REGISTRY_IP}"
-  
-  for node in $(kind get nodes --name "${CLUSTER_NAME}"); do
-    echo "   Configurando node: ${node}"
-    
-    docker exec "${node}" mkdir -p /etc/containerd/certs.d/registry.registry.svc.cluster.local:5000
-    
-    docker exec "${node}" bash -c "cat > /etc/containerd/certs.d/registry.registry.svc.cluster.local:5000/hosts.toml <<EOF
-server = \"http://${REGISTRY_IP}:5000\"
-
-[host.\"http://${REGISTRY_IP}:5000\"]
-  capabilities = [\"pull\", \"resolve\"]
-  skip_verify = true
-EOF"
-    
-    docker exec "${node}" bash -c "echo '${REGISTRY_IP} registry.registry.svc.cluster.local' >> /etc/hosts"
-    
-    docker exec "${node}" systemctl restart containerd
-  done
-  
-  echo "✅ Containerd configurado para usar registry ClusterIP"
+  echo "📍 Registry acessível em: registry.registry.svc.cluster.local:5000"
+  echo "📍 Registry também acessível em: localhost:${REGISTRY_PORT}"
 else
-  echo "✅ Registry local já instalado"
+  echo "✅ Registry Service já instalado"
 fi
 
 if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev/null; then
@@ -271,6 +289,13 @@ if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev
   kubectl apply -f https://github.com/knative-extensions/net-gateway-api/releases/download/knative-v1.20.0/net-gateway-api.yaml
   
   echo "⏳ Aguardando net-gateway-api ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=net-gateway-api-controller -n knative-serving 2>/dev/null | grep -q net-gateway; then
+      break
+    fi
+    sleep 2
+  done
   kubectl wait --for=condition=ready pod -l app=net-gateway-api-controller -n knative-serving --timeout=300s
 else
   echo "✅ Knative net-gateway-api já instalado"
