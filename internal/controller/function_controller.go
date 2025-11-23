@@ -703,13 +703,13 @@ func (r *FunctionReconciler) validateEnvReferences(ctx context.Context, function
 	// Validar referências em EnvFrom
 	for _, envFromSource := range function.Spec.Deploy.EnvFrom {
 		if envFromSource.SecretRef != nil {
-			if result, err := r.validateSecretRef(ctx, function, envFromSource.SecretRef); err != nil || result.RequeueAfter > 0 {
+			if result, err := r.validateSecretEnvSource(ctx, function, envFromSource.SecretRef); err != nil || result.RequeueAfter > 0 {
 				return result, err
 			}
 		}
 
 		if envFromSource.ConfigMapRef != nil {
-			if result, err := r.validateConfigMapRef(ctx, function, envFromSource.ConfigMapRef); err != nil || result.RequeueAfter > 0 {
+			if result, err := r.validateConfigMapEnvSource(ctx, function, envFromSource.ConfigMapRef); err != nil || result.RequeueAfter > 0 {
 				return result, err
 			}
 		}
@@ -751,6 +751,70 @@ func (r *FunctionReconciler) validateSecretRef(ctx context.Context, function *fu
 }
 
 func (r *FunctionReconciler) validateConfigMapRef(ctx context.Context, function *functionsv1alpha1.Function, configMapRef *v1.ConfigMapKeySelector) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	// Só validar se não for opcional
+	if configMapRef.Optional != nil && *configMapRef.Optional {
+		return ctrl.Result{}, nil
+	}
+
+	configMap := &v1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{Name: configMapRef.Name, Namespace: function.Namespace}, configMap)
+	if err != nil && errors.IsNotFound(err) {
+		log.Error(err, "ConfigMap não encontrado", "ConfigMap.Name", configMapRef.Name)
+		condition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "ConfigMapNotFound",
+			Message: fmt.Sprintf("ConfigMap não encontrado: %s. Crie o ConfigMap no namespace %s antes de deployar a função.", configMapRef.Name, function.Namespace),
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, condition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, function); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	} else if err != nil {
+		log.Error(err, "Falha ao verificar ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *FunctionReconciler) validateSecretEnvSource(ctx context.Context, function *functionsv1alpha1.Function, secretRef *v1.SecretEnvSource) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	// Só validar se não for opcional
+	if secretRef.Optional != nil && *secretRef.Optional {
+		return ctrl.Result{}, nil
+	}
+
+	secret := &v1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Name: secretRef.Name, Namespace: function.Namespace}, secret)
+	if err != nil && errors.IsNotFound(err) {
+		log.Error(err, "Secret não encontrado", "Secret.Name", secretRef.Name)
+		condition := metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "SecretNotFound",
+			Message: fmt.Sprintf("Secret não encontrado: %s. Crie o Secret no namespace %s antes de deployar a função.", secretRef.Name, function.Namespace),
+		}
+		meta.SetStatusCondition(&function.Status.Conditions, condition)
+		function.Status.ObservedGeneration = function.Generation
+		if err := r.Status().Update(ctx, function); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	} else if err != nil {
+		log.Error(err, "Falha ao verificar Secret")
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *FunctionReconciler) validateConfigMapEnvSource(ctx context.Context, function *functionsv1alpha1.Function, configMapRef *v1.ConfigMapEnvSource) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// Só validar se não for opcional
