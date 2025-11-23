@@ -372,10 +372,11 @@ kubectl get gateway -n knative-serving
 
 Veja exemplos completos no repositório:
 - [zenith-test-functions](https://github.com/LucasGois1/zenith-test-functions) - Função Go básica
-- [config/samples/](../config/samples/) - Exemplos de Function CRs
+- [config/samples/](https://github.com/LucasGois1/zenith-operator/tree/main/config/samples) - Exemplos de Function CRs
 
 ## Próximos Passos
 
-- [Criando Funções Assíncronas com Eventos](CREATING_EVENT_FUNCTIONS.md)
-- [Comunicação entre Funções](INTER_FUNCTION_COMMUNICATION.md)
-- [Referência Completa do Operator](OPERATOR_REFERENCE.md)
+- [Criando Funções Assíncronas com Eventos](funcoes-eventos.md)
+- [Comunicação entre Funções](comunicacao-funcoes.md)
+- [Especificação do CRD Function](../04-referencia/function-crd.md)
+- [Referência do Operator](../04-referencia/operator-reference.md)
