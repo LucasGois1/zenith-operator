@@ -11,5 +11,7 @@ spec:
               value: http://otel-collector.opentelemetry-operator-system.svc.cluster.local:4317
             - name: OTEL_SERVICE_NAME
               value: test-function-tracing
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: (service.namespace=.+,service.version=latest)
             - name: OTEL_TRACES_EXPORTER
               value: otlp
