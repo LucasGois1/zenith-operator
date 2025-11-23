@@ -1151,7 +1151,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 // Também injeta variáveis de ambiente do OpenTelemetry quando tracing está habilitado.
 func (r *FunctionReconciler) resolveEnvVars(function *functionsv1alpha1.Function) []v1.EnvVar {
 	resolved := make([]v1.EnvVar, 0, len(function.Spec.Deploy.Env)+10) // +10 para OTEL vars
-	
+
 	// Injetar variáveis de ambiente do OpenTelemetry se tracing está habilitado
 	if function.Spec.Observability.Tracing.Enabled {
 		// Use HTTP endpoint (port 4318) for better compatibility
@@ -1172,7 +1172,7 @@ func (r *FunctionReconciler) resolveEnvVars(function *functionsv1alpha1.Function
 			Name:  "OTEL_TRACES_EXPORTER",
 			Value: "otlp",
 		})
-		
+
 		// Se sampling rate foi especificado, adicionar
 		if function.Spec.Observability.Tracing.SamplingRate != nil {
 			resolved = append(resolved, v1.EnvVar{
