@@ -1,0 +1,12 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-dapr-tracing
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  deploy:
+    dapr:
+      enabled: true
+  observability:
+    tracing:
+      enabled: true

@@ -1,0 +1,13 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: test-function-no-tracing-build
+spec:
+  pipelineSpec:
+    tasks:
+      - name: fetch-source
+        taskRef:
+          name: git-clone
+      - name: build-and-push
+        taskRef:
+          name: buildpacks-phases

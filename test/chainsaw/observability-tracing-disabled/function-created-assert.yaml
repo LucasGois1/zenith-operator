@@ -1,0 +1,9 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-no-tracing
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  observability:
+    tracing:
+      enabled: false

@@ -1,6 +1,6 @@
 # Zenith Operator Helm Chart
 
-A comprehensive Helm chart for deploying the Zenith Operator and all its dependencies (Tekton Pipelines, Knative Serving, Knative Eventing, Envoy Gateway, Gateway API, and optional Dapr) in a single installation.
+A comprehensive Helm chart for deploying the Zenith Operator and all its dependencies (Tekton Pipelines, Knative Serving, Knative Eventing, Envoy Gateway, Gateway API, OpenTelemetry Operator, and optional Dapr) in a single installation.
 
 ## Overview
 
@@ -9,6 +9,7 @@ The Zenith Operator provides a serverless function platform on Kubernetes by orc
 - **Knative Serving**: Deploying functions with auto-scaling
 - **Knative Eventing**: Event-driven function invocations
 - **Envoy Gateway + Gateway API**: Ingress and routing
+- **OpenTelemetry Operator**: Distributed tracing and observability
 - **Dapr** (optional): Service mesh capabilities
 
 This Helm chart simplifies installation by automatically deploying all required dependencies with proper configuration and ordering.
@@ -75,7 +76,7 @@ helm install zenith-operator ./charts/zenith-operator \
 ### Development Profile (`values-dev.yaml`)
 
 Optimized for local development with Kind/Minikube:
-- ✅ All dependencies enabled (Tekton, Knative, Envoy Gateway, Dapr)
+- ✅ All dependencies enabled (Tekton, Knative, Envoy Gateway, OpenTelemetry, Dapr)
 - ✅ Local container registry included
 - ✅ Insecure registry configuration
 - ✅ Smaller resource requests
@@ -128,6 +129,8 @@ helm install zenith-operator ./charts/zenith-operator \
 | `knativeEventing.version` | Knative Eventing version | `v0.41.7` | `v0.41.7` |
 | `envoyGateway.enabled` | Install Envoy Gateway | `true` | `true` |
 | `envoyGateway.version` | Envoy Gateway version | `v1.6.0` | `v1.6.0` |
+| `opentelemetry.enabled` | Install OpenTelemetry Operator | `true` | `true` |
+| `opentelemetry.version` | OpenTelemetry Operator version | `v0.140.0` | `v0.140.0` |
 | `dapr.enabled` | Install Dapr | `false` | `true` |
 | `registry.enabled` | Install local registry | `false` | `true` |
 | `operator.image.repository` | Operator image | `ghcr.io/lucasgois1/zenith-operator` | same |
@@ -254,6 +257,8 @@ preflight:
 | Gateway API | v1.3.0 | v1.3.0 |
 | net-gateway-api | knative-v1.20.0 | knative-v1.20.0 |
 | Envoy Gateway | v1.6.0 | v1.6.0 |
+| OpenTelemetry Operator | v0.140.0 | v0.140.0 |
+| cert-manager | v1.16.2 | v1.16.2 |
 | Dapr | 1.14.0 | 1.14.0 |
 
 ## Installation Order
@@ -271,6 +276,8 @@ The Helm chart uses hooks to ensure proper installation ordering:
    - Knative Eventing Core
    - net-gateway-api
    - Envoy Gateway
+   - cert-manager (required for OpenTelemetry Operator)
+   - OpenTelemetry Operator
    - Dapr (via dependency)
    - Local Registry
    - Tekton ClusterTasks

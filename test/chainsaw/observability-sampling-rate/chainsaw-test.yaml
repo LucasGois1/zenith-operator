@@ -1,0 +1,100 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: observability-sampling-rate-test
+spec:
+  description: |
+    Test Function with custom sampling rate and verify that:
+    1. OTEL environment variables are injected with custom sampling rate
+    2. OTEL_TRACES_SAMPLER is set to "traceidratio"
+    3. OTEL_TRACES_SAMPLER_ARG is set to the custom value
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR with custom sampling rate
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build-completion
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-sampling
+              
+              echo "==> Finding PipelineRun for $FN_NAME..."
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              
+              echo "==> Waiting for PipelineRun to complete..."
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              echo "✓ PipelineRun completed successfully"
+    
+    - name: verify-sampling-rate-env-vars
+      description: Verify that sampling rate environment variables are correctly set
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-sampling
+              
+              echo "==> Checking sampling rate environment variables in Knative Service..."
+              
+              # Get the sampling rate env vars
+              OTEL_SAMPLER=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OTEL_TRACES_SAMPLER")].value}')
+              OTEL_SAMPLER_ARG=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OTEL_TRACES_SAMPLER_ARG")].value}')
+              
+              echo "OTEL_TRACES_SAMPLER: $OTEL_SAMPLER"
+              echo "OTEL_TRACES_SAMPLER_ARG: $OTEL_SAMPLER_ARG"
+              
+              # Verify values
+              [ "$OTEL_SAMPLER" = "traceidratio" ] || { echo "ERROR: OTEL_TRACES_SAMPLER should be 'traceidratio'"; exit 1; }
+              [ "$OTEL_SAMPLER_ARG" = "0.5" ] || { echo "ERROR: OTEL_TRACES_SAMPLER_ARG should be '0.5'"; exit 1; }
+              
+              echo "✓ Sampling rate environment variables are correctly set"
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-sampling

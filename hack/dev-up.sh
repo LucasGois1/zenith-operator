@@ -385,6 +385,175 @@ if ! kubectl get configmap config-gateway -n knative-serving -o yaml | grep -q "
   fi
 fi
 
+if ! kubectl get namespace cert-manager 2>/dev/null; then
+  echo "📦 Instalando cert-manager (prerequisite for OpenTelemetry Operator)..."
+  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+  
+  echo "⏳ Aguardando cert-manager ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=cert-manager -n cert-manager 2>/dev/null | grep -q cert-manager; then
+      break
+    fi
+    sleep 2
+  done
+  kubectl wait --for=condition=ready pod -l app=cert-manager -n cert-manager --timeout=300s
+  kubectl wait --for=condition=ready pod -l app=webhook -n cert-manager --timeout=300s
+  kubectl wait --for=condition=ready pod -l app=cainjector -n cert-manager --timeout=300s
+else
+  echo "✅ cert-manager já instalado"
+fi
+
+if ! kubectl get namespace opentelemetry-operator-system 2>/dev/null; then
+  echo "📦 Instalando OpenTelemetry Operator..."
+  
+  # Add OpenTelemetry Helm repository
+  helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts 2>/dev/null || true
+  helm repo update
+  
+  # Install OpenTelemetry Operator
+  helm install opentelemetry-operator open-telemetry/opentelemetry-operator \
+    --namespace opentelemetry-operator-system \
+    --create-namespace \
+    --version 0.99.2 \
+    --set "manager.collectorImage.repository=otel/opentelemetry-collector-k8s" \
+    --wait --timeout=300s
+  
+  echo "⏳ Aguardando OpenTelemetry Operator ficar pronto..."
+  kubectl wait --for=condition=available --timeout=300s deployment/opentelemetry-operator -n opentelemetry-operator-system
+  
+  echo "📦 Criando namespace observability para Jaeger..."
+  kubectl create namespace observability 2>/dev/null || true
+  
+  echo "📦 Instalando Jaeger all-in-one..."
+  cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: observability
+  labels:
+    app: jaeger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+    spec:
+      containers:
+      - name: jaeger
+        image: jaegertracing/all-in-one:latest
+        env:
+        - name: COLLECTOR_OTLP_ENABLED
+          value: "true"
+        ports:
+        - containerPort: 16686
+          name: ui
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 14250
+          name: model-proto
+        resources:
+          limits:
+            memory: 512Mi
+          requests:
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: observability
+  labels:
+    app: jaeger
+spec:
+  type: ClusterIP
+  ports:
+  - port: 16686
+    targetPort: ui
+    name: ui
+  - port: 4317
+    targetPort: otlp-grpc
+    name: otlp-grpc
+  - port: 4318
+    targetPort: otlp-http
+    name: otlp-http
+  - port: 14250
+    targetPort: model-proto
+    name: model-proto
+  selector:
+    app: jaeger
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-ui
+  namespace: observability
+  labels:
+    app: jaeger
+spec:
+  type: NodePort
+  ports:
+  - port: 16686
+    targetPort: ui
+    nodePort: 30686
+    name: ui
+  selector:
+    app: jaeger
+EOF
+  
+  echo "⏳ Aguardando Jaeger ficar pronto..."
+  kubectl wait --for=condition=available --timeout=300s deployment/jaeger -n observability
+  
+  echo "📦 Criando OpenTelemetry Collector com exporters para debug e Jaeger..."
+  cat <<EOF | kubectl apply -f -
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-collector
+  namespace: opentelemetry-operator-system
+spec:
+  mode: deployment
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch: {}
+    exporters:
+      debug:
+        verbosity: detailed
+      otlp/jaeger:
+        endpoint: jaeger.observability.svc.cluster.local:4317
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug, otlp/jaeger]
+EOF
+  
+  echo "⏳ Aguardando OpenTelemetry Collector ficar pronto..."
+  sleep 10
+  kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=opentelemetry-collector -n opentelemetry-operator-system --timeout=300s
+  
+  echo "✅ OpenTelemetry Operator, Collector e Jaeger instalados"
+else
+  echo "✅ OpenTelemetry Operator já instalado"
+fi
+
 echo "🔨 Building operator image..."
 make docker-build IMG="${IMG}"
 
@@ -404,6 +573,10 @@ bash hack/verify-github-token.sh
 
 echo ""
 echo "✅ Ambiente pronto!"
+echo ""
+echo "🔍 Jaeger UI (Visualização de Traces):"
+echo "  URL: http://localhost:30686"
+echo "  Acesse para visualizar traces OpenTelemetry em tempo real"
 echo ""
 echo "Comandos úteis:"
 echo "  bash hack/test-single.sh <suite>      # Executar um teste específico"

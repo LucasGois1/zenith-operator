@@ -1,0 +1,48 @@
+{{- if .Values.opentelemetry.enabled }}
+---
+# Global Instrumentation CR for auto-instrumentation
+# This will be referenced by Functions that enable auto-instrumentation
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: zenith-instrumentation
+  namespace: {{ .Values.namespaceOverride | default .Release.Namespace }}
+spec:
+  # OTLP exporter configuration - using HTTP endpoint (port 4318)
+  # Note: gRPC endpoint (4317) requires endpoint without http:// prefix
+  exporter:
+    endpoint: http://otel-collector-collector.opentelemetry-operator-system.svc.cluster.local:4318
+  
+  # Propagators for trace context
+  propagators:
+    - tracecontext
+    - baggage
+  
+  # Sampler configuration - default to 100% sampling
+  sampler:
+    type: parentbased_traceidratio
+    argument: "1.0"
+  
+  # Go auto-instrumentation configuration
+  go:
+    image: ghcr.io/open-telemetry/opentelemetry-go-instrumentation/autoinstrumentation-go:v0.18.0-alpha
+    env:
+      - name: OTEL_GO_AUTO_TARGET_EXE
+        value: /workspace
+  
+  # Java auto-instrumentation configuration
+  java:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:latest
+  
+  # Node.js auto-instrumentation configuration
+  nodejs:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-nodejs:latest
+  
+  # Python auto-instrumentation configuration
+  python:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:latest
+  
+  # .NET auto-instrumentation configuration
+  dotnet:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-dotnet:latest
+{{- end }}
