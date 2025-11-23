@@ -1,4 +1,4 @@
-{{- if .Values.opentelemetry.enabled }}
+{{- if and .Values.opentelemetry.enabled .Values.opentelemetry.jaeger.enabled }}
 ---
 # Jaeger all-in-one deployment for development/testing
 # Provides a simple UI to visualize OpenTelemetry traces
