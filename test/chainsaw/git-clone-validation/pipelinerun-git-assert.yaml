@@ -23,9 +23,13 @@ spec:
           name: buildpacks-phases
         params:
           - name: APP_IMAGE
-            value: ttl.sh/zenith-test-function-git:1h
+            value: registry.registry.svc.cluster.local:5000/zenith-test/git-clone-validation:latest
           - name: CNB_BUILDER_IMAGE
             value: paketobuildpacks/builder-jammy-base:latest
+          - name: CNB_PROCESS_TYPE
+            value: ""
+          - name: CNB_INSECURE_REGISTRIES
+            value: registry.registry.svc.cluster.local:5000
         runAfter:
           - fetch-source
         workspaces:
