@@ -420,7 +420,7 @@ if ! kubectl get namespace opentelemetry-operator-system 2>/dev/null; then
     --wait --timeout=300s
   
   echo "⏳ Aguardando OpenTelemetry Operator ficar pronto..."
-  kubectl wait --for=condition=available --timeout=300s deployment/opentelemetry-operator-controller-manager -n opentelemetry-operator-system
+  kubectl wait --for=condition=available --timeout=300s deployment/opentelemetry-operator -n opentelemetry-operator-system
   
   echo "📦 Criando OpenTelemetry Collector..."
   cat <<EOF | kubectl apply -f -
