@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zenith Operator | Serverless Functions on Kubernetes</title>
+    <link rel="stylesheet" href="assets/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .docs-cta {
+            background: linear-gradient(135deg, rgba(43, 72, 255, 0.1) 0%, rgba(91, 233, 185, 0.1) 100%);
+            border: 2px solid rgba(91, 233, 185, 0.3);
+            border-radius: 16px;
+            padding: 60px 40px;
+            text-align: center;
+            margin: 40px auto;
+            max-width: 800px;
+            transition: all 0.3s ease;
+        }
+        .docs-cta:hover {
+            border-color: rgba(91, 233, 185, 0.6);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(91, 233, 185, 0.2);
+        }
+        .docs-cta h3 {
+            font-size: 2rem;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #2b48ff 0%, #5be9b9 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .docs-cta p {
+            font-size: 1.1rem;
+            color: #9dacbe;
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+        .docs-cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #2b48ff 0%, #5be9b9 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(43, 72, 255, 0.3);
+        }
+        .docs-cta-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(43, 72, 255, 0.5);
+        }
+        .docs-cta-btn i {
+            font-size: 1.2rem;
+        }
+        .docs-features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 24px;
+            margin-top: 40px;
+        }
+        .docs-feature-item {
+            text-align: center;
+            padding: 20px;
+        }
+        .docs-feature-item i {
+            font-size: 2rem;
+            color: #5be9b9;
+            margin-bottom: 12px;
+        }
+        .docs-feature-item h4 {
+            font-size: 1rem;
+            color: #f4f7ff;
+            margin-bottom: 8px;
+        }
+        .docs-feature-item p {
+            font-size: 0.9rem;
+            color: #9dacbe;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="#" class="logo">
+                <span class="logo-icon"><i class="fa-solid fa-rocket"></i></span>
+                Zenith Operator
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How it Works</a>
+                <a href="#docs">Docs</a>
+                <a href="https://github.com/LucasGois1/zenith-operator" target="_blank" class="btn btn-secondary"><i class="fa-brands fa-github"></i> GitHub</a>
+            </div>
+            <div class="mobile-menu-btn">
+                <i class="fa-solid fa-bars"></i>
+            </div>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1>Serverless on Kubernetes <br><span class="gradient-text">Made Simple</span></h1>
+                <p class="hero-subtitle">
+                    Orchestrate builds, deployments, and event-driven invocations with a single Custom Resource. 
+                    Abstract the complexity of Tekton, Knative, and Dapr.
+                </p>
+                <div class="hero-btns">
+                    <a href="https://zenith-16.gitbook.io/zenith-docs/" target="_blank" class="btn btn-primary">Get Started</a>
+                    <a href="#how-it-works" class="btn btn-outline">Learn More</a>
+                </div>
+            </div>
+            <div class="hero-image">
+                <div class="code-window">
+                    <div class="window-header">
+                        <span class="dot red"></span>
+                        <span class="dot yellow"></span>
+                        <span class="dot green"></span>
+                        <span class="window-title">function.yaml</span>
+                    </div>
+                    <div class="window-body">
+<pre><code class="language-yaml"><span class="keyword">apiVersion:</span> functions.zenith.com/v1alpha1
+<span class="keyword">kind:</span> Function
+<span class="keyword">metadata:</span>
+  <span class="keyword">name:</span> payment-processor
+<span class="keyword">spec:</span>
+  <span class="keyword">gitRepo:</span> https://github.com/org/payments
+  <span class="keyword">build:</span>
+    <span class="keyword">image:</span> registry.io/payments:v1
+  <span class="keyword">deploy:</span>
+    <span class="keyword">dapr:</span>
+      <span class="keyword">enabled:</span> true
+      <span class="keyword">appID:</span> payment-service
+  <span class="keyword">eventing:</span>
+    <span class="keyword">broker:</span> default
+    <span class="keyword">filters:</span>
+      <span class="keyword">type:</span> order.created</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="hero-bg-glow"></div>
+    </header>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">Why <span class="gradient-text">Zenith?</span></h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="icon-box"><i class="fa-solid fa-hammer"></i></div>
+                    <h3>Automated Builds</h3>
+                    <p>Tekton Pipelines integrated with Cloud Native Buildpacks. Source to image without a Dockerfile.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon-box"><i class="fa-solid fa-server"></i></div>
+                    <h3>Serverless Deployment</h3>
+                    <p>Knative Serving under the hood. Auto-scaling, scale-to-zero, and traffic splitting out of the box.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon-box"><i class="fa-solid fa-bolt"></i></div>
+                    <h3>Event Driven</h3>
+                    <p>Native Knative Eventing support. Subscribe to brokers and filter events with simple YAML config.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon-box"><i class="fa-solid fa-network-wired"></i></div>
+                    <h3>Dapr Integration</h3>
+                    <p>First-class support for Dapr sidecars. Enable service mesh capabilities with a single boolean flag.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon-box"><i class="fa-brands fa-git-alt"></i></div>
+                    <h3>GitOps Ready</h3>
+                    <p>Everything is declarative. Manage your serverless functions using standard Kubernetes manifests.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon-box"><i class="fa-solid fa-shield-halved"></i></div>
+                    <h3>Secure by Design</h3>
+                    <p>Secret-based authentication for Git and Registries. Non-root containers by default.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="how-it-works" class="how-it-works">
+        <div class="container">
+            <h2 class="section-title">How it <span class="gradient-text">Works</span></h2>
+            <div class="diagram-container">
+                <svg viewBox="0 0 850 400" class="arch-svg">
+                    <defs>
+                        <!-- Gradients -->
+                        <linearGradient id="strokeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#2b48ff;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#5be9b9;stop-opacity:1" />
+                        </linearGradient>
+                        <linearGradient id="boxGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:rgba(11, 21, 36, 0.9);stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:rgba(5, 7, 12, 0.95);stop-opacity:1" />
+                        </linearGradient>
+                        
+                        <!-- Filters -->
+                        <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
+                            <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0" result="glowColor" />
+                            <feComposite in="SourceGraphic" in2="glowColor" operator="over" />
+                        </filter>
+                        
+                        <!-- Marker -->
+                        <marker id="arrow-head" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#5be9b9" />
+                        </marker>
+                    </defs>
+                    
+                    <style>
+                        .arch-bg { fill: url(#boxGrad); stroke: url(#strokeGrad); stroke-width: 1.5; rx: 8; }
+                        .arch-text { fill: #f4f7ff; font-family: 'Space Grotesk', sans-serif; font-size: 13px; text-anchor: middle; font-weight: 500; }
+                        .arch-sub { fill: #9dacbe; font-family: 'Space Grotesk', sans-serif; font-size: 11px; text-anchor: middle; }
+                        .arch-icon { fill: #5be9b9; }
+                        .arch-arrow { stroke: url(#strokeGrad); stroke-width: 2; fill: none; marker-end: url(#arrow-head); }
+                    </style>
+                    
+                    <!-- Developer -->
+                    <rect class="arch-bg" x="20" y="150" width="140" height="100" />
+                    <text class="arch-text" x="90" y="185"><tspan>👨‍💻</tspan></text>
+                    <text class="arch-text" x="90" y="210">Developer</text>
+                    <text class="arch-sub" x="90" y="230">kubectl apply</text>
+                    
+                    <!-- Arrow 1 -->
+                    <path class="arch-arrow" d="M 160 200 L 230 200" />
+                    
+                    <!-- Zenith Operator -->
+                    <rect class="arch-bg" x="230" y="150" width="140" height="100" />
+                    <text class="arch-text" x="300" y="185"><tspan>🚀</tspan></text>
+                    <text class="arch-text" x="300" y="210">Zenith</text>
+                    <text class="arch-sub" x="300" y="230">Operator</text>
+                    
+                    <!-- Arrow 2 (to Tekton) -->
+                    <path class="arch-arrow" d="M 300 150 L 300 80 L 510 80" />
+                    
+                    <!-- Arrow 3 (to Knative) -->
+                    <path class="arch-arrow" d="M 370 200 L 510 200" />
+                    
+                    <!-- Arrow 4 (to Dapr) -->
+                    <path class="arch-arrow" d="M 300 250 L 300 320 L 510 320" />
+                    
+                    <!-- Tekton -->
+                    <rect class="arch-bg" x="510" y="30" width="140" height="100" />
+                    <text class="arch-text" x="580" y="65"><tspan>🔨</tspan></text>
+                    <text class="arch-text" x="580" y="90">Tekton</text>
+                    <text class="arch-sub" x="580" y="110">Build Pipeline</text>
+                    
+                    <!-- Knative -->
+                    <rect class="arch-bg" x="510" y="150" width="140" height="100" />
+                    <text class="arch-text" x="580" y="185"><tspan>⚡</tspan></text>
+                    <text class="arch-text" x="580" y="210">Knative</text>
+                    <text class="arch-sub" x="580" y="230">Serving + Events</text>
+                    
+                    <!-- Dapr -->
+                    <rect class="arch-bg" x="510" y="270" width="140" height="100" />
+                    <text class="arch-text" x="580" y="305"><tspan>🔗</tspan></text>
+                    <text class="arch-text" x="580" y="330">Dapr</text>
+                    <text class="arch-sub" x="580" y="350">Service Mesh</text>
+                    
+                    <!-- Arrow 5 (Tekton to Function) -->
+                    <path class="arch-arrow" d="M 650 80 L 720 80 L 720 200 L 690 200" />
+                    
+                    <!-- Function -->
+                    <rect class="arch-bg" x="690" y="150" width="140" height="100" />
+                    <text class="arch-text" x="760" y="185"><tspan>📦</tspan></text>
+                    <text class="arch-text" x="760" y="210">Function</text>
+                    <text class="arch-sub" x="760" y="230">Running</text>
+                </svg>
+            </div>
+            <div class="steps-container">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Define</h3>
+                    <p>Create a Function CR with your Git repo and build config</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Build</h3>
+                    <p>Tekton clones your code and builds a container image</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Deploy</h3>
+                    <p>Knative deploys your function with auto-scaling</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>Invoke</h3>
+                    <p>Access via HTTP or subscribe to events</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="docs" class="documentation">
+        <div class="container">
+            <h2 class="section-title">Documentation</h2>
+            
+            <div class="docs-cta">
+                <h3>📚 Complete Documentation on GitBook</h3>
+                <p>
+                    Explore our comprehensive documentation with guides, tutorials, API references, and more. 
+                    Everything you need to get started with Zenith Operator is available on GitBook.
+                </p>
+                <a href="https://zenith-16.gitbook.io/zenith-docs/" target="_blank" class="docs-cta-btn">
+                    <i class="fa-solid fa-book-open"></i>
+                    View Documentation
+                    <i class="fa-solid fa-arrow-right"></i>
+                </a>
+                
+                <div class="docs-features">
+                    <div class="docs-feature-item">
+                        <i class="fa-solid fa-rocket"></i>
+                        <h4>Quick Start</h4>
+                        <p>Get up and running in 5 minutes</p>
+                    </div>
+                    <div class="docs-feature-item">
+                        <i class="fa-solid fa-book"></i>
+                        <h4>Guides</h4>
+                        <p>Step-by-step tutorials</p>
+                    </div>
+                    <div class="docs-feature-item">
+                        <i class="fa-solid fa-code"></i>
+                        <h4>API Reference</h4>
+                        <p>Complete CRD specification</p>
+                    </div>
+                    <div class="docs-feature-item">
+                        <i class="fa-solid fa-wrench"></i>
+                        <h4>Operations</h4>
+                        <p>Production deployment guides</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Zenith Operator. Built with <i class="fa-solid fa-heart"></i> for the Kubernetes Community.</p>
+            <div class="social-links">
+                <a href="https://github.com/LucasGois1/zenith-operator" target="_blank"><i class="fa-brands fa-github"></i></a>
+                <a href="#"><i class="fa-brands fa-twitter"></i></a>
+                <a href="#"><i class="fa-brands fa-slack"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>
