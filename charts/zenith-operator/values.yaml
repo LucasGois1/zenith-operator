@@ -57,6 +57,8 @@ opentelemetry:
   enabled: true
   version: "v0.140.0"
   repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+  jaeger:
+    enabled: true  # Enable Jaeger for trace visualization (recommended for development)
 
 registry:
   enabled: false

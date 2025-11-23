@@ -138,12 +138,18 @@ spec:
               exporters:
                 debug:
                   verbosity: detailed
+                {{- if .Values.opentelemetry.jaeger.enabled }}
+                otlp/jaeger:
+                  endpoint: jaeger.observability.svc.cluster.local:4317
+                  tls:
+                    insecure: true
+                {{- end }}
               service:
                 pipelines:
                   traces:
                     receivers: [otlp]
                     processors: [memory_limiter, batch]
-                    exporters: [debug]
+                    exporters: [debug{{- if .Values.opentelemetry.jaeger.enabled }}, otlp/jaeger{{- end }}]
           EOF
           
           echo "✓ Default OpenTelemetry Collector created"
