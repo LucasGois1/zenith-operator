@@ -604,11 +604,12 @@ curl -v "$FUNCTION_URL" \
 ## Exemplos Completos
 
 Veja exemplos completos:
-- [test/chainsaw/eventing-trigger/](../test/chainsaw/eventing-trigger/) - Teste E2E de eventing
-- [config/samples/](../config/samples/) - Exemplos de Function CRs
+- [test/chainsaw/eventing-trigger/](https://github.com/LucasGois1/zenith-operator/tree/main/test/chainsaw/eventing-trigger) - Teste E2E de eventing
+- [config/samples/](https://github.com/LucasGois1/zenith-operator/tree/main/config/samples) - Exemplos de Function CRs
 
 ## Próximos Passos
 
-- [Criando Funções HTTP Síncronas](CREATING_HTTP_FUNCTIONS.md)
-- [Comunicação entre Funções](INTER_FUNCTION_COMMUNICATION.md)
-- [Referência Completa do Operator](OPERATOR_REFERENCE.md)
+- [Criando Funções HTTP Síncronas](funcoes-http.md)
+- [Comunicação entre Funções](comunicacao-funcoes.md)
+- [Especificação do CRD Function](../04-referencia/function-crd.md)
+- [Referência do Operator](../04-referencia/operator-reference.md)

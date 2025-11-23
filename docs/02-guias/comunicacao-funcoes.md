@@ -683,10 +683,11 @@ kubectl run dnsutils --image=gcr.io/kubernetes-e2e-test-images/dnsutils:1.3 --rm
 ## Exemplos Completos
 
 Veja o exemplo completo de integração financeira:
-- [test/chainsaw/financial-integration/](../test/chainsaw/financial-integration/) - Teste E2E completo
+- [test/chainsaw/financial-integration/](https://github.com/LucasGois1/zenith-operator/tree/main/test/chainsaw/financial-integration) - Teste E2E completo
 
 ## Próximos Passos
 
-- [Criando Funções HTTP Síncronas](CREATING_HTTP_FUNCTIONS.md)
-- [Criando Funções Assíncronas com Eventos](CREATING_EVENT_FUNCTIONS.md)
-- [Referência Completa do Operator](OPERATOR_REFERENCE.md)
+- [Criando Funções HTTP Síncronas](funcoes-http.md)
+- [Criando Funções Assíncronas com Eventos](funcoes-eventos.md)
+- [Especificação do CRD Function](../04-referencia/function-crd.md)
+- [Referência do Operator](../04-referencia/operator-reference.md)

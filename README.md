@@ -6,224 +6,101 @@
 
 Zenith Operator é um operador Kubernetes que fornece uma plataforma serverless para funções, orquestrando builds (Tekton Pipelines), deployments (Knative Serving) e invocações orientadas a eventos (Knative Eventing) através de um único Custom Resource `Function`.
 
-## 🚀 Visão Geral
-
-O Zenith Operator abstrai a complexidade de integrar Tekton, Knative e Dapr, permitindo que desenvolvedores definam funções serverless de forma declarativa usando apenas um Custom Resource.
-
-### Principais Características
-
-- **Build Automático**: Clona repositórios Git e constrói imagens de container usando Tekton Pipelines e Buildpacks
-- **Serverless Deployment**: Deploy automático como Knative Services com scale-to-zero
-- **Event-Driven**: Subscrição a eventos via Knative Eventing com filtros baseados em atributos
-- **Service Mesh**: Integração opcional com Dapr para service discovery, pub/sub e state management
-- **Comunicação entre Funções**: Suporte nativo para comunicação HTTP entre funções
-- **Distributed Tracing**: Rastreamento distribuído automático via OpenTelemetry para visualizar fluxos de requisições
-- **Imagens Imutáveis**: Rastreamento de image digests para reprodutibilidade e segurança
-
-## 📚 Documentação
-
-### Guias de Uso
-
-- **[Criando Funções HTTP Síncronas](docs/CREATING_HTTP_FUNCTIONS.md)** - Como criar funções que respondem a requisições HTTP
-- **[Criando Funções Assíncronas com Eventos](docs/CREATING_EVENT_FUNCTIONS.md)** - Como criar funções que processam eventos assíncronos
-- **[Comunicação entre Funções](docs/INTER_FUNCTION_COMMUNICATION.md)** - Como implementar comunicação entre múltiplas funções
-- **[Observabilidade e Distributed Tracing](docs/OBSERVABILITY.md)** - Como usar OpenTelemetry para rastrear requisições entre funções
-
-### Referência Técnica
-
-- **[Referência Completa do Operator](docs/OPERATOR_REFERENCE.md)** - Documentação completa de todas as features, parâmetros e funcionalidades
-- **[Configuração de Autenticação Git](docs/GIT_AUTHENTICATION.md)** - Como configurar autenticação para repositórios Git privados
-- **[Configuração de Registry](docs/REGISTRY_CONFIGURATION.md)** - Como configurar registries de container
-
-## 🎯 Casos de Uso
-
-### 1. Funções HTTP Síncronas
-
-Funções que respondem a requisições HTTP síncronas, ideais para APIs REST, webhooks e microserviços.
+## 🚀 Início Rápido
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
 kind: Function
 metadata:
-  name: hello-api
+  name: hello-function
 spec:
   gitRepo: https://github.com/myorg/hello-function
   gitRevision: main
   build:
-    image: registry.example.com/hello-api:latest
+    image: registry.example.com/hello-function:latest
   deploy: {}
 ```
 
-### 2. Funções Assíncronas com Eventos
+## 📖 Documentação
 
-Funções que processam eventos de forma assíncrona, ideais para processamento de dados, notificações e workflows event-driven.
+**[Acesse a documentação completa →](docs/)**
 
-```yaml
-apiVersion: functions.zenith.com/v1alpha1
-kind: Function
-metadata:
-  name: order-processor
-spec:
-  gitRepo: https://github.com/myorg/order-processor
-  gitRevision: main
-  build:
-    image: registry.example.com/order-processor:latest
-  deploy: {}
-  eventing:
-    broker: default
-    filters:
-      type: com.example.order.created
-      source: payment-service
-```
+- **[Introdução](docs/01-introducao/)** - Visão geral, instalação e início rápido
+- **[Guias](docs/02-guias/)** - Tutoriais práticos para criar funções
+- **[Conceitos](docs/03-conceitos/)** - Arquitetura e conceitos fundamentais
+- **[Referência](docs/04-referencia/)** - Especificação completa da API
+- **[Operações](docs/05-operacoes/)** - Configuração e gerenciamento
 
-### 3. Comunicação entre Funções
+## ✨ Principais Características
 
-Múltiplas funções que se comunicam via HTTP, ideais para arquiteturas de microserviços e sistemas distribuídos.
-
-```yaml
-# transaction-processor chama balance-manager que chama audit-logger
-apiVersion: functions.zenith.com/v1alpha1
-kind: Function
-metadata:
-  name: transaction-processor
-spec:
-  gitRepo: https://github.com/myorg/transaction-processor
-  gitRevision: main
-  build:
-    image: registry.example.com/transaction-processor:latest
-  deploy:
-    env:
-      - name: BALANCE_MANAGER_URL
-        value: http://balance-manager.default.svc.cluster.local
-```
+- **Build Automático**: Clona repositórios Git e constrói imagens usando Tekton Pipelines e Buildpacks
+- **Serverless Deployment**: Deploy automático como Knative Services com scale-to-zero
+- **Event-Driven**: Subscrição a eventos via Knative Eventing com filtros
+- **Service Mesh**: Integração opcional com Dapr para service discovery e pub/sub
+- **Distributed Tracing**: Rastreamento automático via OpenTelemetry
+- **Imagens Imutáveis**: Rastreamento de image digests para reprodutibilidade
 
 ## 🛠️ Instalação
 
-### Pré-requisitos
-
-- Kubernetes 1.33.0+
-- Tekton Pipelines v0.50+
-- Knative Serving v1.20+
-- Knative Eventing v1.20+ (opcional, para event-driven functions)
-- Envoy Gateway v1.6+ (para ingress)
-
-### Instalação via Helm
+### Via Helm
 
 ```bash
-# Adicionar o repositório Helm
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
-
-# Instalar o operator
 helm install zenith-operator zenith/zenith-operator \
   --namespace zenith-operator-system \
   --create-namespace
 ```
 
-### Instalação via Kustomize
+### Via Kustomize
 
 ```bash
-# Instalar CRDs
-make install
-
-# Deploy do operator
+make install  # Instalar CRDs
 make deploy IMG=ghcr.io/lucasgois1/zenith-operator:latest
 ```
 
-## 🚦 Quick Start
+**[Guia completo de instalação →](docs/01-introducao/instalacao.md)**
 
-1. **Criar um Secret para autenticação Git** (se usar repositório privado):
+## 🎯 Casos de Uso
 
-```bash
-kubectl create secret generic github-auth \
-  --from-literal=username=myuser \
-  --from-literal=password=mytoken \
-  --type=kubernetes.io/basic-auth
+### Funções HTTP Síncronas
+APIs REST, webhooks e microserviços que respondem a requisições HTTP.
 
-kubectl annotate secret github-auth \
-  tekton.dev/git-0=https://github.com
-```
+**[Ver guia →](docs/02-guias/funcoes-http.md)**
 
-2. **Criar sua primeira função**:
+### Funções Assíncronas com Eventos
+Processamento de eventos, notificações e workflows event-driven.
 
-```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: functions.zenith.com/v1alpha1
-kind: Function
-metadata:
-  name: my-first-function
-spec:
-  gitRepo: https://github.com/LucasGois1/zenith-test-functions
-  gitRevision: main
-  gitAuthSecretName: github-auth
-  build:
-    image: registry.example.com/my-first-function:latest
-  deploy: {}
-EOF
-```
+**[Ver guia →](docs/02-guias/funcoes-eventos.md)**
 
-3. **Verificar o status**:
+### Comunicação entre Funções
+Arquiteturas de microserviços com múltiplas funções se comunicando.
 
-```bash
-kubectl get functions
-kubectl describe function my-first-function
-```
-
-4. **Acessar a função**:
-
-```bash
-# Obter a URL da função
-FUNCTION_URL=$(kubectl get function my-first-function -o jsonpath='{.status.url}')
-echo "Function URL: $FUNCTION_URL"
-
-# Fazer uma requisição
-curl $FUNCTION_URL
-```
+**[Ver guia →](docs/02-guias/comunicacao-funcoes.md)**
 
 ## 🧪 Desenvolvimento
 
-### Executar testes localmente
-
 ```bash
-# Testes unitários
-make test
-
-# Testes E2E
-make test-e2e
-
-# Testes Chainsaw específicos
-make test-chainsaw-basic        # Teste básico de função
-make test-chainsaw-eventing     # Teste de eventing
-make test-chainsaw-integration  # Teste de integração entre funções
-```
-
-### Desenvolvimento local
-
-```bash
-# Setup do ambiente de desenvolvimento
+# Setup completo do ambiente
 make dev-up
 
 # Rebuild e redeploy rápido
 make dev-redeploy
 
-# Limpar ambiente
-make dev-down
+# Executar testes
+make test
+make test-chainsaw
 ```
-
-## 📖 Exemplos
-
-Veja o diretório [config/samples/](config/samples/) para exemplos completos de Functions.
-
-## 🤝 Contribuindo
-
-Contribuições são bem-vindas! Por favor, abra issues e pull requests no GitHub.
 
 ## 📄 Licença
 
-Este projeto está licenciado sob a Apache License 2.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
+Apache License 2.0 - veja [LICENSE](LICENSE) para detalhes.
 
-## 🔗 Links Úteis
+## 🤝 Contribuindo
 
-- [Documentação Completa](docs/)
+Contribuições são bem-vindas! Abra issues e pull requests no GitHub.
+
+## 🔗 Links
+
+- [Documentação](docs/)
 - [Exemplos](config/samples/)
-- [Testes Chainsaw](test/chainsaw/)
 - [Issues](https://github.com/LucasGois1/zenith-operator/issues)
