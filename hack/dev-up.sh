@@ -385,6 +385,82 @@ if ! kubectl get configmap config-gateway -n knative-serving -o yaml | grep -q "
   fi
 fi
 
+if ! kubectl get namespace cert-manager 2>/dev/null; then
+  echo "📦 Instalando cert-manager (prerequisite for OpenTelemetry Operator)..."
+  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+  
+  echo "⏳ Aguardando cert-manager ficar pronto..."
+  # Wait for pods to be created before waiting for them to be ready
+  for i in {1..30}; do
+    if kubectl get pod -l app=cert-manager -n cert-manager 2>/dev/null | grep -q cert-manager; then
+      break
+    fi
+    sleep 2
+  done
+  kubectl wait --for=condition=ready pod -l app=cert-manager -n cert-manager --timeout=300s
+  kubectl wait --for=condition=ready pod -l app=webhook -n cert-manager --timeout=300s
+  kubectl wait --for=condition=ready pod -l app=cainjector -n cert-manager --timeout=300s
+else
+  echo "✅ cert-manager já instalado"
+fi
+
+if ! kubectl get namespace opentelemetry-operator-system 2>/dev/null; then
+  echo "📦 Instalando OpenTelemetry Operator..."
+  
+  # Add OpenTelemetry Helm repository
+  helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts 2>/dev/null || true
+  helm repo update
+  
+  # Install OpenTelemetry Operator
+  helm install opentelemetry-operator open-telemetry/opentelemetry-operator \
+    --namespace opentelemetry-operator-system \
+    --create-namespace \
+    --version 0.140.0 \
+    --set "manager.collectorImage.repository=otel/opentelemetry-collector-k8s" \
+    --wait --timeout=300s
+  
+  echo "⏳ Aguardando OpenTelemetry Operator ficar pronto..."
+  kubectl wait --for=condition=available --timeout=300s deployment/opentelemetry-operator-controller-manager -n opentelemetry-operator-system
+  
+  echo "📦 Criando OpenTelemetry Collector..."
+  cat <<EOF | kubectl apply -f -
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-collector
+  namespace: opentelemetry-operator-system
+spec:
+  mode: deployment
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch: {}
+    exporters:
+      debug:
+        verbosity: detailed
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+EOF
+  
+  echo "⏳ Aguardando OpenTelemetry Collector ficar pronto..."
+  sleep 10
+  kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=opentelemetry-collector -n opentelemetry-operator-system --timeout=300s
+  
+  echo "✅ OpenTelemetry Operator e Collector instalados"
+else
+  echo "✅ OpenTelemetry Operator já instalado"
+fi
+
 echo "🔨 Building operator image..."
 make docker-build IMG="${IMG}"
 

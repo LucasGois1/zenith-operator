@@ -1,0 +1,19 @@
+{{- if and .Values.dapr.enabled .Values.opentelemetry.enabled }}
+---
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: tracing-config
+  namespace: {{ .Values.namespaceOverride | default .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: dapr-tracing-config
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  tracing:
+    samplingRate: "1"
+    otel:
+      endpointAddress: "otel-collector.opentelemetry-operator-system.svc.cluster.local:4317"
+      isSecure: false
+      protocol: grpc
+{{- end }}

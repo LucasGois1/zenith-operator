@@ -1,0 +1,175 @@
+{{- if and .Values.installStack .Values.opentelemetry.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opentelemetry-operator-system
+  labels:
+    app.kubernetes.io/name: opentelemetry-operator
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+---
+# cert-manager is required for OpenTelemetry Operator
+# Installing cert-manager first
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opentelemetry-operator-installer
+  namespace: opentelemetry-operator-system
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opentelemetry-operator-installer
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opentelemetry-operator-installer
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opentelemetry-operator-installer
+subjects:
+- kind: ServiceAccount
+  name: opentelemetry-operator-installer
+  namespace: opentelemetry-operator-system
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opentelemetry-operator-installer-{{ .Release.Revision }}
+  namespace: opentelemetry-operator-system
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "6"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/name: opentelemetry-operator-installer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opentelemetry-operator-installer
+    spec:
+      serviceAccountName: opentelemetry-operator-installer
+      restartPolicy: OnFailure
+      containers:
+      - name: installer
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          echo "Installing cert-manager (required for OpenTelemetry Operator)..."
+          
+          # Check if cert-manager is already installed
+          if ! kubectl get namespace cert-manager 2>/dev/null; then
+            echo "Installing cert-manager v1.16.2..."
+            kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+            
+            echo "Waiting for cert-manager to be ready..."
+            kubectl wait --for=condition=available --timeout=300s deployment/cert-manager -n cert-manager || true
+            kubectl wait --for=condition=available --timeout=300s deployment/cert-manager-webhook -n cert-manager || true
+            kubectl wait --for=condition=available --timeout=300s deployment/cert-manager-cainjector -n cert-manager || true
+            
+            echo "✓ cert-manager installed and ready"
+          else
+            echo "✓ cert-manager already installed"
+          fi
+          
+          echo "Installing OpenTelemetry Operator {{ .Values.opentelemetry.version }}..."
+          
+          kubectl apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/download/{{ .Values.opentelemetry.version }}/opentelemetry-operator.yaml
+          
+          echo "✓ OpenTelemetry Operator installed"
+          
+          echo "Waiting for OpenTelemetry Operator to be ready..."
+          kubectl wait --for=condition=available --timeout=300s deployment/opentelemetry-operator-controller-manager -n opentelemetry-operator-system || true
+          
+          echo "✓ OpenTelemetry Operator is ready"
+          
+          echo "Creating default OpenTelemetry Collector for tracing..."
+          
+          cat <<EOF | kubectl apply -f -
+          apiVersion: opentelemetry.io/v1beta1
+          kind: OpenTelemetryCollector
+          metadata:
+            name: otel-collector
+            namespace: opentelemetry-operator-system
+          spec:
+            mode: deployment
+            config:
+              receivers:
+                otlp:
+                  protocols:
+                    grpc:
+                      endpoint: 0.0.0.0:4317
+                    http:
+                      endpoint: 0.0.0.0:4318
+              processors:
+                memory_limiter:
+                  check_interval: 1s
+                  limit_percentage: 75
+                  spike_limit_percentage: 15
+                batch: {}
+              exporters:
+                debug:
+                  verbosity: detailed
+              service:
+                pipelines:
+                  traces:
+                    receivers: [otlp]
+                    processors: [memory_limiter, batch]
+                    exporters: [debug]
+          EOF
+          
+          echo "✓ Default OpenTelemetry Collector created"
+          
+          echo "Creating cluster-wide Service for OTEL Collector..."
+          
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: otel-collector
+            namespace: opentelemetry-operator-system
+          spec:
+            type: ClusterIP
+            selector:
+              app.kubernetes.io/name: otel-collector-collector
+            ports:
+            - name: otlp-grpc
+              port: 4317
+              targetPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              port: 4318
+              targetPort: 4318
+              protocol: TCP
+          EOF
+          
+          echo "✓ OTEL Collector Service created at otel-collector.opentelemetry-operator-system.svc.cluster.local:4317"
+{{- end }}

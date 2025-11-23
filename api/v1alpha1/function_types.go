@@ -50,6 +50,10 @@ type FunctionSpec struct {
 	// Opcional. Configurações de Eventing (Knative Eventing)
 	// +kubebuilder:validation:Optional
 	Eventing EventingSpec `json:"eventing,omitempty"`
+
+	// Opcional. Configurações de Observabilidade (OpenTelemetry)
+	// +kubebuilder:validation:Optional
+	Observability ObservabilitySpec `json:"observability,omitempty"`
 }
 
 // BuildSpec define os parâmetros para o pipeline de build
@@ -108,6 +112,27 @@ type EventingSpec struct {
 	// Opcional. Um mapa de atributos para filtrar eventos.
 	// +kubebuilder:validation:Optional
 	Filters map[string]string `json:"filters,omitempty"`
+}
+
+// ObservabilitySpec define as configurações de observabilidade
+type ObservabilitySpec struct {
+	// Opcional. Configurações de tracing distribuído via OpenTelemetry.
+	// +kubebuilder:validation:Optional
+	Tracing TracingConfig `json:"tracing,omitempty"`
+}
+
+// TracingConfig define as configurações de tracing distribuído
+type TracingConfig struct {
+	// Se verdadeiro, habilita tracing distribuído via OpenTelemetry.
+	// +kubebuilder:validation:Optional
+	Enabled bool `json:"enabled"`
+
+	// Taxa de sampling (0.0 a 1.0). Padrão: usar taxa padrão do OTEL Collector.
+	// Deve ser uma string representando um número decimal entre 0.0 e 1.0.
+	// Exemplos: "0.1", "0.5", "1.0"
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^(0(\.\d+)?|1(\.0+)?)$`
+	SamplingRate *string `json:"samplingRate,omitempty"`
 }
 
 // FunctionStatus defines the observed state of Function.

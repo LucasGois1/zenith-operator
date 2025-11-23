@@ -591,6 +591,113 @@ eventing:
 
 **Note**: Todos os filtros devem corresponder (operação AND).
 
+### observability (Optional)
+
+**Type**: `ObservabilitySpec`
+
+**Description**: Configuração de observabilidade e distributed tracing via OpenTelemetry.
+
+**Note**: Se especificado, o operator injeta variáveis de ambiente OpenTelemetry no container.
+
+#### observability.tracing (Optional)
+
+**Type**: `TracingConfig`
+
+**Description**: Configuração de distributed tracing.
+
+##### observability.tracing.enabled (Required if tracing specified)
+
+**Type**: `boolean`
+
+**Description**: Se `true`, habilita distributed tracing via OpenTelemetry.
+
+**Default**: `false`
+
+**Examples**:
+```yaml
+observability:
+  tracing:
+    enabled: true
+```
+
+**Behavior**:
+- Quando habilitado, o operator injeta automaticamente variáveis de ambiente OpenTelemetry no container
+- Se Dapr também estiver habilitado, o operator configura Dapr para propagar trace context
+
+**Environment Variables Injected**:
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: Endpoint do OpenTelemetry Collector
+- `OTEL_SERVICE_NAME`: Nome da função (usado para identificar o serviço nos traces)
+- `OTEL_RESOURCE_ATTRIBUTES`: Atributos de recurso (namespace, version)
+- `OTEL_TRACES_EXPORTER`: Protocolo de exportação (otlp)
+- `OTEL_TRACES_SAMPLER`: Tipo de sampler (se samplingRate especificado)
+- `OTEL_TRACES_SAMPLER_ARG`: Argumento do sampler (se samplingRate especificado)
+
+##### observability.tracing.samplingRate (Optional)
+
+**Type**: `string`
+
+**Description**: Taxa de amostragem de traces (0.0 a 1.0). Se não especificado, usa a taxa padrão do OpenTelemetry Collector.
+
+**Format**: String representando um número decimal entre 0.0 e 1.0
+
+**Validation**: Deve corresponder ao padrão regex `^(0(\.\d+)?|1(\.0+)?)$`
+
+**Examples**:
+```yaml
+# 100% sampling (captura todos os traces)
+observability:
+  tracing:
+    enabled: true
+    samplingRate: "1.0"
+
+# 50% sampling
+observability:
+  tracing:
+    enabled: true
+    samplingRate: "0.5"
+
+# 10% sampling
+observability:
+  tracing:
+    enabled: true
+    samplingRate: "0.1"
+
+# 1% sampling
+observability:
+  tracing:
+    enabled: true
+    samplingRate: "0.01"
+```
+
+**Recommendations**:
+- **Development**: Use `"1.0"` (100%) para capturar todos os traces
+- **Staging**: Use `"0.5"` a `"1.0"` (50-100%) para funções críticas
+- **Production**: Use `"0.01"` a `"0.1"` (1-10%) para funções de alto tráfego
+
+**Example with Dapr**:
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: payment-processor
+spec:
+  gitRepo: https://github.com/myorg/payment-processor
+  gitRevision: main
+  build:
+    image: registry.example.com/payment-processor:latest
+  deploy:
+    dapr:
+      enabled: true
+      appID: payment-processor
+      appPort: 8080
+  observability:
+    tracing:
+      enabled: true
+      samplingRate: "0.1"
+```
+
+**Note**: Quando Dapr e tracing estão habilitados, o operator adiciona automaticamente a anotação `dapr.io/config: tracing-config` ao pod template.
+
 ## Status Fields
 
 O operator atualiza automaticamente o campo `status` da Function.

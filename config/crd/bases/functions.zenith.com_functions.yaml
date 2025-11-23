@@ -312,6 +312,26 @@ spec:
                   Opcional. A revisão Git (branch, tag, ou hash) a ser usada.
                   Padrão: 'main' se não especificado.
                 type: string
+              observability:
+                description: Opcional. Configurações de Observabilidade (OpenTelemetry)
+                properties:
+                  tracing:
+                    description: Opcional. Configurações de tracing distribuído via
+                      OpenTelemetry.
+                    properties:
+                      enabled:
+                        description: Se verdadeiro, habilita tracing distribuído via
+                          OpenTelemetry.
+                        type: boolean
+                      samplingRate:
+                        description: |-
+                          Taxa de sampling (0.0 a 1.0). Padrão: usar taxa padrão do OTEL Collector.
+                          Deve ser uma string representando um número decimal entre 0.0 e 1.0.
+                          Exemplos: "0.1", "0.5", "1.0"
+                        pattern: ^(0(\.\d+)?|1(\.0+)?)$
+                        type: string
+                    type: object
+                type: object
             required:
             - build
             - deploy

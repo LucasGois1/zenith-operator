@@ -17,6 +17,7 @@ O Zenith Operator abstrai a complexidade de integrar Tekton, Knative e Dapr, per
 - **Event-Driven**: Subscrição a eventos via Knative Eventing com filtros baseados em atributos
 - **Service Mesh**: Integração opcional com Dapr para service discovery, pub/sub e state management
 - **Comunicação entre Funções**: Suporte nativo para comunicação HTTP entre funções
+- **Distributed Tracing**: Rastreamento distribuído automático via OpenTelemetry para visualizar fluxos de requisições
 - **Imagens Imutáveis**: Rastreamento de image digests para reprodutibilidade e segurança
 
 ## 📚 Documentação
@@ -26,6 +27,7 @@ O Zenith Operator abstrai a complexidade de integrar Tekton, Knative e Dapr, per
 - **[Criando Funções HTTP Síncronas](docs/CREATING_HTTP_FUNCTIONS.md)** - Como criar funções que respondem a requisições HTTP
 - **[Criando Funções Assíncronas com Eventos](docs/CREATING_EVENT_FUNCTIONS.md)** - Como criar funções que processam eventos assíncronos
 - **[Comunicação entre Funções](docs/INTER_FUNCTION_COMMUNICATION.md)** - Como implementar comunicação entre múltiplas funções
+- **[Observabilidade e Distributed Tracing](docs/OBSERVABILITY.md)** - Como usar OpenTelemetry para rastrear requisições entre funções
 
 ### Referência Técnica
 

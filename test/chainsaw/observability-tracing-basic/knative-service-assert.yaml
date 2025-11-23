@@ -1,0 +1,15 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: test-function-tracing
+spec:
+  template:
+    spec:
+      containers:
+        - env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.opentelemetry-operator-system.svc.cluster.local:4317
+            - name: OTEL_SERVICE_NAME
+              value: test-function-tracing
+            - name: OTEL_TRACES_EXPORTER
+              value: otlp

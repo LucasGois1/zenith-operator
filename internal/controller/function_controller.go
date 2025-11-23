@@ -1015,6 +1015,11 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		podAnnotations["dapr.io/app-id"] = function.Spec.Deploy.Dapr.AppID
 		podAnnotations["dapr.io/app-port"] = strconv.Itoa(function.Spec.Deploy.Dapr.AppPort)
 		// (Adicione outras anotações Dapr conforme necessário, ex: config, log-level) [4]
+		
+		// Se tracing está habilitado, adicionar configuração de tracing do Dapr
+		if function.Spec.Observability.Tracing.Enabled {
+			podAnnotations["dapr.io/config"] = "tracing-config"
+		}
 	}
 	// ------------------------------------
 
@@ -1094,8 +1099,41 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 // resolveEnvVars resolve fieldRef e resourceFieldRef para valores estáticos
 // porque Knative não suporta esses tipos de referências.
 // Secret e ConfigMap refs são mantidos pois Knative os suporta nativamente.
+// Também injeta variáveis de ambiente do OpenTelemetry quando tracing está habilitado.
 func (r *FunctionReconciler) resolveEnvVars(function *functionsv1alpha1.Function) []v1.EnvVar {
-	resolved := make([]v1.EnvVar, 0, len(function.Spec.Deploy.Env))
+	resolved := make([]v1.EnvVar, 0, len(function.Spec.Deploy.Env)+10) // +10 para OTEL vars
+	
+	// Injetar variáveis de ambiente do OpenTelemetry se tracing está habilitado
+	if function.Spec.Observability.Tracing.Enabled {
+		resolved = append(resolved, v1.EnvVar{
+			Name:  "OTEL_EXPORTER_OTLP_ENDPOINT",
+			Value: "http://otel-collector.opentelemetry-operator-system.svc.cluster.local:4317",
+		})
+		resolved = append(resolved, v1.EnvVar{
+			Name:  "OTEL_SERVICE_NAME",
+			Value: function.Name,
+		})
+		resolved = append(resolved, v1.EnvVar{
+			Name:  "OTEL_RESOURCE_ATTRIBUTES",
+			Value: "service.namespace=" + function.Namespace + ",service.version=latest",
+		})
+		resolved = append(resolved, v1.EnvVar{
+			Name:  "OTEL_TRACES_EXPORTER",
+			Value: "otlp",
+		})
+		
+		// Se sampling rate foi especificado, adicionar
+		if function.Spec.Observability.Tracing.SamplingRate != nil {
+			resolved = append(resolved, v1.EnvVar{
+				Name:  "OTEL_TRACES_SAMPLER",
+				Value: "traceidratio",
+			})
+			resolved = append(resolved, v1.EnvVar{
+				Name:  "OTEL_TRACES_SAMPLER_ARG",
+				Value: *function.Spec.Observability.Tracing.SamplingRate,
+			})
+		}
+	}
 
 	for _, envVar := range function.Spec.Deploy.Env {
 		// Se não tem valueFrom, ou se tem secretKeyRef/configMapKeyRef, manter como está

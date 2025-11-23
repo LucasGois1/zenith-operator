@@ -51,6 +51,11 @@ dapr:
   version: "1.14.0"
   repository: "https://dapr.github.io/helm-charts/"
 
+opentelemetry:
+  enabled: true
+  version: "v0.140.0"
+  repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+
 registry:
   enabled: true
   image:
