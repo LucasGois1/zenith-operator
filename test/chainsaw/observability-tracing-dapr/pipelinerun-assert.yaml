@@ -1,7 +1,7 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: test-function-dapr-tracing
+  name: test-function-dapr-tracing-build
 spec:
   pipelineSpec:
     tasks:

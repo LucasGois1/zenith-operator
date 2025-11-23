@@ -1,7 +1,7 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: test-function-tracing
+  name: test-function-tracing-build
 spec:
   pipelineSpec:
     tasks:
