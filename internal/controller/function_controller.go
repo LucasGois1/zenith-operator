@@ -1062,6 +1062,14 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	}
 	// ------------------------------------
 
+	// --- Ponto de Integração do OpenTelemetry Auto-Instrumentation ---
+	// Se auto-instrumentação está habilitada, adicionar anotação para injetar agente OTEL
+	if function.Spec.Observability.Tracing.Enabled && function.Spec.Observability.Tracing.AutoInstrumentation != nil {
+		language := function.Spec.Observability.Tracing.AutoInstrumentation.Language
+		podAnnotations["instrumentation.opentelemetry.io/inject-"+language] = "true"
+	}
+	// ------------------------------------
+
 	// Determinar a porta do container
 	containerPort := int32(8080)
 	if function.Spec.Deploy.Dapr.Enabled && function.Spec.Deploy.Dapr.AppPort > 0 {
@@ -1144,9 +1152,11 @@ func (r *FunctionReconciler) resolveEnvVars(function *functionsv1alpha1.Function
 	
 	// Injetar variáveis de ambiente do OpenTelemetry se tracing está habilitado
 	if function.Spec.Observability.Tracing.Enabled {
+		// Use HTTP endpoint (port 4318) for better compatibility
+		// gRPC endpoint (4317) requires endpoint without http:// prefix which can cause issues
 		resolved = append(resolved, v1.EnvVar{
 			Name:  "OTEL_EXPORTER_OTLP_ENDPOINT",
-			Value: "http://otel-collector.opentelemetry-operator-system.svc.cluster.local:4317",
+			Value: "http://otel-collector-collector.opentelemetry-operator-system.svc.cluster.local:4318",
 		})
 		resolved = append(resolved, v1.EnvVar{
 			Name:  "OTEL_SERVICE_NAME",

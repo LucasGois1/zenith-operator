@@ -133,6 +133,21 @@ type TracingConfig struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=`^(0(\.\d+)?|1(\.0+)?)$`
 	SamplingRate *string `json:"samplingRate,omitempty"`
+
+	// Opcional. Configurações de auto-instrumentação via OpenTelemetry Operator.
+	// Se especificado, o operator injeta automaticamente agentes de instrumentação
+	// sem necessidade de modificar o código da função.
+	// +kubebuilder:validation:Optional
+	AutoInstrumentation *AutoInstrumentationConfig `json:"autoInstrumentation,omitempty"`
+}
+
+// AutoInstrumentationConfig define as configurações de auto-instrumentação
+type AutoInstrumentationConfig struct {
+	// A linguagem/runtime da função para auto-instrumentação.
+	// Valores suportados: "go", "java", "nodejs", "python", "dotnet"
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=go;java;nodejs;python;dotnet
+	Language string `json:"language"`
 }
 
 // FunctionStatus defines the observed state of Function.

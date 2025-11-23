@@ -319,6 +319,26 @@ spec:
                     description: Opcional. Configurações de tracing distribuído via
                       OpenTelemetry.
                     properties:
+                      autoInstrumentation:
+                        description: |-
+                          Opcional. Configurações de auto-instrumentação via OpenTelemetry Operator.
+                          Se especificado, o operator injeta automaticamente agentes de instrumentação
+                          sem necessidade de modificar o código da função.
+                        properties:
+                          language:
+                            description: |-
+                              A linguagem/runtime da função para auto-instrumentação.
+                              Valores suportados: "go", "java", "nodejs", "python", "dotnet"
+                            enum:
+                            - go
+                            - java
+                            - nodejs
+                            - python
+                            - dotnet
+                            type: string
+                        required:
+                        - language
+                        type: object
                       enabled:
                         description: Se verdadeiro, habilita tracing distribuído via
                           OpenTelemetry.
