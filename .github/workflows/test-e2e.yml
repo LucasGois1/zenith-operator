@@ -30,7 +30,11 @@ jobs:
     env:
       CLUSTER_NAME: zenith-operator-ci
       IMG: zenith-operator:ci-test
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Use custom PAT with access to private zenith-test-functions repository
+      # GitHub doesn't allow secrets named GITHUB_*, so we use ZENITH_TEST_FUNCTIONS_PAT
+      # and map it to GITHUB_TOKEN env var that our scripts expect
+      # Required scopes: Classic PAT with 'repo', or Fine-grained PAT with 'Contents: Read'
+      GITHUB_TOKEN: ${{ secrets.ZENITH_TEST_FUNCTIONS_PAT }}
     steps:
       - name: Clone the code
         uses: actions/checkout@v4

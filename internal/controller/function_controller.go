@@ -326,6 +326,34 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return validationResult, err
 	}
 
+	// Validar se o Broker existe ANTES de criar/atualizar o Knative Service
+	// Isso evita criar um KService que nunca poderá ser usado devido a broker ausente
+	if function.Spec.Eventing.Broker != "" {
+		brokerName := function.Spec.Eventing.Broker
+		broker := &kneventingv1.Broker{}
+		err = r.Get(ctx, types.NamespacedName{Name: brokerName, Namespace: function.Namespace}, broker)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				log.Error(err, "Broker não encontrado", "Broker.Name", brokerName)
+				brokerNotFoundCondition := metav1.Condition{
+					Type:    "Ready",
+					Status:  metav1.ConditionFalse,
+					Reason:  "BrokerNotFound",
+					Message: "Knative Broker não encontrado: " + brokerName,
+				}
+				meta.SetStatusCondition(&function.Status.Conditions, brokerNotFoundCondition)
+				function.Status.ObservedGeneration = function.Generation
+				if err := r.Status().Update(ctx, &function); err != nil {
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+			}
+			log.Error(err, "Falha ao verificar Broker")
+			return ctrl.Result{}, err
+		}
+		log.Info("Broker validado com sucesso", "Broker.Name", brokerName)
+	}
+
 	knativeServiceName := function.Name
 	knativeService := &knservingv1.Service{}
 
@@ -538,33 +566,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	// Verificar se o Broker existe antes de criar/atualizar o Trigger
-	brokerName := function.Spec.Eventing.Broker
-	if brokerName == "" {
-		brokerName = "default"
-	}
-	broker := &kneventingv1.Broker{}
-	err = r.Get(ctx, types.NamespacedName{Name: brokerName, Namespace: function.Namespace}, broker)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			log.Error(err, "Broker não encontrado", "Broker.Name", brokerName)
-			brokerNotFoundCondition := metav1.Condition{
-				Type:    "Ready",
-				Status:  metav1.ConditionFalse,
-				Reason:  "BrokerNotFound",
-				Message: "Knative Broker não encontrado: " + brokerName,
-			}
-			meta.SetStatusCondition(&function.Status.Conditions, brokerNotFoundCondition)
-			function.Status.ObservedGeneration = function.Generation
-			if err := r.Status().Update(ctx, &function); err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{RequeueAfter: time.Second * 30}, nil
-		}
-		log.Error(err, "Falha ao verificar Broker")
-		return ctrl.Result{}, err
-	}
-
+	// O broker já foi validado anteriormente, agora podemos criar/atualizar o Trigger
 	triggerName := function.Name + "-trigger"
 	trigger := &kneventingv1.Trigger{}
 
@@ -1149,7 +1151,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 // Também injeta variáveis de ambiente do OpenTelemetry quando tracing está habilitado.
 func (r *FunctionReconciler) resolveEnvVars(function *functionsv1alpha1.Function) []v1.EnvVar {
 	resolved := make([]v1.EnvVar, 0, len(function.Spec.Deploy.Env)+10) // +10 para OTEL vars
-	
+
 	// Injetar variáveis de ambiente do OpenTelemetry se tracing está habilitado
 	if function.Spec.Observability.Tracing.Enabled {
 		// Use HTTP endpoint (port 4318) for better compatibility
@@ -1170,7 +1172,7 @@ func (r *FunctionReconciler) resolveEnvVars(function *functionsv1alpha1.Function
 			Name:  "OTEL_TRACES_EXPORTER",
 			Value: "otlp",
 		})
-		
+
 		// Se sampling rate foi especificado, adicionar
 		if function.Spec.Observability.Tracing.SamplingRate != nil {
 			resolved = append(resolved, v1.EnvVar{
