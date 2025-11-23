@@ -474,6 +474,94 @@ code {
 }
 
 
+/* Documentation CTA */
+.docs-cta {
+  background: linear-gradient(135deg, rgba(43, 72, 255, 0.1) 0%, rgba(91, 233, 185, 0.1) 100%);
+  border: 2px solid rgba(91, 233, 185, 0.3);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  margin: 40px auto;
+  max-width: 800px;
+  transition: all 0.3s ease;
+}
+
+.docs-cta:hover {
+  border-color: rgba(91, 233, 185, 0.6);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(91, 233, 185, 0.2);
+}
+
+.docs-cta h3 {
+  font-size: 2rem;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #2b48ff 0%, #5be9b9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.docs-cta p {
+  font-size: 1.1rem;
+  color: #9dacbe;
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+
+.docs-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 40px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #2b48ff 0%, #5be9b9 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(43, 72, 255, 0.3);
+}
+
+.docs-cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(43, 72, 255, 0.5);
+}
+
+.docs-cta-btn i {
+  font-size: 1.2rem;
+}
+
+.docs-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-top: 40px;
+}
+
+.docs-feature-item {
+  text-align: center;
+  padding: 20px;
+}
+
+.docs-feature-item i {
+  font-size: 2rem;
+  color: #5be9b9;
+  margin-bottom: 12px;
+}
+
+.docs-feature-item h4 {
+  font-size: 1rem;
+  color: #f4f7ff;
+  margin-bottom: 8px;
+}
+
+.docs-feature-item p {
+  font-size: 0.9rem;
+  color: #9dacbe;
+}
+
 /* Support Section */
 .support-section {
   padding: 80px 0;
