@@ -222,9 +222,24 @@ app.listen(8080, () => {
 
 The OpenTelemetry Collector can export traces to various observability backends. By default, the collector is configured with a debug exporter that logs traces to stdout.
 
-### Jaeger
+### Jaeger (Local Development)
 
-To export traces to Jaeger, update the OpenTelemetry Collector configuration:
+**For local development**, the `hack/dev-up.sh` script automatically installs Jaeger all-in-one and configures the OpenTelemetry Collector to export traces to it.
+
+**Accessing Jaeger UI:**
+- URL: `http://localhost:30686`
+- The Jaeger UI provides a visual interface to search, view, and analyze traces
+- Search for traces by service name (function name) or trace ID
+- View trace waterfalls showing the complete request flow across functions
+
+**What's Included:**
+- Jaeger all-in-one deployment in the `observability` namespace
+- OTEL Collector configured to export to both debug (logs) and Jaeger
+- NodePort service exposing Jaeger UI on port 30686
+
+### Jaeger (Production)
+
+To export traces to Jaeger in production, update the OpenTelemetry Collector configuration:
 
 ```yaml
 apiVersion: opentelemetry.io/v1beta1
