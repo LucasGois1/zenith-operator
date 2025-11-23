@@ -415,7 +415,7 @@ if ! kubectl get namespace opentelemetry-operator-system 2>/dev/null; then
   helm install opentelemetry-operator open-telemetry/opentelemetry-operator \
     --namespace opentelemetry-operator-system \
     --create-namespace \
-    --version 0.140.0 \
+    --version 0.99.2 \
     --set "manager.collectorImage.repository=otel/opentelemetry-collector-k8s" \
     --wait --timeout=300s
   
