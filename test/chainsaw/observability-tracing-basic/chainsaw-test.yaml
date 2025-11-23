@@ -81,12 +81,6 @@ spec:
         - assert:
             file: function-ready-assert.yaml
     
-    - name: verify-knative-service-otel-env
-      description: Verify that Knative Service has OTEL environment variables
-      try:
-        - assert:
-            file: knative-service-assert.yaml
-    
     - name: verify-otel-env-vars-detailed
       description: Verify all OTEL environment variables are correctly set
       try:
