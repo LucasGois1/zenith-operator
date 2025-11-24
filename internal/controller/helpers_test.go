@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kneventingv1 "knative.dev/eventing/pkg/apis/eventing/v1"
 	knservingv1 "knative.dev/serving/pkg/apis/serving/v1"
@@ -469,4 +470,402 @@ func findParam(params []tektonv1.Param, name string) *tektonv1.Param {
 		}
 	}
 	return nil
+}
+
+func TestResolveEnvVars(t *testing.T) {
+	g := NewWithT(t)
+	reconciler := &FunctionReconciler{}
+
+	tests := []struct {
+		name     string
+		function *functionsv1alpha1.Function
+		validate func([]v1.EnvVar)
+	}{
+		{
+			name: "should inject OpenTelemetry variables when tracing is enabled",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-func",
+					Namespace: "default",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Observability: functionsv1alpha1.ObservabilitySpec{
+						Tracing: functionsv1alpha1.TracingConfig{
+							Enabled: true,
+						},
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(4))
+				g.Expect(envVars[0].Name).To(Equal("OTEL_EXPORTER_OTLP_ENDPOINT"))
+				g.Expect(envVars[0].Value).To(Equal("http://otel-collector-collector.opentelemetry-operator-system.svc.cluster.local:4318"))
+				g.Expect(envVars[1].Name).To(Equal("OTEL_SERVICE_NAME"))
+				g.Expect(envVars[1].Value).To(Equal("test-func"))
+				g.Expect(envVars[2].Name).To(Equal("OTEL_RESOURCE_ATTRIBUTES"))
+				g.Expect(envVars[2].Value).To(Equal("service.namespace=default,service.version=latest"))
+				g.Expect(envVars[3].Name).To(Equal("OTEL_TRACES_EXPORTER"))
+				g.Expect(envVars[3].Value).To(Equal("otlp"))
+			},
+		},
+		{
+			name: "should inject sampling rate when specified",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-func",
+					Namespace: "default",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Observability: functionsv1alpha1.ObservabilitySpec{
+						Tracing: functionsv1alpha1.TracingConfig{
+							Enabled:      true,
+							SamplingRate: stringPtr("0.5"),
+						},
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(6))
+				g.Expect(envVars[4].Name).To(Equal("OTEL_TRACES_SAMPLER"))
+				g.Expect(envVars[4].Value).To(Equal("traceidratio"))
+				g.Expect(envVars[5].Name).To(Equal("OTEL_TRACES_SAMPLER_ARG"))
+				g.Expect(envVars[5].Value).To(Equal("0.5"))
+			},
+		},
+		{
+			name: "should resolve fieldRef metadata.name",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-function",
+					Namespace: "prod",
+					UID:       "test-uid-123",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{
+							{
+								Name: "FUNCTION_NAME",
+								ValueFrom: &v1.EnvVarSource{
+									FieldRef: &v1.ObjectFieldSelector{
+										FieldPath: "metadata.name",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(1))
+				g.Expect(envVars[0].Name).To(Equal("FUNCTION_NAME"))
+				g.Expect(envVars[0].Value).To(Equal("my-function"))
+				g.Expect(envVars[0].ValueFrom).To(BeNil())
+			},
+		},
+		{
+			name: "should resolve fieldRef metadata.namespace",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-function",
+					Namespace: "prod",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{
+							{
+								Name: "NAMESPACE",
+								ValueFrom: &v1.EnvVarSource{
+									FieldRef: &v1.ObjectFieldSelector{
+										FieldPath: "metadata.namespace",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(1))
+				g.Expect(envVars[0].Name).To(Equal("NAMESPACE"))
+				g.Expect(envVars[0].Value).To(Equal("prod"))
+			},
+		},
+		{
+			name: "should resolve fieldRef metadata.uid",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-function",
+					Namespace: "prod",
+					UID:       "test-uid-456",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{
+							{
+								Name: "FUNCTION_UID",
+								ValueFrom: &v1.EnvVarSource{
+									FieldRef: &v1.ObjectFieldSelector{
+										FieldPath: "metadata.uid",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(1))
+				g.Expect(envVars[0].Name).To(Equal("FUNCTION_UID"))
+				g.Expect(envVars[0].Value).To(Equal("test-uid-456"))
+			},
+		},
+		{
+			name: "should set empty value for unsupported fieldRef paths",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-function",
+					Namespace: "prod",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{
+							{
+								Name: "LABELS",
+								ValueFrom: &v1.EnvVarSource{
+									FieldRef: &v1.ObjectFieldSelector{
+										FieldPath: "metadata.labels",
+									},
+								},
+							},
+							{
+								Name: "ANNOTATIONS",
+								ValueFrom: &v1.EnvVarSource{
+									FieldRef: &v1.ObjectFieldSelector{
+										FieldPath: "metadata.annotations",
+									},
+								},
+							},
+							{
+								Name: "UNKNOWN",
+								ValueFrom: &v1.EnvVarSource{
+									FieldRef: &v1.ObjectFieldSelector{
+										FieldPath: "status.phase",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(3))
+				g.Expect(envVars[0].Value).To(Equal(""))
+				g.Expect(envVars[1].Value).To(Equal(""))
+				g.Expect(envVars[2].Value).To(Equal(""))
+			},
+		},
+		{
+			name: "should set empty value for resourceFieldRef",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-function",
+					Namespace: "prod",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{
+							{
+								Name: "CPU_LIMIT",
+								ValueFrom: &v1.EnvVarSource{
+									ResourceFieldRef: &v1.ResourceFieldSelector{
+										Resource: "limits.cpu",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(1))
+				g.Expect(envVars[0].Name).To(Equal("CPU_LIMIT"))
+				g.Expect(envVars[0].Value).To(Equal(""))
+				g.Expect(envVars[0].ValueFrom).To(BeNil())
+			},
+		},
+		{
+			name: "should keep Secret and ConfigMap refs as-is",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-function",
+					Namespace: "prod",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{
+							{
+								Name: "DB_PASSWORD",
+								ValueFrom: &v1.EnvVarSource{
+									SecretKeyRef: &v1.SecretKeySelector{
+										LocalObjectReference: v1.LocalObjectReference{Name: "db-secret"},
+										Key:                  "password",
+									},
+								},
+							},
+							{
+								Name: "CONFIG_VALUE",
+								ValueFrom: &v1.EnvVarSource{
+									ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+										LocalObjectReference: v1.LocalObjectReference{Name: "app-config"},
+										Key:                  "value",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(2))
+				g.Expect(envVars[0].Name).To(Equal("DB_PASSWORD"))
+				g.Expect(envVars[0].ValueFrom).NotTo(BeNil())
+				g.Expect(envVars[0].ValueFrom.SecretKeyRef).NotTo(BeNil())
+				g.Expect(envVars[1].Name).To(Equal("CONFIG_VALUE"))
+				g.Expect(envVars[1].ValueFrom).NotTo(BeNil())
+				g.Expect(envVars[1].ValueFrom.ConfigMapKeyRef).NotTo(BeNil())
+			},
+		},
+		{
+			name: "should keep plain value env vars as-is",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-function",
+					Namespace: "prod",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					Deploy: functionsv1alpha1.DeploySpec{
+						Env: []v1.EnvVar{
+							{
+								Name:  "PLAIN_VAR",
+								Value: "plain-value",
+							},
+						},
+					},
+				},
+			},
+			validate: func(envVars []v1.EnvVar) {
+				g.Expect(envVars).To(HaveLen(1))
+				g.Expect(envVars[0].Name).To(Equal("PLAIN_VAR"))
+				g.Expect(envVars[0].Value).To(Equal("plain-value"))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := reconciler.resolveEnvVars(tt.function)
+			tt.validate(result)
+		})
+	}
+}
+
+func TestDetectInsecureRegistries(t *testing.T) {
+	g := NewWithT(t)
+	reconciler := &FunctionReconciler{}
+
+	tests := []struct {
+		name     string
+		imageURL string
+		expected string
+		setup    func()
+		cleanup  func()
+	}{
+		{
+			name:     "should detect cluster-internal registry",
+			imageURL: "registry.registry.svc.cluster.local:5000/myapp:latest",
+			expected: "registry.registry.svc.cluster.local:5000",
+		},
+		{
+			name:     "should detect localhost registry",
+			imageURL: "localhost:5000/myapp:latest",
+			expected: "localhost:5000",
+		},
+		{
+			name:     "should detect 127.0.0.1 registry",
+			imageURL: "127.0.0.1:5000/myapp:latest",
+			expected: "127.0.0.1:5000",
+		},
+		{
+			name:     "should detect custom registry with port",
+			imageURL: "my-registry.local:8080/myapp:latest",
+			expected: "my-registry.local:8080",
+		},
+		{
+			name:     "should not detect docker.io as insecure",
+			imageURL: "docker.io:443/myapp:latest",
+			expected: "",
+		},
+		{
+			name:     "should not detect gcr.io as insecure",
+			imageURL: "gcr.io:443/myapp:latest",
+			expected: "",
+		},
+		{
+			name:     "should not detect ghcr.io as insecure",
+			imageURL: "ghcr.io:443/myapp:latest",
+			expected: "",
+		},
+		{
+			name:     "should not detect quay.io as insecure",
+			imageURL: "quay.io:443/myapp:latest",
+			expected: "",
+		},
+		{
+			name:     "should not detect registry.k8s.io as insecure",
+			imageURL: "registry.k8s.io:443/myapp:latest",
+			expected: "",
+		},
+		{
+			name:     "should return empty for image without registry",
+			imageURL: "myapp:latest",
+			expected: "",
+		},
+		{
+			name:     "should return empty for single-part image name",
+			imageURL: "myapp",
+			expected: "",
+		},
+		{
+			name:     "should use INSECURE_REGISTRIES env var when set",
+			imageURL: "any-registry.com/myapp:latest",
+			expected: "custom-registry.local:5000,another-registry:8080",
+			setup: func() {
+				t.Setenv("INSECURE_REGISTRIES", "custom-registry.local:5000,another-registry:8080")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setup != nil {
+				tt.setup()
+			}
+			if tt.cleanup != nil {
+				defer tt.cleanup()
+			}
+
+			result := reconciler.detectInsecureRegistries(tt.imageURL)
+			g.Expect(result).To(Equal(tt.expected))
+		})
+	}
+}
+
+func stringPtr(s string) *string {
+	return &s
 }
