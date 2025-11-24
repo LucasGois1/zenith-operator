@@ -49,6 +49,13 @@ type FunctionReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+const (
+	// annotationValueTrue is the string value "true" used for Dapr and OpenTelemetry annotations
+	annotationValueTrue = "true"
+	// defaultBrokerName is the default Knative Eventing broker name
+	defaultBrokerName = "default"
+)
+
 // +kubebuilder:rbac:groups=functions.zenith.com,resources=functions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=functions.zenith.com,resources=functions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=functions.zenith.com,resources=functions/finalizers,verbs=update
@@ -110,7 +117,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		log.Info("ServiceAccount criado com sucesso")
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	} else if err != nil {
 		log.Error(err, "Falha ao buscar ServiceAccount")
 		return ctrl.Result{}, err
@@ -181,7 +188,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		log.Info("ServiceAccount atualizado com sucesso")
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
 	pipelineRunName := function.Name + "-build"
@@ -235,9 +242,9 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 
-		// Retorna com Requeue: true para que possamos começar a monitorar
+		// Retorna com RequeueAfter para que possamos começar a monitorar
 		// o status do PipelineRun na próxima reconciliação.
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	} else if err != nil {
 		// Algum outro erro ocorreu ao tentar obter o PipelineRun
 		log.Error(err, "Falha ao obter o PipelineRun")
@@ -384,7 +391,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Info("Knative Service criado com sucesso.")
 		// Re-enfileira a requisição. A próxima reconciliação irá monitorar
 		// o status do ksvc recém-criado (e eventualmente passar para a Fase 3.5).
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 
 	} else if err != nil {
 		// Erro real ao tentar o Get
@@ -474,7 +481,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		log.Info("Knative Service atualizado com sucesso.")
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
 	log.Info("Knative Service está sincronizado.")
@@ -546,7 +553,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				return ctrl.Result{}, err
 			}
 			log.Info("Trigger deletado com sucesso")
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: time.Second}, nil
 		} else if !errors.IsNotFound(err) {
 			log.Error(err, "Falha ao verificar Trigger existente")
 			return ctrl.Result{}, err
@@ -656,7 +663,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		log.Info("Knative Trigger atualizado com sucesso.")
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
 	log.Info("Knative Trigger está sincronizado.")
@@ -1052,7 +1059,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	// Estas anotações devem ser aplicadas ao TEMPLATE do Pod.[3, 4]
 	podAnnotations := make(map[string]string)
 	if function.Spec.Deploy.Dapr.Enabled {
-		podAnnotations["dapr.io/enabled"] = "true"
+		podAnnotations["dapr.io/enabled"] = annotationValueTrue
 		podAnnotations["dapr.io/app-id"] = function.Spec.Deploy.Dapr.AppID
 		podAnnotations["dapr.io/app-port"] = strconv.Itoa(function.Spec.Deploy.Dapr.AppPort)
 		// (Adicione outras anotações Dapr conforme necessário, ex: config, log-level) [4]
@@ -1068,7 +1075,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	// Se auto-instrumentação está habilitada, adicionar anotação para injetar agente OTEL
 	if function.Spec.Observability.Tracing.Enabled && function.Spec.Observability.Tracing.AutoInstrumentation != nil {
 		language := function.Spec.Observability.Tracing.AutoInstrumentation.Language
-		podAnnotations["instrumentation.opentelemetry.io/inject-"+language] = "true"
+		podAnnotations["instrumentation.opentelemetry.io/inject-"+language] = annotationValueTrue
 	}
 	// ------------------------------------
 
@@ -1246,7 +1253,7 @@ func (r *FunctionReconciler) resolveEnvVars(function *functionsv1alpha1.Function
 }
 
 func (r *FunctionReconciler) buildKnativeTrigger(function *functionsv1alpha1.Function) *kneventingv1.Trigger {
-	brokerName := "default" // Padrão
+	brokerName := defaultBrokerName // Padrão
 	if function.Spec.Eventing.Broker != "" {
 		brokerName = function.Spec.Eventing.Broker
 	}
