@@ -3,7 +3,36 @@ entries:
   zenith-operator:
   - apiVersion: v2
     appVersion: 0.0.1
-    created: "2025-11-24T04:37:37.351227169Z"
+    created: "2025-11-24T13:23:06.451817803Z"
+    dependencies:
+    - condition: dapr.enabled
+      name: dapr
+      repository: https://dapr.github.io/helm-charts/
+      version: 1.14.4
+    description: A Helm chart for Kubernetes to install the Zenith Operator and its
+      dependencies
+    digest: aa34643c5211cd1b501331b5437d66ced48e8b529746bbc32651886db28b2da5
+    home: https://github.com/LucasGois1/zenith-operator
+    keywords:
+    - serverless
+    - functions
+    - knative
+    - tekton
+    - operator
+    kubeVersion: '>= 1.33.0-0'
+    maintainers:
+    - email: lucassampaiodegois1@gmail.com
+      name: Lucas Sampaio de Góis
+    name: zenith-operator
+    sources:
+    - https://github.com/LucasGois1/zenith-operator
+    type: application
+    urls:
+    - https://lucasgois1.github.io/zenith-operator/zenith-operator-0.2.1.tgz
+    version: 0.2.1
+  - apiVersion: v2
+    appVersion: 0.0.1
+    created: "2025-11-24T13:23:06.441045128Z"
     dependencies:
     - condition: dapr.enabled
       name: dapr
@@ -30,4 +59,4 @@ entries:
     urls:
     - https://lucasgois1.github.io/zenith-operator/zenith-operator-0.2.0.tgz
     version: 0.2.0
-generated: "2025-11-24T04:37:37.338766451Z"
+generated: "2025-11-24T13:23:06.426635446Z"
