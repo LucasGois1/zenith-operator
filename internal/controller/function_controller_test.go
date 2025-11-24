@@ -70,7 +70,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -85,7 +87,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify ServiceAccount was created
 			sa := &v1.ServiceAccount{}
@@ -123,7 +125,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
-			defer k8sClient.Delete(ctx, secret)
+			defer func() {
+				_ = k8sClient.Delete(ctx, secret)
+			}()
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -146,7 +150,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -199,7 +205,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
-			defer k8sClient.Delete(ctx, secret)
+			defer func() {
+				_ = k8sClient.Delete(ctx, secret)
+			}()
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -222,7 +230,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -284,7 +294,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -343,7 +355,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -361,7 +375,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify PipelineRun was created
 			pr := &tektonv1.PipelineRun{}
@@ -414,7 +428,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -491,7 +507,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -580,7 +598,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -661,7 +681,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -708,7 +730,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify Knative Service was updated with new image
 			Eventually(func() bool {
@@ -746,7 +768,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -830,7 +854,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -924,7 +950,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -975,7 +1003,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify Trigger was deleted
 			Eventually(func() bool {
@@ -1012,7 +1040,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -1091,7 +1121,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -1146,7 +1178,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
-			defer k8sClient.Delete(ctx, secret)
+			defer func() {
+				_ = k8sClient.Delete(ctx, secret)
+			}()
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1179,7 +1213,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -1235,7 +1271,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -1305,7 +1343,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -1375,7 +1415,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -1451,7 +1493,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -1516,7 +1560,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, function)).To(Succeed())
-			defer k8sClient.Delete(ctx, function)
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
 
 			reconciler := &FunctionReconciler{
 				Client: k8sClient,
@@ -1570,7 +1616,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify Trigger was updated with new filters
 			Eventually(func() bool {
