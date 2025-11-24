@@ -1,0 +1,104 @@
+name: Publish Helm Chart
+
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - 'charts/**'
+    - '.github/workflows/helm-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish Helm Chart to GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout main branch
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
+
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: 'latest'
+
+    - name: Lint Helm chart
+      run: |
+        echo "🔍 Linting Helm chart..."
+        helm lint charts/zenith-operator
+        echo "✅ Chart validation passed"
+
+    - name: Package Helm chart
+      run: |
+        echo "📦 Packaging Helm chart..."
+        mkdir -p .helm-publish
+        helm package charts/zenith-operator --destination .helm-publish
+        echo "✅ Chart packaged successfully"
+
+    - name: Generate Helm repository index
+      run: |
+        echo "📝 Generating Helm repository index..."
+        helm repo index .helm-publish --url https://lucasgois1.github.io/zenith-operator
+        echo "✅ Repository index generated"
+
+    - name: Checkout gh-pages branch
+      run: |
+        echo "🔄 Checking out gh-pages branch..."
+        git fetch origin gh-pages
+        git worktree add .gh-pages gh-pages
+        echo "✅ gh-pages branch checked out to .gh-pages/"
+
+    - name: Copy Helm artifacts to gh-pages
+      run: |
+        echo "📋 Copying Helm artifacts to gh-pages..."
+
+        # Copy the packaged chart and index.yaml to the root of gh-pages
+        cp .helm-publish/*.tgz .gh-pages/
+        cp .helm-publish/index.yaml .gh-pages/
+
+        echo "✅ Artifacts copied to gh-pages"
+
+    - name: Commit and push to gh-pages
+      run: |
+        cd .gh-pages
+
+        # Configure git
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        # Add only the Helm-related files
+        git add *.tgz index.yaml
+
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "ℹ️  No changes to commit"
+          exit 0
+        fi
+
+        # Get chart version from Chart.yaml
+        CHART_VERSION=$(grep '^version:' ../charts/zenith-operator/Chart.yaml | awk '{print $2}')
+
+        # Commit and push
+        git commit -m "chore: publish Helm chart v${CHART_VERSION}"
+        git push origin gh-pages
+
+        echo "✅ Helm chart published to GitHub Pages"
+
+    - name: Summary
+      run: |
+        CHART_VERSION=$(grep '^version:' charts/zenith-operator/Chart.yaml | awk '{print $2}')
+        echo "🎉 Helm chart v${CHART_VERSION} published successfully!"
+        echo ""
+        echo "📦 Chart URL: https://lucasgois1.github.io/zenith-operator/zenith-operator-${CHART_VERSION}.tgz"
+        echo "📋 Repository index: https://lucasgois1.github.io/zenith-operator/index.yaml"
+        echo ""
+        echo "To use this Helm repository:"
+        echo "  helm repo add zenith-operator https://lucasgois1.github.io/zenith-operator"
+        echo "  helm repo update"
+        echo "  helm install my-zenith zenith-operator/zenith-operator"
