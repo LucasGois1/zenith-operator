@@ -33,3 +33,7 @@ go*.tar.gz*
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .windsurf/rules/snyk_rules.md
+
+# Helm publishing artifacts
+.helm-publish/
+.gh-pages/
