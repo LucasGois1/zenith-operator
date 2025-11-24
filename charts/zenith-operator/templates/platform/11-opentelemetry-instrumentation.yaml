@@ -7,6 +7,9 @@ kind: Instrumentation
 metadata:
   name: zenith-instrumentation
   namespace: {{ .Values.namespaceOverride | default .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
 spec:
   # OTLP exporter configuration - using HTTP endpoint (port 4318)
   # Note: gRPC endpoint (4317) requires endpoint without http:// prefix
