@@ -81,6 +81,7 @@ var _ = BeforeSuite(func() {
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
 			filepath.Join("..", "..", "config", "testcrds", "tekton"),
+			filepath.Join("..", "..", "config", "testcrds", "knative"),
 		},
 		ErrorIfCRDPathMissing: true,
 	}
