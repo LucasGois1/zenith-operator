@@ -37,7 +37,8 @@ jobs:
           helm dependency update
 
       - name: Set up chart-testing
-        uses: helm/chart-testing-action@v2.7.0
+        uses: helm/chart-testing-action@v2.8.0
+        # v2.8.0 includes cosign-installer v4.0.0 which fixes signature verification issues
 
       - name: Run chart-testing (lint)
         run: ct lint --config .github/ct.yaml --charts charts/zenith-operator
