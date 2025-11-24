@@ -39,15 +39,16 @@ import (
 
 var _ = Describe("Function Controller Reconciliation", func() {
 	const (
-		timeout  = time.Second * 10
-		interval = time.Millisecond * 250
+		timeout       = time.Second * 10
+		interval      = time.Millisecond * 250
+		testNamespace = "default" // Default Kubernetes namespace for tests
 	)
 
 	Context("ServiceAccount Management", func() {
 		It("should create a dedicated ServiceAccount for the Function", func() {
 			ctx := context.Background()
 			functionName := "test-sa-creation"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -109,7 +110,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should attach git auth secret to ServiceAccount", func() {
 			ctx := context.Background()
 			functionName := "test-git-secret"
-			namespace := "default"
+			namespace := testNamespace
 			secretName := "git-auth-secret"
 
 			// Create the git auth secret first
@@ -190,7 +191,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should attach registry secret to ServiceAccount imagePullSecrets", func() {
 			ctx := context.Background()
 			functionName := "test-registry-secret"
-			namespace := "default"
+			namespace := testNamespace
 			secretName := "registry-secret"
 
 			// Create the registry secret first
@@ -270,7 +271,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should set status to GitAuthMissing when git secret does not exist", func() {
 			ctx := context.Background()
 			functionName := "test-missing-git-secret"
-			namespace := "default"
+			namespace := testNamespace
 			secretName := "nonexistent-secret"
 
 			function := &functionsv1alpha1.Function{
@@ -333,7 +334,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should create PipelineRun when ServiceAccount is ready", func() {
 			ctx := context.Background()
 			functionName := "test-pipelinerun-create"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -406,7 +407,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should update status to BuildFailed when PipelineRun fails", func() {
 			ctx := context.Background()
 			functionName := "test-pipelinerun-failed"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -485,7 +486,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should extract image digest when PipelineRun succeeds", func() {
 			ctx := context.Background()
 			functionName := "test-pipelinerun-success"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -576,7 +577,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should create Knative Service after successful build", func() {
 			ctx := context.Background()
 			functionName := "test-ksvc-create"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -659,7 +660,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should update Knative Service when image changes", func() {
 			ctx := context.Background()
 			functionName := "test-ksvc-update"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -745,7 +746,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should configure Dapr annotations when enabled", func() {
 			ctx := context.Background()
 			functionName := "test-ksvc-dapr"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -814,7 +815,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should create Trigger when eventing is configured", func() {
 			ctx := context.Background()
 			functionName := "test-trigger-create"
-			namespace := "default"
+			namespace := testNamespace
 			brokerName := "test-broker"
 
 			// Create broker first
@@ -826,7 +827,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				Spec: kneventingv1.BrokerSpec{},
 			}
 			Expect(k8sClient.Create(ctx, broker)).To(Succeed())
-			defer k8sClient.Delete(ctx, broker)
+			defer func() {
+				_ = k8sClient.Delete(ctx, broker)
+			}()
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -913,7 +916,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should delete Trigger when eventing is removed", func() {
 			ctx := context.Background()
 			functionName := "test-trigger-delete"
-			namespace := "default"
+			namespace := testNamespace
 			brokerName := "test-broker-2"
 
 			// Create broker
@@ -925,7 +928,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				Spec: kneventingv1.BrokerSpec{},
 			}
 			Expect(k8sClient.Create(ctx, broker)).To(Succeed())
-			defer k8sClient.Delete(ctx, broker)
+			defer func() {
+				_ = k8sClient.Delete(ctx, broker)
+			}()
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1015,7 +1020,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should set status to BrokerNotFound when broker does not exist", func() {
 			ctx := context.Background()
 			functionName := "test-broker-missing"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1088,7 +1093,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should fail when Secret referenced in Env does not exist", func() {
 			ctx := context.Background()
 			functionName := "test-env-secret-missing"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1164,7 +1169,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should succeed when Secret referenced in Env exists", func() {
 			ctx := context.Background()
 			functionName := "test-env-secret-exists"
-			namespace := "default"
+			namespace := testNamespace
 			secretName := "db-secret"
 
 			// Create the secret
@@ -1238,7 +1243,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should fail when ConfigMap referenced in Env does not exist", func() {
 			ctx := context.Background()
 			functionName := "test-env-cm-missing"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1314,7 +1319,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should fail when Secret referenced in EnvFrom does not exist", func() {
 			ctx := context.Background()
 			functionName := "test-envfrom-secret-missing"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1386,7 +1391,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should fail when ConfigMap referenced in EnvFrom does not exist", func() {
 			ctx := context.Background()
 			functionName := "test-envfrom-cm-missing"
-			namespace := "default"
+			namespace := testNamespace
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1458,7 +1463,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should skip validation for optional Secret references", func() {
 			ctx := context.Background()
 			functionName := "test-env-secret-optional"
-			namespace := "default"
+			namespace := testNamespace
 			optional := true
 
 			function := &functionsv1alpha1.Function{
@@ -1520,7 +1525,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 		It("should update Trigger when filters change", func() {
 			ctx := context.Background()
 			functionName := "test-trigger-filter-update"
-			namespace := "default"
+			namespace := testNamespace
 			brokerName := "test-broker-filters"
 
 			// Create broker
@@ -1532,7 +1537,9 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				Spec: kneventingv1.BrokerSpec{},
 			}
 			Expect(k8sClient.Create(ctx, broker)).To(Succeed())
-			defer k8sClient.Delete(ctx, broker)
+			defer func() {
+				_ = k8sClient.Delete(ctx, broker)
+			}()
 
 			function := &functionsv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
