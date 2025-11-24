@@ -1,0 +1,162 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: e2e-event-delivery-test
+spec:
+  description: |
+    Test end-to-end event delivery through Knative Eventing.
+    This test verifies:
+    1. Function with eventing deploys successfully
+    2. Trigger is created and routes events to function
+    3. PingSource publishes events to Broker
+    4. Function receives and logs CloudEvent headers
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-broker
+      description: Create Knative Eventing Broker
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | kubectl apply -f - -n $NAMESPACE
+              apiVersion: eventing.knative.dev/v1
+              kind: Broker
+              metadata:
+                name: default
+                annotations:
+                  eventing.knative.dev/broker.class: MTChannelBasedBroker
+              spec:
+                config:
+                  apiVersion: v1
+                  kind: ConfigMap
+                  name: config-br-default-channel
+                  namespace: knative-eventing
+              EOF
+              
+              echo "Waiting for Broker to be ready..."
+              kubectl wait --for=condition=Ready broker/default -n $NAMESPACE --timeout=2m || true
+    
+    - name: create-function
+      description: Create Function with eventing configuration
+      try:
+        - apply:
+            file: function.yaml
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-e2e-event
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"\n"}{end}' | tail -n1)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - script:
+            content: |
+              echo "Waiting for Function to be Ready..."
+              for i in $(seq 1 60); do
+                READY=$(kubectl get function test-function-e2e-event -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+                if [ "$READY" = "True" ]; then
+                  echo "SUCCESS: Function is Ready"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: Function not Ready after 120 seconds"
+              kubectl get function test-function-e2e-event -n "$NAMESPACE" -o yaml
+              exit 1
+            timeout: 150s
+    
+    - name: create-pingsource
+      description: Create PingSource to publish events
+      try:
+        - apply:
+            file: pingsource.yaml
+        - script:
+            content: |
+              echo "Waiting for PingSource to be ready..."
+              kubectl wait --for=condition=Ready pingsource/test-pingsource -n $NAMESPACE --timeout=2m || true
+              echo "PingSource created, events will be published every minute"
+    
+    - name: verify-event-delivery
+      description: Verify function receives CloudEvents
+      try:
+        - script:
+            content: |
+              echo "Waiting for function to receive CloudEvents..."
+              echo "Checking function pod logs for CloudEvent headers..."
+              
+              sleep 70
+              
+              POD_NAME=$(kubectl get pods -n "$NAMESPACE" -l serving.knative.dev/service=test-function-e2e-event -o jsonpath='{.items[0].metadata.name}')
+              
+              if [ -z "$POD_NAME" ]; then
+                echo "ERROR: No function pod found"
+                exit 1
+              fi
+              
+              echo "Found pod: $POD_NAME"
+              echo "Fetching logs..."
+              
+              LOGS=$(kubectl logs -n "$NAMESPACE" "$POD_NAME" --tail=100 || echo "")
+              
+              if echo "$LOGS" | grep -q "Ce-Type.*com.zenith.test.ping"; then
+                echo "SUCCESS: Function received CloudEvent with correct type"
+                echo "Log excerpt:"
+                echo "$LOGS" | grep -A 5 "CloudEvent Headers Detected"
+                exit 0
+              else
+                echo "ERROR: CloudEvent headers not found in logs"
+                echo "Full logs:"
+                echo "$LOGS"
+                exit 1
+              fi
+            timeout: 120s
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-e2e-event
+        - delete:
+            ref:
+              apiVersion: sources.knative.dev/v1
+              kind: PingSource
+              name: test-pingsource

@@ -1,0 +1,136 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: knative-config-setup
+  namespace: knative-serving
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: knative-config-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "patch", "update"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gatewayclasses", "gateways"]
+  verbs: ["get", "list", "create", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: knative-config-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: knative-config-setup
+subjects:
+- kind: ServiceAccount
+  name: knative-config-setup
+  namespace: knative-serving
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: knative-config-setup-{{ .Release.Revision }}
+  namespace: knative-serving
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "15"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/name: knative-config-setup
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: knative-config-setup
+    spec:
+      serviceAccountName: knative-config-setup
+      restartPolicy: OnFailure
+      containers:
+      - name: config-setup
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          echo "Configuring Knative Serving to use Gateway API..."
+          
+          kubectl patch configmap/config-network \
+            -n knative-serving \
+            --type merge \
+            -p '{"data":{"ingress-class":"{{ .Values.knativeServing.config.ingressClass }}"}}'
+          
+          echo "✓ Configured Knative ingress class"
+          
+          {{- if .Values.gatewayAPI.enabled }}
+          cat <<EOF | kubectl apply -f -
+          apiVersion: gateway.networking.k8s.io/v1
+          kind: GatewayClass
+          metadata:
+            name: {{ .Values.gatewayAPI.gateway.className }}
+          spec:
+            controllerName: {{ .Values.envoyGateway.controllerName }}
+          EOF
+          
+          echo "✓ Created GatewayClass"
+          
+          cat <<EOF | kubectl apply -f -
+          apiVersion: gateway.networking.k8s.io/v1
+          kind: Gateway
+          metadata:
+            name: {{ .Values.gatewayAPI.gateway.name }}
+            namespace: {{ .Values.gatewayAPI.gateway.namespace }}
+          spec:
+            gatewayClassName: {{ .Values.gatewayAPI.gateway.className }}
+            listeners:
+            - name: http
+              protocol: HTTP
+              port: 80
+              allowedRoutes:
+                namespaces:
+                  from: All
+          EOF
+          
+          echo "✓ Created Gateway"
+          
+          sleep 15
+          
+          ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name={{ .Values.gatewayAPI.gateway.name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          
+          if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
+            kubectl patch configmap/config-gateway \
+              -n knative-serving \
+              --type merge \
+              -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"{{ .Values.gatewayAPI.gateway.className }}\\\",\\\"gateway\\\":\\\"{{ .Values.gatewayAPI.gateway.namespace }}/{{ .Values.gatewayAPI.gateway.name }}\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\",\"local-gateways\":\"[{\\\"class\\\":\\\"{{ .Values.gatewayAPI.gateway.className }}\\\",\\\"gateway\\\":\\\"{{ .Values.gatewayAPI.gateway.namespace }}/knative-local-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${LOCAL_ENVOY_SVC}\\\"}]\"}}"
+            echo "✓ Configured Knative Gateway with Envoy services:"
+            echo "  - External: envoy-gateway-system/${ENVOY_SVC}"
+            echo "  - Local: envoy-gateway-system/${LOCAL_ENVOY_SVC}"
+          else
+            echo "⚠️  Envoy Gateway services not found yet, will be configured on first reconciliation"
+            [ -z "$ENVOY_SVC" ] && echo "  - Missing external gateway service"
+            [ -z "$LOCAL_ENVOY_SVC" ] && echo "  - Missing local gateway service"
+          fi
+          {{- end }}
+          
+          echo "Configuration complete!"

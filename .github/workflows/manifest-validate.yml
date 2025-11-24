@@ -1,0 +1,56 @@
+name: Manifest Validation
+
+on:
+  pull_request:
+    paths:
+      - 'config/**'
+      - 'api/**'
+      - '**.yaml'
+      - '**.yml'
+      - '.github/workflows/manifest-validate.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install tools
+        run: |
+          # Install kustomize
+          make kustomize
+          
+          # Install kubeconform
+          curl -L https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Generate manifests
+        run: make manifests
+
+      - name: Validate Kustomize build
+        run: |
+          ./bin/kustomize build config/default > /tmp/manifests.yaml
+          echo "✓ Kustomize build successful"
+
+      - name: Validate manifests with kubeconform
+        run: |
+          ./bin/kustomize build config/default | kubeconform -strict -ignore-missing-schemas -summary -output text -kubernetes-version 1.33.0
+
+      - name: Lint YAML files
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          config_file: .yamllint.yml
+          file_or_dir: config/
+          strict: true

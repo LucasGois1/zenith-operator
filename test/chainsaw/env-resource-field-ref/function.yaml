@@ -1,0 +1,20 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-env-resource-ref
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: add-env-echo-endpoint
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-env-resource-ref
+  deploy:
+    env:
+      - name: MEMORY_LIMIT
+        valueFrom:
+          resourceFieldRef:
+            resource: limits.memory
+      - name: CPU_REQUEST
+        valueFrom:
+          resourceFieldRef:
+            resource: requests.cpu

@@ -1,0 +1,11 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: test-function-dapr
+spec:
+  template:
+    metadata:
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: test-dapr-app
+        dapr.io/app-port: "8080"

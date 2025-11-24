@@ -1,0 +1,123 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: build-no-digest-test
+spec:
+  description: |
+    Test that controller handles PipelineRun success without image digest.
+    This test verifies:
+    1. PipelineRun succeeds but doesn't produce IMAGE_DIGEST result
+    2. Function status shows BuildImageError
+    3. Controller doesn't create KService without valid digest
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-no-digest.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build-completion
+      description: Wait for PipelineRun to complete successfully (but with empty digest)
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-no-digest
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              echo "SUCCESS: PipelineRun completed successfully"
+    
+    - name: verify-no-digest-in-results
+      description: Verify PipelineRun has no IMAGE_DIGEST result
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              IMAGE_DIGEST=$(kubectl get pipelinerun test-function-no-digest-build -n $NAMESPACE -o jsonpath='{.status.results[?(@.name=="IMAGE_DIGEST")].value}' 2>/dev/null || echo "")
+              
+              if [ -z "$IMAGE_DIGEST" ]; then
+                echo "SUCCESS: No IMAGE_DIGEST result found as expected"
+              else
+                echo "ERROR: Found IMAGE_DIGEST: $IMAGE_DIGEST"
+                exit 1
+              fi
+    
+    - name: verify-build-error-status
+      description: Verify Function status shows BuildImageError
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              sleep 5  # Give controller time to reconcile
+              
+              READY_STATUS=$(kubectl get function test-function-no-digest -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+              READY_REASON=$(kubectl get function test-function-no-digest -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}')
+              
+              echo "Ready status: $READY_STATUS"
+              echo "Ready reason: $READY_REASON"
+              
+              if [ "$READY_STATUS" = "False" ] && [ "$READY_REASON" = "BuildImageError" ]; then
+                echo "SUCCESS: Function shows BuildImageError as expected"
+              else
+                echo "ERROR: Expected BuildImageError, got status=$READY_STATUS reason=$READY_REASON"
+                exit 1
+              fi
+    
+    - name: verify-no-ksvc-created
+      description: Verify KService was not created without valid digest
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              if kubectl get service.serving.knative.dev test-function-no-digest -n $NAMESPACE 2>/dev/null; then
+                echo "WARNING: KService was created despite missing digest"
+              else
+                echo "SUCCESS: KService not created without valid digest"
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-no-digest

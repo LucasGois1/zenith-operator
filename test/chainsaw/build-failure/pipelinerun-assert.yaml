@@ -1,0 +1,6 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: test-function-build-fail-build
+status:
+  registry.registry.svc.cluster.local:5000*: true

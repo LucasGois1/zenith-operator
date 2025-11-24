@@ -1,0 +1,163 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: eventing-dapr-combined-test
+spec:
+  description: |
+    Test that eventing and Dapr work together correctly.
+    This test verifies:
+    1. Function with both eventing and Dapr deploys successfully
+    2. Knative Service has Dapr annotations
+    3. Trigger is created and references the Knative Service
+    4. Function reaches Ready status with both features enabled
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-broker
+      description: Create Knative Eventing Broker
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | kubectl apply -f - -n $NAMESPACE
+              apiVersion: eventing.knative.dev/v1
+              kind: Broker
+              metadata:
+                name: default
+                annotations:
+                  eventing.knative.dev/broker.class: MTChannelBasedBroker
+              spec:
+                config:
+                  apiVersion: v1
+                  kind: ConfigMap
+                  name: config-br-default-channel
+                  namespace: knative-eventing
+              EOF
+    
+    - name: create-function
+      description: Create Function with eventing and Dapr
+      try:
+        - apply:
+            file: function.yaml
+        - script:
+            content: |
+              FN_NAME=test-function-eventing-dapr
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="'"$FN_NAME"'")]}{.metadata.name}{"\n"}{end}' | tail -n1)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-dapr-annotations
+      description: Verify Knative Service has Dapr annotations
+      try:
+        - script:
+            content: |
+              echo "Verifying Dapr annotations on Knative Service..."
+              
+              DAPR_ENABLED=$(kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/enabled}')
+              DAPR_APP_ID=$(kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/app-id}')
+              DAPR_APP_PORT=$(kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/app-port}')
+              
+              echo "Dapr enabled: $DAPR_ENABLED"
+              echo "Dapr app-id: $DAPR_APP_ID"
+              echo "Dapr app-port: $DAPR_APP_PORT"
+              
+              if [ "$DAPR_ENABLED" = "true" ] && [ "$DAPR_APP_ID" = "test-eventing-dapr-app" ] && [ "$DAPR_APP_PORT" = "8080" ]; then
+                echo "SUCCESS: Dapr annotations are correct"
+                exit 0
+              else
+                echo "ERROR: Dapr annotations are incorrect"
+                kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o yaml
+                exit 1
+              fi
+            timeout: 30s
+    
+    - name: verify-trigger-created
+      description: Verify Trigger was created
+      try:
+        - script:
+            content: |
+              echo "Waiting for Trigger to be created..."
+              TRIGGER_NAME="test-function-eventing-dapr-trigger"
+              for i in $(seq 1 60); do
+                if kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" 2>/dev/null; then
+                  echo "SUCCESS: Trigger exists"
+                  
+                  BROKER=$(kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.broker}')
+                  SUBSCRIBER=$(kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.subscriber.ref.name}')
+                  
+                  echo "Trigger broker: $BROKER"
+                  echo "Trigger subscriber: $SUBSCRIBER"
+                  
+                  if [ "$BROKER" = "default" ] && [ "$SUBSCRIBER" = "test-function-eventing-dapr" ]; then
+                    echo "SUCCESS: Trigger configuration is correct"
+                    exit 0
+                  else
+                    echo "ERROR: Trigger configuration incorrect"
+                    exit 1
+                  fi
+                fi
+                sleep 2
+              done
+              echo "ERROR: Trigger not created after 120 seconds"
+              exit 1
+            timeout: 150s
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - script:
+            content: |
+              echo "Waiting for Function to be Ready..."
+              for i in $(seq 1 60); do
+                READY=$(kubectl get function test-function-eventing-dapr -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+                if [ "$READY" = "True" ]; then
+                  echo "SUCCESS: Function is Ready with both eventing and Dapr"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: Function not Ready after 120 seconds"
+              kubectl get function test-function-eventing-dapr -n "$NAMESPACE" -o yaml
+              exit 1
+            timeout: 150s
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-eventing-dapr

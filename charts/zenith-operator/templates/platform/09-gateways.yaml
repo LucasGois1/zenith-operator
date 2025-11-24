@@ -1,0 +1,51 @@
+{{- if and .Values.installStack .Values.gatewayAPI.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ .Values.gatewayAPI.gateway.className }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.gatewayAPI.gateway.className }}-gatewayclass
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  controllerName: {{ .Values.envoyGateway.controllerName }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gatewayAPI.gateway.name }}
+  namespace: {{ .Values.gatewayAPI.gateway.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.gatewayAPI.gateway.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  gatewayClassName: {{ .Values.gatewayAPI.gateway.className }}
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: knative-local-gateway
+  namespace: {{ .Values.gatewayAPI.gateway.namespace }}
+  labels:
+    app.kubernetes.io/name: knative-local-gateway
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  gatewayClassName: {{ .Values.gatewayAPI.gateway.className }}
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: All
+{{- end }}

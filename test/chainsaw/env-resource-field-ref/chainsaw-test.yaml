@@ -1,0 +1,140 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: env-resource-field-ref-test
+spec:
+  description: |
+    Test resource field references (limits.cpu, requests.memory).
+    This test verifies:
+    1. Function deploys successfully with resourceFieldRef
+    2. Resource limits/requests are available in the container
+    3. Env vars from resourceFieldRef can be retrieved via /env endpoint
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: ../e2e-http-basic/git-clone-task.yaml
+        - apply:
+            file: ../e2e-http-basic/buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR with resourceFieldRef
+      try:
+        - apply:
+            file: function.yaml
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-env-resource-ref
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-env-vars
+      description: Verify resourceFieldRef values are available in container
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FUNCTION_URL=$(kubectl get function test-function-env-resource-ref -n $NAMESPACE -o jsonpath='{.status.url}')
+              echo "Function URL: $FUNCTION_URL"
+              
+              if [ -z "$FUNCTION_URL" ]; then
+                echo "ERROR: Function URL not set in status"
+                exit 1
+              fi
+              
+              FUNCTION_HOST=$(echo "$FUNCTION_URL" | sed 's|http://||' | sed 's|https://||')
+              
+              if echo "$FUNCTION_HOST" | grep -q "\.svc\.cluster\.local"; then
+                GATEWAY_NAME="knative-local-gateway"
+              else
+                GATEWAY_NAME="knative-gateway"
+              fi
+              
+              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=$GATEWAY_NAME -o jsonpath='{.items[0].metadata.name}')
+              
+              if [ -z "$ENVOY_SVC" ]; then
+                echo "ERROR: Could not find Envoy Gateway service"
+                exit 1
+              fi
+              
+              ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+              
+              if [ -z "$ENVOY_IP" ]; then
+                ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.spec.clusterIP}')
+              fi
+              
+              sleep 10
+              
+              RESPONSE=$(curl -s -H "Host: ${FUNCTION_HOST}" "http://${ENVOY_IP}/env?var=MEMORY_LIMIT&var=CPU_REQUEST" || echo "CURL_FAILED")
+              
+              if [ "$RESPONSE" = "CURL_FAILED" ]; then
+                echo "ERROR: curl command failed"
+                exit 1
+              fi
+              
+              echo "Response: $RESPONSE"
+              
+              # Verify MEMORY_LIMIT is set (value may vary)
+              if echo "$RESPONSE" | grep -q '"MEMORY_LIMIT"'; then
+                echo "SUCCESS: MEMORY_LIMIT from resourceFieldRef is present"
+              else
+                echo "ERROR: MEMORY_LIMIT from resourceFieldRef is missing"
+                echo "Response was: $RESPONSE"
+                exit 1
+              fi
+              
+              # Verify CPU_REQUEST is set (value may vary)
+              if echo "$RESPONSE" | grep -q '"CPU_REQUEST"'; then
+                echo "SUCCESS: CPU_REQUEST from resourceFieldRef is present"
+              else
+                echo "ERROR: CPU_REQUEST from resourceFieldRef is missing"
+                echo "Response was: $RESPONSE"
+                exit 1
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-env-resource-ref

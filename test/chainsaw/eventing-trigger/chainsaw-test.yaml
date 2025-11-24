@@ -1,0 +1,156 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: eventing-trigger-test
+spec:
+  description: |
+    Test that a Function with eventing configuration creates a Trigger.
+    This test verifies:
+    1. Function with eventing.broker and filters creates a Trigger
+    2. Trigger has correct broker, filters, and subscriber configuration
+    3. Function status is updated to Ready=True
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-eventing-broker
+      description: Create Knative Eventing Broker for the test
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | kubectl apply -f - -n $NAMESPACE
+              apiVersion: eventing.knative.dev/v1
+              kind: Broker
+              metadata:
+                name: default
+              EOF
+              
+              echo "Broker created (readiness not required for test)"
+    
+    - name: create-function-with-eventing
+      description: Create a Function CR with eventing configuration
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build-completion
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-eventing
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: wait-for-image-digest
+      description: Wait for controller to set Function.status.imageDigest after build
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              echo "Waiting for Function.status.imageDigest to be set..."
+              for i in $(seq 1 60); do
+                IMAGE_DIGEST=$(kubectl get function test-function-eventing -n "$NAMESPACE" -o jsonpath='{.status.imageDigest}')
+                if [ -n "$IMAGE_DIGEST" ]; then
+                  echo "SUCCESS: imageDigest set to: $IMAGE_DIGEST"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: imageDigest not set after 120 seconds"
+              exit 1
+    
+    - name: verify-knative-service-created
+      description: Verify that a Knative Service was created
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              echo "Waiting for Knative Service to be created..."
+              for i in $(seq 1 60); do
+                if kubectl get service.serving.knative.dev test-function-eventing -n "$NAMESPACE" 2>/dev/null; then
+                  echo "SUCCESS: Knative Service created"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: Knative Service not created after 120 seconds"
+              exit 1
+    
+    - name: verify-trigger-created
+      description: Verify that a Trigger was created with correct broker and subscriber
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              echo "Waiting for Trigger to be created..."
+              TRIGGER_NAME="test-function-eventing-trigger"
+              for i in $(seq 1 60); do
+                if kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" 2>/dev/null; then
+                  echo "SUCCESS: Trigger exists"
+                  
+                  BROKER=$(kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.broker}')
+                  SUBSCRIBER=$(kubectl get trigger "$TRIGGER_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.subscriber.ref.name}')
+                  
+                  echo "Trigger broker: $BROKER"
+                  echo "Trigger subscriber: $SUBSCRIBER"
+                  
+                  if [ "$BROKER" = "default" ] && [ "$SUBSCRIBER" = "test-function-eventing" ]; then
+                    echo "SUCCESS: Trigger has correct broker and subscriber"
+                    exit 0
+                  else
+                    echo "ERROR: Trigger configuration incorrect"
+                    echo "Expected broker=default, got: $BROKER"
+                    echo "Expected subscriber=test-function-eventing, got: $SUBSCRIBER"
+                    exit 1
+                  fi
+                fi
+                sleep 2
+              done
+              echo "ERROR: Trigger not created after 120 seconds"
+              exit 1
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-eventing

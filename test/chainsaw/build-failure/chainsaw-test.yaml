@@ -1,0 +1,98 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: build-failure-test
+spec:
+  description: |
+    Test that the operator correctly handles build failures.
+    This test verifies:
+    1. Function with invalid git repo causes PipelineRun to fail
+    2. Function status is updated to Ready=False with BuildFailed reason
+    3. No Knative Service is created when build fails
+  timeouts:
+    apply: 1m
+    assert: 8m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function-with-invalid-repo
+      description: Create a Function CR with invalid git repository
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-pipelinerun-created
+      description: Verify that a PipelineRun was created and has status
+      try:
+        - script:
+            content: |
+              for i in $(seq 1 60); do
+                STATUS=$(kubectl get pipelinerun test-function-build-fail-build -n $NAMESPACE -o jsonpath='{.status.conditions[0].type}' 2>/dev/null || echo "")
+                if [ -n "$STATUS" ]; then
+                  echo "SUCCESS: PipelineRun has status field"
+                  exit 0
+                fi
+                sleep 1
+              done
+              echo "ERROR: PipelineRun status not found after 60 seconds"
+              exit 1
+            timeout: 90s
+    
+    - name: wait-for-build-failure
+      description: Wait for PipelineRun to fail
+      try:
+        - assert:
+            file: pipelinerun-failed-assert.yaml
+            timeout: 5m
+    
+    - name: verify-build-failed-status
+      description: Verify Function status shows BuildFailed
+      try:
+        - assert:
+            file: function-build-failed-assert.yaml
+            timeout: 1m
+    
+    - name: verify-no-knative-service
+      description: Verify that no Knative Service was created
+      try:
+        - script:
+            content: |
+              if kubectl get service.serving.knative.dev test-function-build-fail -n $NAMESPACE 2>/dev/null; then
+                echo "ERROR: Knative Service should not exist after build failure"
+                exit 1
+              fi
+              echo "OK: No Knative Service exists as expected"
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-build-fail

@@ -1,0 +1,164 @@
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'api/**'
+      - 'internal/**'
+      - 'config/**'
+      - 'charts/**'
+      - 'test/chainsaw/**'
+      - 'hack/dev-up.sh'
+      - '.github/workflows/test-e2e.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-e2e:
+    name: E2E Tests (Sequential)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CLUSTER_NAME: zenith-operator-ci
+      IMG: zenith-operator:ci-test
+      # Use custom PAT with access to private zenith-test-functions repository
+      # GitHub doesn't allow secrets named GITHUB_*, so we use ZENITH_TEST_FUNCTIONS_PAT
+      # and map it to GITHUB_TOKEN env var that our scripts expect
+      # Required scopes: Classic PAT with 'repo', or Fine-grained PAT with 'Contents: Read'
+      GITHUB_TOKEN: ${{ secrets.ZENITH_TEST_FUNCTIONS_PAT }}
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup cluster and dependencies
+        run: |
+          echo "🚀 Setting up Kubernetes cluster and dependencies..."
+          
+          # Run dev-up.sh to install everything (Tekton, Knative, Envoy Gateway, MetalLB, etc.)
+          bash hack/dev-up.sh
+          
+          echo "✅ Cluster setup complete"
+
+      - name: Verify cluster readiness
+        run: |
+          echo "🔍 Verifying cluster components..."
+          
+          kubectl get pods -n tekton-pipelines
+          kubectl get pods -n knative-serving
+          kubectl get pods -n knative-eventing
+          kubectl get pods -n envoy-gateway-system
+          kubectl get pods -n metallb-system
+          kubectl get pods -n zenith-operator-system
+          
+          kubectl get gateway -n knative-serving
+          
+          echo "✅ All components ready"
+
+      - name: Run Chainsaw tests sequentially
+        run: |
+          echo "🧪 Running Chainsaw tests one by one..."
+          
+          # Install chainsaw if not already installed by dev-up.sh
+          if ! command -v chainsaw &> /dev/null; then
+            bash hack/install-chainsaw.sh
+            export PATH="$(pwd)/bin:$PATH"
+          fi
+          
+          # Get list of all test directories
+          TEST_DIRS=$(ls -1 test/chainsaw | grep -v README | sort)
+          
+          PASSED=0
+          FAILED=0
+          FAILED_TESTS=""
+          
+          # Run each test sequentially with increased cleanup timeout
+          for test_dir in $TEST_DIRS; do
+            echo ""
+            echo "=========================================="
+            echo "Running test: $test_dir"
+            echo "=========================================="
+            
+            # Run test with increased cleanup timeout (180s instead of default 30s)
+            # and skip Chainsaw's cleanup (we'll do it manually with longer timeout)
+            if chainsaw test \
+              --test-dir "test/chainsaw/$test_dir" \
+              --cleanup-timeout 180s \
+              --parallel 1; then
+              echo "✅ PASSED: $test_dir"
+              PASSED=$((PASSED + 1))
+            else
+              echo "❌ FAILED: $test_dir"
+              FAILED=$((FAILED + 1))
+              FAILED_TESTS="$FAILED_TESTS\n  - $test_dir"
+            fi
+            
+            # Manual cleanup of any leftover chainsaw namespaces with extended timeout
+            echo "🧹 Cleaning up test namespaces..."
+            kubectl get ns | awk '/^chainsaw-/{print $1}' | xargs -r -n1 kubectl delete ns --timeout=180s --wait=true || true
+            
+            # Small delay between tests
+            sleep 2
+          done
+          
+          echo ""
+          echo "=========================================="
+          echo "📊 Test Results Summary"
+          echo "=========================================="
+          echo "Total tests: $((PASSED + FAILED))"
+          echo "✅ Passed: $PASSED"
+          echo "❌ Failed: $FAILED"
+          
+          if [ $FAILED -gt 0 ]; then
+            echo ""
+            echo "Failed tests:$FAILED_TESTS"
+            exit 1
+          fi
+          
+          echo ""
+          echo "🎉 All tests passed!"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "📋 Collecting diagnostic logs..."
+          
+          mkdir -p /tmp/logs
+          
+          # Operator logs
+          kubectl logs -n zenith-operator-system -l control-plane=controller-manager --tail=500 > /tmp/logs/operator.log || true
+          
+          # Gateway status
+          kubectl get gateway -n knative-serving -o yaml > /tmp/logs/gateways.yaml || true
+          
+          # Envoy Gateway logs
+          kubectl logs -n envoy-gateway-system -l control-plane=envoy-gateway --tail=200 > /tmp/logs/envoy-gateway.log || true
+          
+          # List all pods
+          kubectl get pods --all-namespaces > /tmp/logs/all-pods.txt || true
+          
+          # Chainsaw namespaces (if any remain)
+          kubectl get ns | grep chainsaw || echo "No chainsaw namespaces found"
+          
+          echo "✅ Logs collected"
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-logs
+          path: /tmp/logs/
+          retention-days: 7

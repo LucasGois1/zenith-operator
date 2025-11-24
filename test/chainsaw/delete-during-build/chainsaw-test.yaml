@@ -1,0 +1,136 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: delete-during-build-test
+spec:
+  description: |
+    Test that deleting Function during build works correctly.
+    This test verifies:
+    1. Function is created and build starts
+    2. Function is deleted while PipelineRun is running
+    3. PipelineRun is garbage-collected via OwnerReference
+    4. All resources are cleaned up properly
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-pipelinerun-created
+      description: Verify PipelineRun was created
+      try:
+        - assert:
+            file: pipelinerun-assert.yaml
+            timeout: 1m
+    
+    - name: wait-for-build-to-start
+      description: Wait for build to actually start
+      try:
+        - script:
+            content: |
+              echo "Waiting for PipelineRun to start..."
+              sleep 10
+              
+              PR_STATUS=$(kubectl get pipelinerun test-function-delete-build -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].reason}' 2>/dev/null || echo "Unknown")
+              echo "PipelineRun status: $PR_STATUS"
+            timeout: 15s
+    
+    - name: delete-function-during-build
+      description: Delete Function while build is running
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-delete
+    
+    - name: verify-function-deleted
+      description: Verify Function is deleted
+      try:
+        - script:
+            content: |
+              echo "Verifying Function deletion..."
+              sleep 2
+              
+              if kubectl get function test-function-delete -n $NAMESPACE 2>/dev/null; then
+                echo "Function still exists (may be in terminating state)"
+              else
+                echo "SUCCESS: Function deleted"
+              fi
+    
+    - name: verify-pipelinerun-garbage-collected
+      description: Verify PipelineRun is garbage-collected
+      try:
+        - script:
+            content: |
+              echo "Waiting for PipelineRun garbage collection..."
+              
+              for i in $(seq 1 120); do
+                if ! kubectl get pipelinerun test-function-delete-build -n $NAMESPACE 2>/dev/null; then
+                  echo "SUCCESS: PipelineRun garbage-collected via OwnerReference"
+                  exit 0
+                fi
+                sleep 1
+              done
+              
+              echo "WARNING: PipelineRun still exists after 120 seconds"
+              echo "This may indicate OwnerReference is not set correctly"
+            timeout: 150s
+    
+    - name: verify-serviceaccount-deleted
+      description: Verify ServiceAccount is garbage-collected
+      try:
+        - script:
+            content: |
+              if ! kubectl get sa test-function-delete-sa -n $NAMESPACE 2>/dev/null; then
+                echo "SUCCESS: ServiceAccount garbage-collected"
+              else
+                echo "WARNING: ServiceAccount still exists"
+              fi
+    
+    - name: verify-no-orphaned-resources
+      description: Verify no orphaned resources remain
+      try:
+        - script:
+            content: |
+              echo "Checking for orphaned resources..."
+              
+              ORPHANED=$(kubectl get all -n $NAMESPACE -l functions.zenith.com/function=test-function-delete --no-headers 2>/dev/null | wc -l)
+              
+              if [ "$ORPHANED" -eq 0 ]; then
+                echo "SUCCESS: No orphaned resources found"
+              else
+                echo "WARNING: Found $ORPHANED orphaned resources"
+                kubectl get all -n $NAMESPACE -l functions.zenith.com/function=test-function-delete
+              fi

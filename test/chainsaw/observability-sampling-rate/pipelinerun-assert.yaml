@@ -1,0 +1,10 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: test-function-sampling-build
+spec:
+  pipelineSpec:
+    tasks:
+      - name: fetch-source
+        taskRef:
+          name: git-clone

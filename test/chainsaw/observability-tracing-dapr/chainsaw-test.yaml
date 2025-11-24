@@ -1,0 +1,147 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: observability-tracing-dapr-test
+spec:
+  description: |
+    Test Function with both Dapr and observability tracing enabled and verify that:
+    1. Dapr sidecar is injected with proper annotations
+    2. dapr.io/config annotation is set to "tracing-config"
+    3. OTEL environment variables are injected into the Knative Service
+    4. Function builds and deploys successfully
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret (requires GITHUB_TOKEN env var)
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR with Dapr and tracing enabled
+      try:
+        - apply:
+            file: function.yaml
+        - assert:
+            file: function-created-assert.yaml
+    
+    - name: verify-pipelinerun-created
+      description: Verify that a PipelineRun was created
+      try:
+        - assert:
+            file: pipelinerun-assert.yaml
+    
+    - name: wait-for-build-completion
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-dapr-tracing
+              
+              echo "==> Finding PipelineRun for $FN_NAME..."
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              
+              echo "==> Waiting for PipelineRun to complete..."
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              echo "✓ PipelineRun completed successfully"
+    
+    - name: verify-function-ready
+      description: Verify Function status shows Ready after successful build
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+    
+    - name: verify-dapr-and-tracing-annotations
+      description: Verify that Knative Service has both Dapr and tracing config annotations
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-dapr-tracing
+              
+              echo "==> Checking Dapr and tracing annotations in Knative Service..."
+              
+              # Get the annotations
+              DAPR_ENABLED=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/enabled}')
+              DAPR_APP_ID=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/app-id}')
+              DAPR_APP_PORT=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/app-port}')
+              DAPR_CONFIG=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/config}')
+              
+              echo "dapr.io/enabled: $DAPR_ENABLED"
+              echo "dapr.io/app-id: $DAPR_APP_ID"
+              echo "dapr.io/app-port: $DAPR_APP_PORT"
+              echo "dapr.io/config: $DAPR_CONFIG"
+              
+              # Verify values
+              [ "$DAPR_ENABLED" = "true" ] || { echo "ERROR: dapr.io/enabled not set to true"; exit 1; }
+              [ "$DAPR_APP_ID" = "test-dapr-tracing" ] || { echo "ERROR: dapr.io/app-id incorrect"; exit 1; }
+              [ "$DAPR_APP_PORT" = "8080" ] || { echo "ERROR: dapr.io/app-port incorrect"; exit 1; }
+              [ "$DAPR_CONFIG" = "tracing-config" ] || { echo "ERROR: dapr.io/config not set to tracing-config"; exit 1; }
+              
+              echo "✓ All Dapr and tracing annotations are correctly set"
+    
+    - name: verify-otel-env-vars
+      description: Verify that OTEL environment variables are injected
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-dapr-tracing
+              
+              echo "==> Checking OTEL environment variables in Knative Service..."
+              
+              # Get the container env vars
+              OTEL_ENDPOINT=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OTEL_EXPORTER_OTLP_ENDPOINT")].value}')
+              OTEL_SERVICE_NAME=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OTEL_SERVICE_NAME")].value}')
+              OTEL_EXPORTER=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OTEL_TRACES_EXPORTER")].value}')
+              
+              echo "OTEL_EXPORTER_OTLP_ENDPOINT: $OTEL_ENDPOINT"
+              echo "OTEL_SERVICE_NAME: $OTEL_SERVICE_NAME"
+              echo "OTEL_TRACES_EXPORTER: $OTEL_EXPORTER"
+              
+              # Verify values
+              [ "$OTEL_ENDPOINT" = "http://otel-collector.opentelemetry-operator-system.svc.cluster.local:4317" ] || { echo "ERROR: OTEL_EXPORTER_OTLP_ENDPOINT incorrect"; exit 1; }
+              [ "$OTEL_SERVICE_NAME" = "$FN_NAME" ] || { echo "ERROR: OTEL_SERVICE_NAME incorrect"; exit 1; }
+              [ "$OTEL_EXPORTER" = "otlp" ] || { echo "ERROR: OTEL_TRACES_EXPORTER incorrect"; exit 1; }
+              
+              echo "✓ All OTEL environment variables are correctly set"
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-dapr-tracing

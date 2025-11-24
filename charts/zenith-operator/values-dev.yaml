@@ -1,0 +1,133 @@
+
+profile: dev
+
+installStack: true
+
+tekton:
+  enabled: true
+  version: "v0.68.0"
+  clusterTasks:
+    gitClone:
+      enabled: true
+      version: "0.9"
+    buildpacksPhases:
+      enabled: true
+      version: "0.4"
+
+knativeServing:
+  enabled: true
+  version: "v0.41.2"
+  config:
+    ingressClass: "gateway-api.ingress.networking.knative.dev"
+
+knativeEventing:
+  enabled: true
+  version: "v0.41.7"
+
+gatewayAPI:
+  enabled: true
+  version: "v1.3.0"
+  gateway:
+    name: "knative-gateway"
+    namespace: "knative-serving"
+    className: "envoy"
+
+netGatewayAPI:
+  enabled: true
+  version: "knative-v1.20.0"
+
+envoyGateway:
+  enabled: true
+  version: "v1.6.0"
+  controllerName: "gateway.envoyproxy.io/gatewayclass-controller"
+
+metallb:
+  enabled: true
+  version: "v0.14.9"
+  addressPool: "172.18.255.200-172.18.255.250"
+
+dapr:
+  enabled: true
+  version: "1.14.0"
+  repository: "https://dapr.github.io/helm-charts/"
+
+opentelemetry:
+  enabled: true
+  version: "v0.140.0"
+  repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+
+registry:
+  enabled: true
+  image:
+    repository: registry
+    tag: "2"
+    pullPolicy: IfNotPresent
+  storage:
+    size: "10Gi"
+    storageClass: "standard"  # Kind default StorageClass
+  service:
+    type: ClusterIP
+    port: 5000
+  hostname: "registry.registry.svc.cluster.local"
+
+operator:
+  image:
+    repository: ghcr.io/lucasgois1/zenith-operator
+    tag: "test"  # Use test tag for development
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+
+  podAnnotations: {}
+
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - "ALL"
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  imagePullSecrets: []
+
+  controller:
+    insecureRegistries:
+      - "registry.registry.svc.cluster.local:5000"
+
+preflight:
+  enabled: true
+  checks:
+    rbac: true
+    kubernetesVersion: true
+    storageClass: true
+    nodeResources: true
+
+hooks:
+  preInstall:
+    weight: -5
+  postInstall:
+    weight: 0
+
+namespaceOverride: ""
+
+nameOverride: ""
+fullnameOverride: ""

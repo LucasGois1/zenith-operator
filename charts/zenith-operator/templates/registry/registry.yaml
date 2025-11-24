@@ -1,0 +1,103 @@
+{{- if .Values.registry.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-pvc
+  namespace: registry
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.registry.storage.storageClass }}
+  storageClassName: {{ .Values.registry.storage.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.registry.storage.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+  labels:
+    app: registry
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+        app.kubernetes.io/name: registry
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: registry
+        image: "{{ .Values.registry.image.repository }}:{{ .Values.registry.image.tag }}"
+        imagePullPolicy: {{ .Values.registry.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.registry.service.port }}
+          name: registry
+          protocol: TCP
+        volumeMounts:
+        - name: registry-storage
+          mountPath: /var/lib/registry
+        env:
+        - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+          value: /var/lib/registry
+        livenessProbe:
+          httpGet:
+            path: /
+            port: registry
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: registry
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: registry-storage
+        persistentVolumeClaim:
+          claimName: registry-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: registry
+  labels:
+    app: registry
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.registry.service.type }}
+  ports:
+  - port: {{ .Values.registry.service.port }}
+    targetPort: registry
+    protocol: TCP
+    name: registry
+  selector:
+    app: registry
+{{- end }}

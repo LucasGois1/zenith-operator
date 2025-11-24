@@ -1,0 +1,129 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: observability-tracing-disabled-test
+spec:
+  description: |
+    Test Function with observability tracing disabled and verify that:
+    1. NO OTEL environment variables are injected into the Knative Service
+    2. Function builds and deploys successfully without tracing
+    3. Function status shows Ready after successful deployment
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret (requires GITHUB_TOKEN env var)
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR with tracing disabled
+      try:
+        - apply:
+            file: function.yaml
+        - assert:
+            file: function-created-assert.yaml
+    
+    - name: verify-pipelinerun-created
+      description: Verify that a PipelineRun was created
+      try:
+        - assert:
+            file: pipelinerun-assert.yaml
+    
+    - name: wait-for-build-completion
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-no-tracing
+              
+              echo "==> Finding PipelineRun for $FN_NAME..."
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              
+              echo "==> Waiting for PipelineRun to complete..."
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              echo "✓ PipelineRun completed successfully"
+    
+    - name: verify-function-ready
+      description: Verify Function status shows Ready after successful build
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+    
+    - name: verify-no-otel-env-vars
+      description: Verify that NO OTEL environment variables are present
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-no-tracing
+              
+              echo "==> Checking that NO OTEL environment variables are present in Knative Service..."
+              
+              # Get all env vars
+              ALL_ENV=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].env[*].name}')
+              
+              echo "All environment variables: $ALL_ENV"
+              
+              # Check that OTEL vars are NOT present
+              if echo "$ALL_ENV" | grep -q "OTEL_EXPORTER_OTLP_ENDPOINT"; then
+                echo "ERROR: OTEL_EXPORTER_OTLP_ENDPOINT should not be present when tracing is disabled"
+                exit 1
+              fi
+              
+              if echo "$ALL_ENV" | grep -q "OTEL_SERVICE_NAME"; then
+                echo "ERROR: OTEL_SERVICE_NAME should not be present when tracing is disabled"
+                exit 1
+              fi
+              
+              if echo "$ALL_ENV" | grep -q "OTEL_TRACES_EXPORTER"; then
+                echo "ERROR: OTEL_TRACES_EXPORTER should not be present when tracing is disabled"
+                exit 1
+              fi
+              
+              if echo "$ALL_ENV" | grep -q "OTEL_RESOURCE_ATTRIBUTES"; then
+                echo "ERROR: OTEL_RESOURCE_ATTRIBUTES should not be present when tracing is disabled"
+                exit 1
+              fi
+              
+              echo "✓ Confirmed: NO OTEL environment variables are present (as expected)"
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-no-tracing

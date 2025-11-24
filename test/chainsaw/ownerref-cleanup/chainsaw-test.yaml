@@ -1,0 +1,129 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: ownerref-cleanup-test
+spec:
+  description: |
+    Test that dependent resources are cleaned up when Function is deleted.
+    This test verifies:
+    1. ServiceAccount, PipelineRun, Knative Service have ownerReferences to Function
+    2. When Function is deleted, dependent resources are garbage-collected
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 2m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-ownerref
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-resources-created
+      description: Verify that all dependent resources were created
+      try:
+        - assert:
+            file: serviceaccount-assert.yaml
+        - assert:
+            file: pipelinerun-assert.yaml
+        - assert:
+            file: knative-service-assert.yaml
+    
+    - name: verify-ownerrefs
+      description: Verify that resources have ownerReferences to Function
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              SA_OWNER=$(kubectl get serviceaccount test-function-ownerref-sa -n $NAMESPACE -o jsonpath='{.metadata.ownerReferences[0].kind}')
+              if [ "$SA_OWNER" != "Function" ]; then
+                echo "ERROR: ServiceAccount does not have Function as owner"
+                exit 1
+              fi
+              
+              PR_OWNER=$(kubectl get pipelinerun test-function-ownerref-build -n $NAMESPACE -o jsonpath='{.metadata.ownerReferences[0].kind}')
+              if [ "$PR_OWNER" != "Function" ]; then
+                echo "ERROR: PipelineRun does not have Function as owner"
+                exit 1
+              fi
+              
+              KSVC_OWNER=$(kubectl get service.serving.knative.dev test-function-ownerref -n $NAMESPACE -o jsonpath='{.metadata.ownerReferences[0].kind}')
+              if [ "$KSVC_OWNER" != "Function" ]; then
+                echo "ERROR: Knative Service does not have Function as owner"
+                exit 1
+              fi
+              
+              echo "OK: All resources have correct ownerReferences"
+    
+    - name: delete-function
+      description: Delete the Function
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-ownerref
+    
+    - name: verify-resources-deleted
+      description: Verify that dependent resources were garbage-collected
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              sleep 5
+              
+              if kubectl get serviceaccount test-function-ownerref-sa -n $NAMESPACE 2>/dev/null; then
+                echo "ERROR: ServiceAccount was not garbage-collected"
+                exit 1
+              fi
+              
+              if kubectl get pipelinerun test-function-ownerref-build -n $NAMESPACE 2>/dev/null; then
+                echo "ERROR: PipelineRun was not garbage-collected"
+                exit 1
+              fi
+              
+              if kubectl get service.serving.knative.dev test-function-ownerref -n $NAMESPACE 2>/dev/null; then
+                echo "ERROR: Knative Service was not garbage-collected"
+                exit 1
+              fi
+              
+              echo "OK: All dependent resources were garbage-collected"

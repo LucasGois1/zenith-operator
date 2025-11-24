@@ -1,0 +1,158 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "zenith-operator.fullname" . }}-manager-role
+  labels:
+    {{- include "zenith-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - eventing.knative.dev
+  resources:
+  - triggers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - functions.zenith.com
+  resources:
+  - functions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - functions.zenith.com
+  resources:
+  - functions/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - functions.zenith.com
+  resources:
+  - functions/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - serving.knative.dev
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - tekton.dev
+  resources:
+  - pipelineruns
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "zenith-operator.fullname" . }}-manager-rolebinding
+  labels:
+    {{- include "zenith-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "zenith-operator.fullname" . }}-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "zenith-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "zenith-operator.fullname" . }}-leader-election-role
+  labels:
+    {{- include "zenith-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "zenith-operator.fullname" . }}-leader-election-rolebinding
+  labels:
+    {{- include "zenith-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "zenith-operator.fullname" . }}-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "zenith-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}

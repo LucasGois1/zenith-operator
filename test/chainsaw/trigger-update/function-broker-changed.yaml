@@ -1,0 +1,16 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-trigger-update
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: devin/1763232295-add-test-functions
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-trigger-update
+  deploy: {}
+  eventing:
+    broker: alternate-broker
+    filters:
+      type: com.example.event.v2
+      source: /test/source

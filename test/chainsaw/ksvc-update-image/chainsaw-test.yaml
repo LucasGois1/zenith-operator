@@ -1,0 +1,125 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: ksvc-update-image-test
+spec:
+  description: |
+    Test that Knative Service is updated when Function image changes.
+    This test verifies:
+    1. Function deploys successfully with initial image
+    2. Updating the image digest triggers KService update
+    3. Function status reflects the new image
+    4. ObservedGeneration is updated correctly
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-initial-build
+      description: Wait for initial PipelineRun to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-update-image
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: wait-for-image-digest
+      description: Wait for controller to set Function.status.imageDigest after build
+      try:
+        - script:
+            content: |
+              echo "Waiting for Function.status.imageDigest to be set..."
+              for i in $(seq 1 60); do
+                IMAGE_DIGEST=$(kubectl get function test-function-update-image -n "$NAMESPACE" -o jsonpath='{.status.imageDigest}')
+                if [ -n "$IMAGE_DIGEST" ]; then
+                  echo "SUCCESS: imageDigest set to: $IMAGE_DIGEST"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: imageDigest not set after 120 seconds"
+              exit 1
+    
+    - name: wait-for-ksvc-creation
+      description: Wait for controller to create Knative Service after build
+      try:
+        - script:
+            content: |
+              echo "Waiting for Knative Service to be created..."
+              for i in $(seq 1 60); do
+                if kubectl get service.serving.knative.dev test-function-update-image -n "$NAMESPACE" 2>/dev/null; then
+                  echo "SUCCESS: Knative Service created"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "ERROR: Knative Service not created after 120 seconds"
+              exit 1
+    
+    - name: verify-knative-service-image
+      description: Verify that Knative Service was created with correct image from build
+      try:
+        - script:
+            content: |
+              FUNCTION_DIGEST=$(kubectl get function test-function-update-image -n "$NAMESPACE" -o jsonpath='{.status.imageDigest}')
+              KSVC_IMAGE=$(kubectl get service.serving.knative.dev test-function-update-image -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].image}')
+              
+              echo "Function imageDigest: $FUNCTION_DIGEST"
+              echo "KService image: $KSVC_IMAGE"
+              
+              if [ "$KSVC_IMAGE" = "$FUNCTION_DIGEST" ]; then
+                echo "SUCCESS: KService image matches Function imageDigest"
+              else
+                echo "ERROR: KService image ($KSVC_IMAGE) does not match Function imageDigest ($FUNCTION_DIGEST)"
+                exit 1
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-update-image

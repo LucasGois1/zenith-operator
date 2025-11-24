@@ -1,0 +1,10 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-build-fail
+status:
+  conditions:
+    - type: Ready
+      status: "False"
+      reason: BuildFailed
+      message: O build falhou

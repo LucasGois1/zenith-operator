@@ -1,0 +1,178 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: e2e-http-basic-test
+spec:
+  description: |
+    Test end-to-end HTTP request flow through Envoy Gateway to Function.
+    This test verifies:
+    1. Function deploys successfully
+    2. Envoy Gateway is accessible
+    3. HTTP requests with Host header reach the function
+    4. Function returns expected JSON response
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-http-basic
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-knative-service
+      description: Verify Knative Service was created
+      try:
+        - assert:
+            file: knative-service-assert.yaml
+            timeout: 1m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: get-function-url
+      description: Get Function URL from status
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FUNCTION_URL=$(kubectl get function test-function-http-basic -n $NAMESPACE -o jsonpath='{.status.url}')
+              echo "Function URL: $FUNCTION_URL"
+              
+              if [ -z "$FUNCTION_URL" ]; then
+                echo "ERROR: Function URL not set in status"
+                exit 1
+              fi
+              
+              FUNCTION_HOST=$(echo "$FUNCTION_URL" | sed 's|http://||' | sed 's|https://||')
+              echo "$FUNCTION_HOST" > /tmp/function-host.txt
+              echo "Function Host: $FUNCTION_HOST"
+    
+    - name: get-envoy-endpoint
+      description: Get Envoy Gateway LoadBalancer endpoint
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FUNCTION_HOST=$(cat /tmp/function-host.txt)
+              
+              if echo "$FUNCTION_HOST" | grep -q "\.svc\.cluster\.local"; then
+                GATEWAY_NAME="knative-local-gateway"
+                echo "Using local gateway for cluster.local URL"
+              else
+                GATEWAY_NAME="knative-gateway"
+                echo "Using external gateway for public URL"
+              fi
+              
+              ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=$GATEWAY_NAME -o jsonpath='{.items[0].metadata.name}')
+              
+              if [ -z "$ENVOY_SVC" ]; then
+                echo "ERROR: Could not find Envoy Gateway service for $GATEWAY_NAME"
+                exit 1
+              fi
+              
+              ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+              
+              if [ -z "$ENVOY_IP" ]; then
+                ENVOY_IP=$(kubectl get svc "$ENVOY_SVC" -n envoy-gateway-system -o jsonpath='{.spec.clusterIP}')
+              fi
+              
+              if [ -z "$ENVOY_IP" ]; then
+                echo "ERROR: Could not get Envoy Gateway endpoint"
+                exit 1
+              fi
+              
+              echo "Envoy Gateway endpoint: http://${ENVOY_IP}"
+              echo "${ENVOY_IP}" > /tmp/envoy-endpoint.txt
+    
+    - name: test-http-request
+      description: Test HTTP request through Envoy Gateway to Function
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FUNCTION_HOST=$(cat /tmp/function-host.txt)
+              ENVOY_ENDPOINT=$(cat /tmp/envoy-endpoint.txt)
+              
+              echo "Testing HTTP request..."
+              echo "  Envoy Gateway: http://${ENVOY_ENDPOINT}"
+              echo "  Host: ${FUNCTION_HOST}"
+              
+              sleep 10
+              
+              RESPONSE=$(curl -s -H "Host: ${FUNCTION_HOST}" "http://${ENVOY_ENDPOINT}/" || echo "CURL_FAILED")
+              
+              if [ "$RESPONSE" = "CURL_FAILED" ]; then
+                echo "ERROR: curl command failed"
+                exit 1
+              fi
+              
+              echo "Response: $RESPONSE"
+              
+              if echo "$RESPONSE" | grep -q '"status"' && echo "$RESPONSE" | grep -q '"type"'; then
+                echo "SUCCESS: Received valid JSON response"
+              else
+                echo "ERROR: Response does not contain expected JSON fields"
+                echo "Response was: $RESPONSE"
+                exit 1
+              fi
+              
+              if echo "$RESPONSE" | grep -q '"status":"ok"'; then
+                echo "SUCCESS: Status is 'ok'"
+              else
+                echo "ERROR: Status is not 'ok'"
+                exit 1
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-http-basic

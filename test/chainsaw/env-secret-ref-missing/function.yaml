@@ -1,0 +1,17 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-env-secret-missing
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: add-env-echo-endpoint
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/test-function-env-secret-missing
+  deploy:
+    env:
+      - name: API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: missing-credentials
+            key: api-key

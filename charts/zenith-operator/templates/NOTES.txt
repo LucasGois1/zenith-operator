@@ -1,0 +1,183 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+========================================
+Installation Summary
+========================================
+
+Profile: {{ .Values.profile }}
+Namespace: {{ .Release.Namespace }}
+
+Components Installed:
+{{- if .Values.installStack }}
+  ✓ Zenith Operator
+  {{- if .Values.tekton.enabled }}
+  ✓ Tekton Pipelines ({{ .Values.tekton.version }})
+    {{- if .Values.tekton.clusterTasks.gitClone.enabled }}
+    ✓ git-clone ClusterTask (v{{ .Values.tekton.clusterTasks.gitClone.version }})
+    {{- end }}
+    {{- if .Values.tekton.clusterTasks.buildpacksPhases.enabled }}
+    ✓ buildpacks-phases ClusterTask (v{{ .Values.tekton.clusterTasks.buildpacksPhases.version }})
+    {{- end }}
+  {{- end }}
+  {{- if .Values.knativeServing.enabled }}
+  ✓ Knative Serving ({{ .Values.knativeServing.version }})
+  {{- end }}
+  {{- if .Values.knativeEventing.enabled }}
+  ✓ Knative Eventing ({{ .Values.knativeEventing.version }})
+  {{- end }}
+  {{- if .Values.gatewayAPI.enabled }}
+  ✓ Gateway API ({{ .Values.gatewayAPI.version }})
+  {{- end }}
+  {{- if .Values.netGatewayAPI.enabled }}
+  ✓ net-gateway-api ({{ .Values.netGatewayAPI.version }})
+  {{- end }}
+  {{- if .Values.envoyGateway.enabled }}
+  ✓ Envoy Gateway ({{ .Values.envoyGateway.version }})
+  {{- end }}
+  {{- if .Values.dapr.enabled }}
+  ✓ Dapr ({{ .Values.dapr.version }})
+  {{- end }}
+  {{- if .Values.registry.enabled }}
+  ✓ Local Container Registry
+  {{- end }}
+{{- else }}
+  ✓ Zenith Operator (dependencies not installed)
+{{- end }}
+
+========================================
+Getting Started
+========================================
+
+1. Verify all components are running:
+
+   kubectl get pods -n {{ .Release.Namespace }}
+   {{- if .Values.installStack }}
+   kubectl get pods -n tekton-pipelines
+   kubectl get pods -n knative-serving
+   kubectl get pods -n knative-eventing
+   kubectl get pods -n envoy-gateway-system
+   {{- if .Values.dapr.enabled }}
+   kubectl get pods -n dapr-system
+   {{- end }}
+   {{- if .Values.registry.enabled }}
+   kubectl get pods -n registry
+   {{- end }}
+   {{- end }}
+
+2. Check the operator logs:
+
+   kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "zenith-operator.name" . }} -f
+
+3. Create your first Function:
+
+   cat <<EOF | kubectl apply -f -
+   apiVersion: functions.zenith.com/v1alpha1
+   kind: Function
+   metadata:
+     name: hello-world
+     namespace: default
+   spec:
+     git:
+       url: https://github.com/your-org/your-function
+       revision: main
+     {{- if .Values.registry.enabled }}
+     image: {{ .Values.registry.hostname }}/hello-world:latest
+     {{- else }}
+     image: your-registry/hello-world:latest
+     {{- end }}
+     builder: paketobuildpacks/builder:base
+   EOF
+
+4. Watch the Function build:
+
+   kubectl get functions -n default
+   kubectl get pipelineruns -n default
+   kubectl get ksvc -n default
+
+{{- if .Values.registry.enabled }}
+
+========================================
+Local Registry Configuration
+========================================
+
+A local container registry has been deployed for development.
+
+Registry URL: {{ .Values.registry.hostname }}:{{ .Values.registry.service.port }}
+
+To use the local registry with your Functions:
+1. Set the image field to: {{ .Values.registry.hostname }}/your-image:tag
+2. The operator will automatically detect and configure insecure registry access
+
+{{- end }}
+
+{{- if .Values.envoyGateway.enabled }}
+
+========================================
+Envoy Gateway Configuration
+========================================
+
+Envoy Gateway has been installed with Gateway API support.
+
+To access your Functions via Envoy Gateway:
+
+1. Get the Gateway address:
+   kubectl get gateway knative-gateway -n knative-serving -o jsonpath='{.status.addresses[0].value}'
+
+2. Access your Function:
+   curl http://<gateway-address> -H "Host: hello-world.default.example.com"
+
+Note: If using kind without MetalLB, the Gateway may not have an external address.
+In that case, use port-forwarding:
+   kubectl port-forward -n envoy-gateway-system svc/<envoy-service> 8080:80
+
+{{- end }}
+
+{{- if .Values.dapr.enabled }}
+
+========================================
+Dapr Configuration
+========================================
+
+Dapr has been installed and is available for your Functions.
+
+To enable Dapr for a Function, add the following annotation:
+  metadata:
+    annotations:
+      dapr.io/enabled: "true"
+
+{{- end }}
+
+========================================
+Documentation
+========================================
+
+For more information:
+- Helm Chart: https://github.com/LucasGois1/zenith-operator/tree/main/charts/zenith-operator
+- Operator Docs: https://github.com/LucasGois1/zenith-operator
+- Tekton: https://tekton.dev
+- Knative: https://knative.dev
+- Envoy Gateway: https://gateway.envoyproxy.io
+
+========================================
+Troubleshooting
+========================================
+
+If you encounter issues:
+
+1. Check operator logs:
+   kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "zenith-operator.name" . }}
+
+2. Check Function status:
+   kubectl describe function <function-name> -n <namespace>
+
+3. Check PipelineRun logs:
+   kubectl logs -n <namespace> <pipelinerun-name> --all-containers
+
+4. Verify all dependencies are running:
+   kubectl get pods --all-namespaces | grep -E "tekton|knative|envoy|dapr"
+
+For more help, visit: https://github.com/LucasGois1/zenith-operator/issues
+
+========================================

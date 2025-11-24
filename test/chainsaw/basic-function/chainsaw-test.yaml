@@ -1,0 +1,127 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: basic-function-test
+spec:
+  description: |
+    Test basic Function CR creation and verify that the operator:
+    1. Creates a PipelineRun to build the function
+    2. Updates the Function status correctly
+    3. Creates a Knative Service after successful build
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret (requires GITHUB_TOKEN env var)
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function
+      description: Create a basic Function CR
+      try:
+        - apply:
+            file: function.yaml
+        - assert:
+            file: function-created-assert.yaml
+    
+    - name: verify-pipelinerun-created
+      description: Verify that a PipelineRun was created
+      try:
+        - assert:
+            file: pipelinerun-assert.yaml
+    
+    - name: verify-building-status
+      description: Verify Function status shows Building while PipelineRun is in progress
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function
+              
+              echo "==> Finding PipelineRun for $FN_NAME..."
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              
+              echo "==> Polling Function status while PipelineRun is in progress..."
+              BUILDING_OBSERVED=false
+              for i in $(seq 1 60); do
+                PR_SUCCEEDED=$(kubectl get pipelinerun "$PR_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}' 2>/dev/null || echo "Unknown")
+                
+                FN_READY_STATUS=$(kubectl get function "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+                FN_READY_REASON=$(kubectl get function "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+                
+                echo "Iteration $i: PR Succeeded=$PR_SUCCEEDED, Function Ready=$FN_READY_STATUS, Reason=$FN_READY_REASON"
+                
+                if [ "$PR_SUCCEEDED" != "True" ] && [ "$FN_READY_STATUS" = "False" ] && [ "$FN_READY_REASON" = "Building" ]; then
+                  echo "✓ SUCCESS: Observed Function in 'Building' state while PipelineRun is in progress"
+                  BUILDING_OBSERVED=true
+                  break
+                fi
+                
+                if [ "$PR_SUCCEEDED" = "True" ]; then
+                  echo "PipelineRun completed before we could observe Building status"
+                  break
+                fi
+                
+                sleep 2
+              done
+              
+              if [ "$BUILDING_OBSERVED" = "false" ]; then
+                echo "ERROR: Could not observe 'Building' status during PipelineRun execution"
+                echo "This indicates the operator may not be setting the Building status correctly"
+                exit 1
+              fi
+              
+              echo "==> Waiting for PipelineRun to complete..."
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+              echo "✓ PipelineRun completed successfully"
+    
+    - name: verify-function-ready
+      description: Verify Function status shows Ready after successful build
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+    
+    - name: verify-knative-service-created
+      description: Verify that a Knative Service was created
+      try:
+        - assert:
+            file: knative-service-assert.yaml
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function

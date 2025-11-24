@@ -1,0 +1,96 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: no-eventing-ready-test
+spec:
+  description: |
+    Test that a Function without eventing configuration reaches Ready status.
+    This test verifies:
+    1. Function without eventing.broker completes successfully
+    2. Function status is updated to Ready=True
+    3. No Trigger is created
+    4. Knative Service is created and ready
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function-without-eventing
+      description: Create a Function CR without eventing configuration
+      try:
+        - apply:
+            file: function.yaml
+        - script:
+            timeout: 10m
+            content: |
+              FN_NAME=test-function-no-eventing
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-knative-service-created
+      description: Verify that a Knative Service was created
+      try:
+        - assert:
+            file: knative-service-assert.yaml
+            timeout: 1m
+    
+    - name: verify-function-ready
+      description: Verify Function status shows Ready=True
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-no-trigger
+      description: Verify that no Trigger was created
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              if kubectl get trigger test-function-no-eventing-trigger -n $NAMESPACE 2>/dev/null; then
+                echo "ERROR: Trigger should not exist when eventing is not configured"
+                exit 1
+              fi
+              echo "OK: No Trigger exists as expected"
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-no-eventing
