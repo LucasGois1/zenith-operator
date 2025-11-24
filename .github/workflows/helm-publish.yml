@@ -47,33 +47,30 @@ jobs:
         helm repo index .helm-publish --url https://lucasgois1.github.io/zenith-operator
         echo "✅ Repository index generated"
 
-    - name: Checkout gh-pages branch
+    - name: Copy Helm artifacts to docs directory
       run: |
-        echo "🔄 Checking out gh-pages branch..."
-        git fetch origin gh-pages
-        git worktree add .gh-pages gh-pages
-        echo "✅ gh-pages branch checked out to .gh-pages/"
+        echo "📋 Copying Helm artifacts to docs/..."
 
-    - name: Copy Helm artifacts to gh-pages
+        # Ensure docs directory exists
+        mkdir -p docs
+
+        # Copy the packaged chart and index.yaml to docs/
+        cp .helm-publish/*.tgz docs/
+        cp .helm-publish/index.yaml docs/
+
+        # Create .nojekyll to disable Jekyll processing
+        touch docs/.nojekyll
+
+        echo "✅ Artifacts copied to docs/"
+
+    - name: Commit and push to main
       run: |
-        echo "📋 Copying Helm artifacts to gh-pages..."
-
-        # Copy the packaged chart and index.yaml to the root of gh-pages
-        cp .helm-publish/*.tgz .gh-pages/
-        cp .helm-publish/index.yaml .gh-pages/
-
-        echo "✅ Artifacts copied to gh-pages"
-
-    - name: Commit and push to gh-pages
-      run: |
-        cd .gh-pages
-
         # Configure git
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
         # Add only the Helm-related files
-        git add *.tgz index.yaml
+        git add docs/*.tgz docs/index.yaml docs/.nojekyll
 
         # Check if there are changes to commit
         if git diff --staged --quiet; then
@@ -82,11 +79,11 @@ jobs:
         fi
 
         # Get chart version from Chart.yaml
-        CHART_VERSION=$(grep '^version:' ../charts/zenith-operator/Chart.yaml | awk '{print $2}')
+        CHART_VERSION=$(grep '^version:' charts/zenith-operator/Chart.yaml | awk '{print $2}')
 
         # Commit and push
         git commit -m "chore: publish Helm chart v${CHART_VERSION}"
-        git push origin gh-pages
+        git push origin main
 
         echo "✅ Helm chart published to GitHub Pages"
 
