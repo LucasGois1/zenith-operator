@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kneventingv1 "knative.dev/eventing/pkg/apis/eventing/v1"
 	"knative.dev/pkg/apis"
@@ -1635,6 +1636,389 @@ var _ = Describe("Function Controller Reconciliation", func() {
 					trigger.Spec.Filter.Attributes["type"] == "com.example.v2" &&
 					trigger.Spec.Filter.Attributes["source"] == "my-source"
 			}, timeout, interval).Should(BeTrue())
+		})
+	})
+
+	Context("extractPipelineRunFailure", func() {
+		It("should return default values when PipelineRun has no conditions", func() {
+			ctx := context.Background()
+			namespace := testNamespace
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			pr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pr-no-conditions",
+					Namespace: namespace,
+				},
+				Status: tektonv1.PipelineRunStatus{},
+			}
+
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			Expect(reason).To(Equal("BuildFailed"))
+			Expect(message).To(Equal("O build falhou"))
+		})
+
+		It("should extract reason and message from PipelineRun Succeeded condition", func() {
+			ctx := context.Background()
+			namespace := testNamespace
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			pr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pr-with-condition",
+					Namespace: namespace,
+				},
+				Status: tektonv1.PipelineRunStatus{
+					Status: duckv1.Status{
+						Conditions: duckv1.Conditions{
+							{
+								Type:    apis.ConditionSucceeded,
+								Status:  v1.ConditionFalse,
+								Reason:  "PipelineFailed",
+								Message: "Pipeline execution failed due to task error",
+							},
+						},
+					},
+				},
+			}
+
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			Expect(reason).To(Equal("PipelineFailed"))
+			Expect(message).To(Equal("Pipeline execution failed due to task error"))
+		})
+
+		It("should use default reason when condition has empty reason", func() {
+			ctx := context.Background()
+			namespace := testNamespace
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			pr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pr-empty-reason",
+					Namespace: namespace,
+				},
+				Status: tektonv1.PipelineRunStatus{
+					Status: duckv1.Status{
+						Conditions: duckv1.Conditions{
+							{
+								Type:    apis.ConditionSucceeded,
+								Status:  v1.ConditionFalse,
+								Reason:  "",
+								Message: "Some failure message",
+							},
+						},
+					},
+				},
+			}
+
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			Expect(reason).To(Equal("BuildFailed"))
+			Expect(message).To(Equal("Some failure message"))
+		})
+
+		It("should extract details from failed TaskRun with PipelineTaskName", func() {
+			ctx := context.Background()
+			namespace := testNamespace
+			taskRunName := "test-pr-taskrun-fetch-source"
+
+			// Create the TaskRun first (without status)
+			taskRun := &tektonv1.TaskRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      taskRunName,
+					Namespace: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, taskRun)
+			}()
+
+			// Update the status separately (status is a subresource)
+			taskRun.Status = tektonv1.TaskRunStatus{
+				Status: duckv1.Status{
+					Conditions: duckv1.Conditions{
+						{
+							Type:    apis.ConditionSucceeded,
+							Status:  v1.ConditionFalse,
+							Reason:  "TaskRunFailed",
+							Message: "authentication required for https://github.com/user/repo",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, taskRun)).To(Succeed())
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			pr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pr-with-taskrun",
+					Namespace: namespace,
+				},
+				Status: tektonv1.PipelineRunStatus{
+					Status: duckv1.Status{
+						Conditions: duckv1.Conditions{
+							{
+								Type:    apis.ConditionSucceeded,
+								Status:  v1.ConditionFalse,
+								Reason:  "Failed",
+								Message: "Tasks Completed: 0, Failed: 1",
+							},
+						},
+					},
+					PipelineRunStatusFields: tektonv1.PipelineRunStatusFields{
+						ChildReferences: []tektonv1.ChildStatusReference{
+							{
+								TypeMeta:         runtime.TypeMeta{Kind: "TaskRun"},
+								Name:             taskRunName,
+								PipelineTaskName: "fetch-source",
+							},
+						},
+					},
+				},
+			}
+
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			Expect(reason).To(Equal("TaskRunFailed"))
+			Expect(message).To(Equal("Task 'fetch-source' falhou: authentication required for https://github.com/user/repo"))
+		})
+
+		It("should use TaskRun name when PipelineTaskName is empty", func() {
+			ctx := context.Background()
+			namespace := testNamespace
+			taskRunName := "test-pr-taskrun-no-pipeline-task"
+
+			// Create the TaskRun first (without status)
+			taskRun := &tektonv1.TaskRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      taskRunName,
+					Namespace: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, taskRun)
+			}()
+
+			// Update the status separately (status is a subresource)
+			taskRun.Status = tektonv1.TaskRunStatus{
+				Status: duckv1.Status{
+					Conditions: duckv1.Conditions{
+						{
+							Type:    apis.ConditionSucceeded,
+							Status:  v1.ConditionFalse,
+							Reason:  "BuildError",
+							Message: "build failed: exit code 1",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, taskRun)).To(Succeed())
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			pr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pr-empty-pipeline-task",
+					Namespace: namespace,
+				},
+				Status: tektonv1.PipelineRunStatus{
+					Status: duckv1.Status{
+						Conditions: duckv1.Conditions{
+							{
+								Type:    apis.ConditionSucceeded,
+								Status:  v1.ConditionFalse,
+								Reason:  "Failed",
+								Message: "Tasks Completed: 0, Failed: 1",
+							},
+						},
+					},
+					PipelineRunStatusFields: tektonv1.PipelineRunStatusFields{
+						ChildReferences: []tektonv1.ChildStatusReference{
+							{
+								TypeMeta:         runtime.TypeMeta{Kind: "TaskRun"},
+								Name:             taskRunName,
+								PipelineTaskName: "",
+							},
+						},
+					},
+				},
+			}
+
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			Expect(reason).To(Equal("BuildError"))
+			Expect(message).To(Equal("Task '" + taskRunName + "' falhou: build failed: exit code 1"))
+		})
+
+		It("should skip non-TaskRun child references", func() {
+			ctx := context.Background()
+			namespace := testNamespace
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			pr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pr-non-taskrun-child",
+					Namespace: namespace,
+				},
+				Status: tektonv1.PipelineRunStatus{
+					Status: duckv1.Status{
+						Conditions: duckv1.Conditions{
+							{
+								Type:    apis.ConditionSucceeded,
+								Status:  v1.ConditionFalse,
+								Reason:  "PipelineFailed",
+								Message: "Pipeline failed",
+							},
+						},
+					},
+					PipelineRunStatusFields: tektonv1.PipelineRunStatusFields{
+						ChildReferences: []tektonv1.ChildStatusReference{
+							{
+								TypeMeta: runtime.TypeMeta{Kind: "CustomRun"},
+								Name:     "some-custom-run",
+							},
+						},
+					},
+				},
+			}
+
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			Expect(reason).To(Equal("PipelineFailed"))
+			Expect(message).To(Equal("Pipeline failed"))
+		})
+
+		It("should skip successful TaskRuns", func() {
+			ctx := context.Background()
+			namespace := testNamespace
+			taskRunName := "test-pr-taskrun-success"
+
+			// Create the TaskRun first (without status)
+			taskRun := &tektonv1.TaskRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      taskRunName,
+					Namespace: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, taskRun)
+			}()
+
+			// Update the status separately (status is a subresource)
+			taskRun.Status = tektonv1.TaskRunStatus{
+				Status: duckv1.Status{
+					Conditions: duckv1.Conditions{
+						{
+							Type:    apis.ConditionSucceeded,
+							Status:  v1.ConditionTrue,
+							Reason:  "Succeeded",
+							Message: "Task completed successfully",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, taskRun)).To(Succeed())
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			pr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pr-success-taskrun",
+					Namespace: namespace,
+				},
+				Status: tektonv1.PipelineRunStatus{
+					Status: duckv1.Status{
+						Conditions: duckv1.Conditions{
+							{
+								Type:    apis.ConditionSucceeded,
+								Status:  v1.ConditionFalse,
+								Reason:  "PipelineFailed",
+								Message: "Pipeline failed for other reasons",
+							},
+						},
+					},
+					PipelineRunStatusFields: tektonv1.PipelineRunStatusFields{
+						ChildReferences: []tektonv1.ChildStatusReference{
+							{
+								TypeMeta:         runtime.TypeMeta{Kind: "TaskRun"},
+								Name:             taskRunName,
+								PipelineTaskName: "fetch-source",
+							},
+						},
+					},
+				},
+			}
+
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			Expect(reason).To(Equal("PipelineFailed"))
+			Expect(message).To(Equal("Pipeline failed for other reasons"))
+		})
+
+		It("should handle TaskRun not found gracefully", func() {
+			ctx := context.Background()
+			namespace := testNamespace
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			pr := &tektonv1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pr-taskrun-not-found",
+					Namespace: namespace,
+				},
+				Status: tektonv1.PipelineRunStatus{
+					Status: duckv1.Status{
+						Conditions: duckv1.Conditions{
+							{
+								Type:    apis.ConditionSucceeded,
+								Status:  v1.ConditionFalse,
+								Reason:  "PipelineFailed",
+								Message: "Pipeline failed",
+							},
+						},
+					},
+					PipelineRunStatusFields: tektonv1.PipelineRunStatusFields{
+						ChildReferences: []tektonv1.ChildStatusReference{
+							{
+								TypeMeta:         runtime.TypeMeta{Kind: "TaskRun"},
+								Name:             "nonexistent-taskrun",
+								PipelineTaskName: "fetch-source",
+							},
+						},
+					},
+				},
+			}
+
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			Expect(reason).To(Equal("PipelineFailed"))
+			Expect(message).To(Equal("Pipeline failed"))
 		})
 	})
 })
