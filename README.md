@@ -1,5 +1,6 @@
 # Zenith Operator
 
+[![codecov](https://codecov.io/github/LucasGois1/zenith-operator/branch/main/graph/badge.svg?token=2QNLMH3D7H)](https://codecov.io/github/LucasGois1/zenith-operator)
 [![Lint](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/lint.yml)
 [![Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml)
 [![E2E Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml)
