@@ -7,4 +7,3 @@ status:
     - type: Ready
       status: "False"
       reason: BuildFailed
-      message: O build falhou

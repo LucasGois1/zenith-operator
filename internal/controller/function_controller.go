@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kneventingv1 "knative.dev/eventing/pkg/apis/eventing/v1"
+	"knative.dev/pkg/apis"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	knservingv1 "knative.dev/serving/pkg/apis/serving/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -265,13 +266,20 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// 2. Verificar se falhou
 	if pipelineRun.IsFailure() {
-		log.Error(nil, "PipelineRun failed", "PipelineRun.Name", pipelineRun.Name)
-		// (Atualizar Status para "BuildFailed" e parar)
+		// Extrair informações detalhadas sobre a falha do PipelineRun e TaskRuns
+		failureReason, failureMessage := r.extractPipelineRunFailure(ctx, pipelineRun)
+
+		log.Error(nil, "PipelineRun failed",
+			"PipelineRun.Name", pipelineRun.Name,
+			"Reason", failureReason,
+			"Message", failureMessage)
+
+		// Atualizar Status para "BuildFailed" com mensagem detalhada
 		buildFailedCondition := metav1.Condition{
-			Type:    "Ready", // Usar tipo "Ready" consistentemente
+			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
 			Reason:  "BuildFailed",
-			Message: "O build falhou",
+			Message: failureMessage,
 		}
 		meta.SetStatusCondition(&function.Status.Conditions, buildFailedCondition)
 		function.Status.ObservedGeneration = function.Generation
@@ -1280,6 +1288,88 @@ func (r *FunctionReconciler) buildKnativeTrigger(function *functionsv1alpha1.Fun
 			},
 		},
 	}
+}
+
+// extractPipelineRunFailure extracts detailed failure information from a PipelineRun.
+// It returns the failure reason and a human-readable message describing what went wrong.
+// This function first checks the PipelineRun's Succeeded condition, then attempts to
+// get more specific details from failed TaskRuns if available.
+func (r *FunctionReconciler) extractPipelineRunFailure(ctx context.Context, pipelineRun *tektonv1.PipelineRun) (reason string, message string) {
+	log := logf.FromContext(ctx)
+
+	// Default values
+	reason = "BuildFailed"
+	message = "O build falhou"
+
+	// 1. First, try to get the failure reason from the PipelineRun's Succeeded condition
+	succeededCondition := pipelineRun.Status.GetCondition(apis.ConditionSucceeded)
+	if succeededCondition != nil {
+		if succeededCondition.Reason != "" {
+			reason = succeededCondition.Reason
+		}
+		if succeededCondition.Message != "" {
+			message = succeededCondition.Message
+		}
+		log.Info("PipelineRun failure details from Succeeded condition",
+			"PipelineRun.Name", pipelineRun.Name,
+			"Reason", reason,
+			"Message", message)
+	}
+
+	// 2. Try to get more specific details from failed TaskRuns
+	// The v1 API uses ChildReferences instead of inline TaskRuns
+	for _, childRef := range pipelineRun.Status.ChildReferences {
+		if childRef.Kind != "TaskRun" {
+			continue
+		}
+
+		// Fetch the TaskRun to get its status
+		taskRun := &tektonv1.TaskRun{}
+		err := r.Get(ctx, types.NamespacedName{
+			Name:      childRef.Name,
+			Namespace: pipelineRun.Namespace,
+		}, taskRun)
+		if err != nil {
+			log.V(1).Info("Could not fetch TaskRun for failure details",
+				"TaskRun.Name", childRef.Name,
+				"error", err.Error())
+			continue
+		}
+
+		// Check if this TaskRun failed
+		if !taskRun.IsFailure() {
+			continue
+		}
+
+		// Get the TaskRun's Succeeded condition for detailed error
+		taskRunCondition := taskRun.Status.GetCondition(apis.ConditionSucceeded)
+		if taskRunCondition != nil && taskRunCondition.Message != "" {
+			taskName := childRef.PipelineTaskName
+			if taskName == "" {
+				taskName = childRef.Name
+			}
+
+			// Build a more descriptive message including the task name
+			detailedMessage := fmt.Sprintf("Task '%s' falhou: %s", taskName, taskRunCondition.Message)
+
+			log.Info("Found failed TaskRun with details",
+				"TaskRun.Name", childRef.Name,
+				"PipelineTask", taskName,
+				"Reason", taskRunCondition.Reason,
+				"Message", taskRunCondition.Message)
+
+			// Use the TaskRun's more specific error message
+			message = detailedMessage
+			if taskRunCondition.Reason != "" {
+				reason = taskRunCondition.Reason
+			}
+
+			// Return the first failed TaskRun's details (usually the root cause)
+			return reason, message
+		}
+	}
+
+	return reason, message
 }
 
 // SetupWithManager sets up the controller with the Manager.
