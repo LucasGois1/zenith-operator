@@ -470,6 +470,67 @@ deploy:
         name: app-config
 ```
 
+#### deploy.scale (Optional)
+
+**Type**: `ScaleSpec`
+
+**Description**: Configuração de autoscaling para controlar o número mínimo e máximo de réplicas.
+
+##### deploy.scale.minScale (Optional)
+
+**Type**: `integer`
+
+**Description**: Número mínimo de réplicas a manter. Se definido como 1 ou mais, previne scale-to-zero e elimina cold starts.
+
+**Default**: `0` (scale-to-zero habilitado)
+
+**Minimum**: `0`
+
+**Examples**:
+```yaml
+deploy:
+  scale:
+    minScale: 1  # Sempre mantém 1 réplica ativa
+```
+
+##### deploy.scale.maxScale (Optional)
+
+**Type**: `integer`
+
+**Description**: Número máximo de réplicas permitido. Se definido como 0, não há limite máximo.
+
+**Default**: `0` (sem limite)
+
+**Minimum**: `0`
+
+**Examples**:
+```yaml
+deploy:
+  scale:
+    maxScale: 10  # Limita a 10 réplicas máximo
+```
+
+**Combined Example**:
+```yaml
+deploy:
+  scale:
+    minScale: 1    # Elimina cold starts
+    maxScale: 50   # Controla custos máximos
+  env:
+    - name: LOG_LEVEL
+      value: info
+```
+
+**Use Cases**:
+- **APIs críticas**: Use `minScale: 1` para eliminar cold starts
+- **Controle de custos**: Use `maxScale` para limitar recursos máximos
+- **Desenvolvimento**: Mantenha defaults (scale-to-zero) para economizar recursos
+
+**Knative Annotations**:
+Quando configurado, o operator adiciona as seguintes anotações ao template do Knative Service:
+- `autoscaling.knative.dev/min-scale`: Valor de minScale
+- `autoscaling.knative.dev/max-scale`: Valor de maxScale
+
 ### eventing (Optional)
 
 **Type**: `EventingSpec`
