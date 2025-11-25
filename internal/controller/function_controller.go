@@ -1087,6 +1087,18 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	}
 	// ------------------------------------
 
+	// --- Ponto de Integração de Autoscaling ---
+	// Adicionar anotações de scale se configuradas
+	if function.Spec.Deploy.Scale != nil {
+		if function.Spec.Deploy.Scale.MinScale != nil {
+			podAnnotations["autoscaling.knative.dev/min-scale"] = strconv.Itoa(int(*function.Spec.Deploy.Scale.MinScale))
+		}
+		if function.Spec.Deploy.Scale.MaxScale != nil {
+			podAnnotations["autoscaling.knative.dev/max-scale"] = strconv.Itoa(int(*function.Spec.Deploy.Scale.MaxScale))
+		}
+	}
+	// ------------------------------------
+
 	// Determinar a porta do container
 	containerPort := int32(8080)
 	if function.Spec.Deploy.Dapr.Enabled && function.Spec.Deploy.Dapr.AppPort > 0 {

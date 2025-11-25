@@ -85,6 +85,26 @@ type DeploySpec struct {
 	// As chaves definidas em um ConfigMap ou Secret serão expostas como variáveis de ambiente.
 	// +kubebuilder:validation:Optional
 	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
+
+	// Opcional. Configurações de autoscaling.
+	// +kubebuilder:validation:Optional
+	Scale *ScaleSpec `json:"scale,omitempty"`
+}
+
+// ScaleSpec define os parâmetros de autoscaling
+type ScaleSpec struct {
+	// Opcional. Número mínimo de réplicas a manter.
+	// Se definido como 1 ou mais, previne scale-to-zero e cold starts.
+	// Default: 0 (scale-to-zero habilitado)
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=0
+	MinScale *int32 `json:"minScale,omitempty"`
+
+	// Opcional. Número máximo de réplicas permitido.
+	// Se definido como 0 (default), não há limite máximo.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=0
+	MaxScale *int32 `json:"maxScale,omitempty"`
 }
 
 // DaprConfig define os parâmetros de injeção do Dapr

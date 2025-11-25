@@ -1,0 +1,94 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: scale-edge-cases-test
+spec:
+  description: |
+    Test edge cases for scale configuration.
+    This test verifies:
+    1. Function deploys successfully with minScale=0 and maxScale=0
+    2. Zero values are correctly applied as annotations
+    3. Function reaches Ready status
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function-with-zero-values
+      description: Create a Function CR with minScale=0 and maxScale=0
+      try:
+        - apply:
+            file: function-zero-values.yaml
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-scale-annotations
+      description: Verify Knative Service has scale annotations with zero values
+      try:
+        - assert:
+            file: knative-service-scale-assert.yaml
+            timeout: 1m
+    
+    - name: verify-annotation-values
+      description: Verify annotation values are exactly "0"
+      try:
+        - script:
+            content: |
+              MIN_SCALE=$(kubectl get service.serving.knative.dev test-function-scale-edge -n $NAMESPACE -o jsonpath='{.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale}')
+              MAX_SCALE=$(kubectl get service.serving.knative.dev test-function-scale-edge -n $NAMESPACE -o jsonpath='{.spec.template.metadata.annotations.autoscaling\.knative\.dev/max-scale}')
+              
+              if [ "$MIN_SCALE" = "0" ] && [ "$MAX_SCALE" = "0" ]; then
+                echo "SUCCESS: Both scale annotations are correctly set to 0"
+              else
+                echo "ERROR: Scale annotations are not correct"
+                echo "min-scale: $MIN_SCALE (expected: 0)"
+                echo "max-scale: $MAX_SCALE (expected: 0)"
+                exit 1
+              fi
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-scale-edge
