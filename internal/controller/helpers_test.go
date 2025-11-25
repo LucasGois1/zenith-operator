@@ -286,6 +286,171 @@ func TestBuildKnativeService(t *testing.T) {
 				g.Expect(container.Ports[0].ContainerPort).To(Equal(int32(9090)))
 			},
 		},
+		{
+			name: "service with only minScale configured",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-func-minscale",
+					Namespace: "default",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					GitRepo: "https://github.com/user/repo",
+					Build: functionsv1alpha1.BuildSpec{
+						Image:              "registry.io/test:latest",
+						RegistrySecretName: "secret",
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Dapr: functionsv1alpha1.DaprConfig{
+							Enabled: false,
+							AppPort: 8080,
+						},
+						Scale: &functionsv1alpha1.ScaleSpec{
+							MinScale: int32Ptr(1),
+						},
+					},
+				},
+				Status: functionsv1alpha1.FunctionStatus{
+					ImageDigest: "registry.io/test@sha256:minscale123",
+				},
+			},
+			validate: func(t *testing.T, ksvc *knservingv1.Service, g *GomegaWithT) {
+				annotations := ksvc.Spec.Template.Annotations
+				g.Expect(annotations).To(HaveKeyWithValue("autoscaling.knative.dev/min-scale", "1"))
+				g.Expect(annotations).NotTo(HaveKey("autoscaling.knative.dev/max-scale"))
+			},
+		},
+		{
+			name: "service with only maxScale configured",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-func-maxscale",
+					Namespace: "default",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					GitRepo: "https://github.com/user/repo",
+					Build: functionsv1alpha1.BuildSpec{
+						Image:              "registry.io/test:latest",
+						RegistrySecretName: "secret",
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Dapr: functionsv1alpha1.DaprConfig{
+							Enabled: false,
+							AppPort: 8080,
+						},
+						Scale: &functionsv1alpha1.ScaleSpec{
+							MaxScale: int32Ptr(5),
+						},
+					},
+				},
+				Status: functionsv1alpha1.FunctionStatus{
+					ImageDigest: "registry.io/test@sha256:maxscale123",
+				},
+			},
+			validate: func(t *testing.T, ksvc *knservingv1.Service, g *GomegaWithT) {
+				annotations := ksvc.Spec.Template.Annotations
+				g.Expect(annotations).To(HaveKeyWithValue("autoscaling.knative.dev/max-scale", "5"))
+				g.Expect(annotations).NotTo(HaveKey("autoscaling.knative.dev/min-scale"))
+			},
+		},
+		{
+			name: "service with both minScale and maxScale configured",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-func-both-scale",
+					Namespace: "default",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					GitRepo: "https://github.com/user/repo",
+					Build: functionsv1alpha1.BuildSpec{
+						Image:              "registry.io/test:latest",
+						RegistrySecretName: "secret",
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Dapr: functionsv1alpha1.DaprConfig{
+							Enabled: false,
+							AppPort: 8080,
+						},
+						Scale: &functionsv1alpha1.ScaleSpec{
+							MinScale: int32Ptr(1),
+							MaxScale: int32Ptr(10),
+						},
+					},
+				},
+				Status: functionsv1alpha1.FunctionStatus{
+					ImageDigest: "registry.io/test@sha256:bothscale123",
+				},
+			},
+			validate: func(t *testing.T, ksvc *knservingv1.Service, g *GomegaWithT) {
+				annotations := ksvc.Spec.Template.Annotations
+				g.Expect(annotations).To(HaveKeyWithValue("autoscaling.knative.dev/min-scale", "1"))
+				g.Expect(annotations).To(HaveKeyWithValue("autoscaling.knative.dev/max-scale", "10"))
+			},
+		},
+		{
+			name: "service with scale nil (no scale annotations)",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-func-no-scale",
+					Namespace: "default",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					GitRepo: "https://github.com/user/repo",
+					Build: functionsv1alpha1.BuildSpec{
+						Image:              "registry.io/test:latest",
+						RegistrySecretName: "secret",
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Dapr: functionsv1alpha1.DaprConfig{
+							Enabled: false,
+							AppPort: 8080,
+						},
+						Scale: nil,
+					},
+				},
+				Status: functionsv1alpha1.FunctionStatus{
+					ImageDigest: "registry.io/test@sha256:noscale123",
+				},
+			},
+			validate: func(t *testing.T, ksvc *knservingv1.Service, g *GomegaWithT) {
+				annotations := ksvc.Spec.Template.Annotations
+				g.Expect(annotations).NotTo(HaveKey("autoscaling.knative.dev/min-scale"))
+				g.Expect(annotations).NotTo(HaveKey("autoscaling.knative.dev/max-scale"))
+			},
+		},
+		{
+			name: "service with zero values for scale (annotations set to 0)",
+			function: &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-func-zero-scale",
+					Namespace: "default",
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					GitRepo: "https://github.com/user/repo",
+					Build: functionsv1alpha1.BuildSpec{
+						Image:              "registry.io/test:latest",
+						RegistrySecretName: "secret",
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Dapr: functionsv1alpha1.DaprConfig{
+							Enabled: false,
+							AppPort: 8080,
+						},
+						Scale: &functionsv1alpha1.ScaleSpec{
+							MinScale: int32Ptr(0),
+							MaxScale: int32Ptr(0),
+						},
+					},
+				},
+				Status: functionsv1alpha1.FunctionStatus{
+					ImageDigest: "registry.io/test@sha256:zeroscale123",
+				},
+			},
+			validate: func(t *testing.T, ksvc *knservingv1.Service, g *GomegaWithT) {
+				annotations := ksvc.Spec.Template.Annotations
+				g.Expect(annotations).To(HaveKeyWithValue("autoscaling.knative.dev/min-scale", "0"))
+				g.Expect(annotations).To(HaveKeyWithValue("autoscaling.knative.dev/max-scale", "0"))
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -868,4 +1033,8 @@ func TestDetectInsecureRegistries(t *testing.T) {
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+func int32Ptr(i int32) *int32 {
+	return &i
 }
