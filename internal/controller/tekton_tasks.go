@@ -168,8 +168,8 @@ The git-clone Task will clone a repo from the provided url into the output Works
 				{Name: "httpsProxy", Type: tektonv1.ParamTypeString, Description: "HTTPS proxy server for SSL requests.", Default: &tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: ""}},
 				{Name: "noProxy", Type: tektonv1.ParamTypeString, Description: "Opt out of proxying HTTP/HTTPS requests.", Default: &tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: ""}},
 				{Name: "verbose", Type: tektonv1.ParamTypeString, Description: "Log the commands that are executed during `git-clone`'s operation.", Default: &tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "true"}},
-				{Name: "gitInitImage", Type: tektonv1.ParamTypeString, Description: "The image providing the git binary that this Task runs.", Default: &tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "alpine/git:latest"}},
-				{Name: "userHome", Type: tektonv1.ParamTypeString, Description: "Absolute path to the user's home directory.", Default: &tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "/root"}},
+				{Name: "gitInitImage", Type: tektonv1.ParamTypeString, Description: "The image providing the git-init binary that this Task runs.", Default: &tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "ghcr.io/tektoncd/github.com/tektoncd/pipeline/cmd/git-init:v0.40.2"}},
+				{Name: "userHome", Type: tektonv1.ParamTypeString, Description: "Absolute path to the user's home directory.", Default: &tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: "/home/git"}},
 			},
 			Results: []tektonv1.TaskResult{
 				{Name: "commit", Description: "The precise commit SHA that was fetched by this Task."},
@@ -202,8 +202,12 @@ The git-clone Task will clone a repo from the provided url into the output Works
 						{Name: "WORKSPACE_SSH_DIRECTORY_PATH", Value: "$(workspaces.ssh-directory.path)"},
 						{Name: "WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND", Value: "$(workspaces.basic-auth.bound)"},
 						{Name: "WORKSPACE_BASIC_AUTH_DIRECTORY_PATH", Value: "$(workspaces.basic-auth.path)"},
-						{Name: "WORKSPACE_SSL_CA_DIRECTORY_BOUND", Value: "$(workspaces.ssl-ca-directory.bound)"},
+					{Name: "WORKSPACE_SSL_CA_DIRECTORY_BOUND", Value: "$(workspaces.ssl-ca-directory.bound)"},
 						{Name: "WORKSPACE_SSL_CA_DIRECTORY_PATH", Value: "$(workspaces.ssl-ca-directory.path)"},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						RunAsNonRoot: boolPtr(true),
+						RunAsUser:    int64Ptr(65532),
 					},
 					Script: gitCloneScript,
 				},
@@ -213,6 +217,7 @@ The git-clone Task will clone a repo from the provided url into the output Works
 }
 
 // gitCloneScript is the shell script for the git-clone step
+// This script uses the Tekton git-init binary (/ko-app/git-init) for cloning
 const gitCloneScript = `#!/usr/bin/env sh
 set -eu
 
@@ -220,16 +225,11 @@ if [ "${PARAM_VERBOSE}" = "true" ] ; then
   set -x
 fi
 
-if [ -f "${PARAM_USER_HOME}/.git-credentials" ]; then
-  echo "Using Tekton-injected git credentials from HOME directory"
-  git config --global credential.helper store
-elif [ "${WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND}" = "true" ] ; then
-  echo "Using git credentials from basic-auth workspace"
+if [ "${WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND}" = "true" ] ; then
   cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.git-credentials" "${PARAM_USER_HOME}/.git-credentials"
   cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.gitconfig" "${PARAM_USER_HOME}/.gitconfig"
   chmod 400 "${PARAM_USER_HOME}/.git-credentials"
   chmod 400 "${PARAM_USER_HOME}/.gitconfig"
-  git config --global credential.helper store
 fi
 
 if [ "${WORKSPACE_SSH_DIRECTORY_BOUND}" = "true" ] ; then
@@ -247,9 +247,16 @@ fi
 CHECKOUT_DIR="${WORKSPACE_OUTPUT_PATH}/${PARAM_SUBDIRECTORY}"
 
 cleandir() {
+  # Delete any existing contents of the repo directory if it exists.
+  #
+  # We don't just "rm -rf ${CHECKOUT_DIR}" because ${CHECKOUT_DIR} might be "/"
+  # or the root of a mounted volume.
   if [ -d "${CHECKOUT_DIR}" ] ; then
+    # Delete non-hidden files and directories
     rm -rf "${CHECKOUT_DIR:?}"/*
+    # Delete files and directories starting with . but excluding ..
     rm -rf "${CHECKOUT_DIR}"/.[!.]*
+    # Delete files and directories starting with .. plus any other character
     rm -rf "${CHECKOUT_DIR}"/..?*
   fi
 }
@@ -263,41 +270,25 @@ test -z "${PARAM_HTTPS_PROXY}" || export HTTPS_PROXY="${PARAM_HTTPS_PROXY}"
 test -z "${PARAM_NO_PROXY}" || export NO_PROXY="${PARAM_NO_PROXY}"
 
 git config --global --add safe.directory "${WORKSPACE_OUTPUT_PATH}"
-git config --global http.sslVerify "${PARAM_SSL_VERIFY}"
-
-mkdir -p "${CHECKOUT_DIR}"
+/ko-app/git-init \
+  -url="${PARAM_URL}" \
+  -revision="${PARAM_REVISION}" \
+  -refspec="${PARAM_REFSPEC}" \
+  -path="${CHECKOUT_DIR}" \
+  -sslVerify="${PARAM_SSL_VERIFY}" \
+  -submodules="${PARAM_SUBMODULES}" \
+  -depth="${PARAM_DEPTH}" \
+  -sparseCheckoutDirectories="${PARAM_SPARSE_CHECKOUT_DIRECTORIES}"
 cd "${CHECKOUT_DIR}"
-
-CLONE_ARGS="--no-checkout"
-if [ "${PARAM_DEPTH}" != "0" ] ; then
-  CLONE_ARGS="${CLONE_ARGS} --depth=${PARAM_DEPTH}"
-fi
-
-git clone ${CLONE_ARGS} "${PARAM_URL}" .
-
-if [ -n "${PARAM_REFSPEC}" ] ; then
-  git fetch origin "${PARAM_REFSPEC}"
-fi
-
-if [ -n "${PARAM_REVISION}" ] ; then
-  git checkout "${PARAM_REVISION}"
-else
-  git checkout HEAD
-fi
-
-if [ "${PARAM_SUBMODULES}" = "true" ] ; then
-  git submodule update --init --recursive
-fi
-
-if [ -n "${PARAM_SPARSE_CHECKOUT_DIRECTORIES}" ] ; then
-  git sparse-checkout init --cone
-  git sparse-checkout set ${PARAM_SPARSE_CHECKOUT_DIRECTORIES}
-fi
-
 RESULT_SHA="$(git rev-parse HEAD)"
+EXIT_CODE="$?"
+if [ "${EXIT_CODE}" != 0 ] ; then
+  exit "${EXIT_CODE}"
+fi
+RESULT_COMMITTER_DATE="$(git log -1 --pretty=%ct)"
+printf "%s" "${RESULT_COMMITTER_DATE}" > "$(results.committer-date.path)"
 printf "%s" "${RESULT_SHA}" > "$(results.commit.path)"
 printf "%s" "${PARAM_URL}" > "$(results.url.path)"
-printf "%s" "$(git log -1 --pretty=%ct)" > "$(results.committer-date.path)"
 `
 
 // buildBuildpacksPhasesTask builds the buildpacks-phases Task definition
@@ -564,6 +555,11 @@ func buildBuildpacksSteps() []tektonv1.Step {
 // int64Ptr returns a pointer to an int64
 func int64Ptr(i int64) *int64 {
 	return &i
+}
+
+// boolPtr returns a pointer to a bool
+func boolPtr(b bool) *bool {
+	return &b
 }
 
 // getLabelsAndEnvScript is the script for the get-labels-and-env step
