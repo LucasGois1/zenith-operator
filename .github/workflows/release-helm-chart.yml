@@ -55,34 +55,47 @@ jobs:
 
       - name: Checkout gh-pages branch
         run: |
-          git fetch origin gh-pages || true
-          git checkout gh-pages || git checkout --orphan gh-pages
+          # Save chart-releaser artifacts to temp before switching branches
+          mkdir -p /tmp/cr-backup
+          if [ -f index.yaml ]; then
+            cp index.yaml /tmp/cr-backup/
+          fi
+          if [ -d .cr-release-packages ]; then
+            cp -r .cr-release-packages /tmp/cr-backup/
+          fi
+          if [ -d .cr-index ]; then
+            cp -r .cr-index /tmp/cr-backup/
+          fi
+          
+          # Clean up artifacts that would block checkout
+          rm -rf .cr-release-packages .cr-index
+          
+          # Fetch and checkout gh-pages properly
+          git fetch origin gh-pages:gh-pages || true
+          
+          if git show-ref --verify --quiet refs/heads/gh-pages; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . || true
+          fi
 
       - name: Copy website files to gh-pages
         run: |
-          # Keep the index.yaml and .cr-* files from chart-releaser
-          if [ -f index.yaml ]; then
-            cp index.yaml /tmp/index.yaml
-          fi
-          if [ -d .cr-release-packages ]; then
-            cp -r .cr-release-packages /tmp/.cr-release-packages
-          fi
-          if [ -d .cr-index ]; then
-            cp -r .cr-index /tmp/.cr-index
-          fi
-          
-          # Copy website files
+          # Copy website files from docs/
+          git checkout main -- docs/
           cp -r docs/* .
+          rm -rf docs/
           
-          # Restore Helm chart files
-          if [ -f /tmp/index.yaml ]; then
-            cp /tmp/index.yaml .
+          # Restore Helm chart files from backup
+          if [ -f /tmp/cr-backup/index.yaml ]; then
+            cp /tmp/cr-backup/index.yaml .
           fi
-          if [ -d /tmp/.cr-release-packages ]; then
-            cp -r /tmp/.cr-release-packages .
+          if [ -d /tmp/cr-backup/.cr-release-packages ]; then
+            cp -r /tmp/cr-backup/.cr-release-packages .
           fi
-          if [ -d /tmp/.cr-index ]; then
-            cp -r /tmp/.cr-index .
+          if [ -d /tmp/cr-backup/.cr-index ]; then
+            cp -r /tmp/cr-backup/.cr-index .
           fi
 
       - name: Commit and push website
