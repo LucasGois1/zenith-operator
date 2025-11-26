@@ -285,6 +285,25 @@ spec:
                           x-kubernetes-map-type: atomic
                       type: object
                     type: array
+                  scale:
+                    description: Opcional. Configurações de autoscaling.
+                    properties:
+                      maxScale:
+                        description: |-
+                          Opcional. Número máximo de réplicas permitido.
+                          Se definido como 0 (default), não há limite máximo.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      minScale:
+                        description: |-
+                          Opcional. Número mínimo de réplicas a manter.
+                          Se definido como 1 ou mais, previne scale-to-zero e cold starts.
+                          Default: 0 (scale-to-zero habilitado)
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
                 type: object
               eventing:
                 description: Opcional. Configurações de Eventing (Knative Eventing)

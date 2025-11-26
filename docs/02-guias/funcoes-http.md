@@ -290,6 +290,60 @@ Com Dapr habilitado, você pode usar:
 - State management
 - Secret stores
 
+### Otimizando Performance com Configuração de Escala
+
+Para APIs críticas que precisam de baixa latência, você pode configurar o comportamento de autoscaling para eliminar cold starts.
+
+#### Eliminando Cold Starts
+
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: api-critica
+spec:
+  gitRepo: https://github.com/myorg/api-critica
+  gitRevision: main
+  build:
+    image: registry.example.com/api-critica:latest
+  deploy:
+    scale:
+      minScale: 1      # Sempre mantém 1 réplica ativa
+      maxScale: 20     # Limita escalabilidade para controlar custos
+    env:
+      - name: LOG_LEVEL
+        value: info
+```
+
+#### Considerações de Custo vs Performance
+
+- **minScale: 0** (padrão) - Scale-to-zero, economia máxima, cold start presente
+- **minScale: 1** - Sem cold start, custo de 1 pod sempre ativo
+- **maxScale** - Controla o teto de escalabilidade e custos durante picos
+
+#### Recomendações por Ambiente
+
+**Desenvolvimento:**
+```yaml
+deploy:
+  scale: {}  # Use defaults (scale-to-zero)
+```
+
+**Produção - API crítica:**
+```yaml
+deploy:
+  scale:
+    minScale: 2    # Redundância
+    maxScale: 100  # Suporte a alto tráfego
+```
+
+**Produção - API não crítica:**
+```yaml
+deploy:
+  scale:
+    maxScale: 10   # Apenas controle de custos
+```
+
 ### Registry Privado
 
 Para usar um registry privado, crie um Secret:

@@ -1,0 +1,115 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: scale-removal-test
+spec:
+  description: |
+    Test that scale annotations are removed when scale configuration is removed.
+    This test verifies:
+    1. Function deploys successfully with scale configuration
+    2. Removing scale config triggers KService update
+    3. Scale annotations are removed after update
+  timeouts:
+    apply: 1m
+    assert: 12m
+    delete: 1m
+  steps:
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task.yaml
+    
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-function-with-scale
+      description: Create a Function CR with scale configuration
+      try:
+        - apply:
+            file: function-with-scale.yaml
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - assert:
+            file: pipelinerun-success-assert.yaml
+            timeout: 8m
+    
+    - name: verify-initial-scale-annotations
+      description: Verify KService has scale annotations initially
+      try:
+        - assert:
+            file: knative-service-scale-assert.yaml
+            timeout: 1m
+    
+    - name: verify-initial-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: update-function-remove-scale
+      description: Update Function to remove scale configuration
+      try:
+        - apply:
+            file: function-without-scale.yaml
+    
+    - name: wait-for-ksvc-update
+      description: Wait for KService to be updated without scale annotations
+      try:
+        - script:
+            content: |
+              echo "Waiting for scale annotations to be removed..."
+              for i in {1..30}; do
+                MIN_SCALE=$(kubectl get service.serving.knative.dev test-function-scale-removal -n $NAMESPACE -o jsonpath='{.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale}' 2>/dev/null || echo "")
+                MAX_SCALE=$(kubectl get service.serving.knative.dev test-function-scale-removal -n $NAMESPACE -o jsonpath='{.spec.template.metadata.annotations.autoscaling\.knative\.dev/max-scale}' 2>/dev/null || echo "")
+                
+                if [ -z "$MIN_SCALE" ] && [ -z "$MAX_SCALE" ]; then
+                  echo "SUCCESS: Scale annotations removed"
+                  break
+                fi
+                
+                if [ $i -eq 30 ]; then
+                  echo "ERROR: Scale annotations not removed after 30 seconds"
+                  echo "min-scale: $MIN_SCALE, max-scale: $MAX_SCALE"
+                  exit 1
+                fi
+                
+                sleep 1
+              done
+            timeout: 45s
+    
+    - name: verify-still-ready
+      description: Verify Function is still Ready after update
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: cleanup
+      description: Clean up resources
+      try:
+        - delete:
+            ref:
+              apiVersion: functions.zenith.com/v1alpha1
+              kind: Function
+              name: test-function-scale-removal

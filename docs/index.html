@@ -57,17 +57,36 @@
 <span class="keyword">metadata:</span>
   <span class="keyword">name:</span> payment-processor
 <span class="keyword">spec:</span>
-  <span class="keyword">gitRepo:</span> https://github.com/org/payments
+  <span class="keyword">gitRepo:</span> https://github.com/acme/payments
+  <span class="keyword">gitRevision:</span> v2.1.0
+  <span class="keyword">gitAuthSecretName:</span> github-credentials
   <span class="keyword">build:</span>
-    <span class="keyword">image:</span> registry.io/payments:v1
+    <span class="keyword">image:</span> ghcr.io/acme/payments
+    <span class="keyword">registrySecretName:</span> ghcr-auth
   <span class="keyword">deploy:</span>
+    <span class="keyword">env:</span>
+      - <span class="keyword">name:</span> LOG_LEVEL
+        <span class="keyword">value:</span> info
+      - <span class="keyword">name:</span> DB_PASSWORD
+        <span class="keyword">valueFrom:</span>
+          <span class="keyword">secretKeyRef:</span>
+            <span class="keyword">name:</span> db-secrets
+            <span class="keyword">key:</span> password
     <span class="keyword">dapr:</span>
       <span class="keyword">enabled:</span> true
       <span class="keyword">appID:</span> payment-service
+      <span class="keyword">appPort:</span> 8080
   <span class="keyword">eventing:</span>
-    <span class="keyword">broker:</span> default
+    <span class="keyword">broker:</span> production
     <span class="keyword">filters:</span>
-      <span class="keyword">type:</span> order.created</code></pre>
+      <span class="keyword">type:</span> order.created
+      <span class="keyword">source:</span> checkout-service
+  <span class="keyword">observability:</span>
+    <span class="keyword">tracing:</span>
+      <span class="keyword">enabled:</span> true
+      <span class="keyword">samplingRate:</span> "0.5"
+      <span class="keyword">autoInstrumentation:</span>
+        <span class="keyword">language:</span> nodejs</code></pre>
                     </div>
                 </div>
             </div>

@@ -11,10 +11,11 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   publish:
-    name: Publish Helm Chart to GitHub Pages
+    name: Publish Helm Chart via Pull Request
     runs-on: ubuntu-latest
     steps:
     - name: Checkout main branch
@@ -30,26 +31,26 @@ jobs:
 
     - name: Lint Helm chart
       run: |
-        echo "🔍 Linting Helm chart..."
+        echo "Linting Helm chart..."
         helm lint charts/zenith-operator
-        echo "✅ Chart validation passed"
+        echo "Chart validation passed"
 
     - name: Package Helm chart
       run: |
-        echo "📦 Packaging Helm chart..."
+        echo "Packaging Helm chart..."
         mkdir -p .helm-publish
         helm package charts/zenith-operator --destination .helm-publish
-        echo "✅ Chart packaged successfully"
+        echo "Chart packaged successfully"
 
     - name: Generate Helm repository index
       run: |
-        echo "📝 Generating Helm repository index..."
+        echo "Generating Helm repository index..."
         helm repo index .helm-publish --url https://lucasgois1.github.io/zenith-operator
-        echo "✅ Repository index generated"
+        echo "Repository index generated"
 
     - name: Copy Helm artifacts to docs directory
       run: |
-        echo "📋 Copying Helm artifacts to docs/..."
+        echo "Copying Helm artifacts to docs/..."
 
         # Ensure docs directory exists
         mkdir -p docs
@@ -61,41 +62,66 @@ jobs:
         # Create .nojekyll to disable Jekyll processing
         touch docs/.nojekyll
 
-        echo "✅ Artifacts copied to docs/"
+        echo "Artifacts copied to docs/"
 
-    - name: Commit and push to main
+    - name: Get chart version
+      id: chart-version
       run: |
-        # Configure git
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-
-        # Add only the Helm-related files
-        git add docs/*.tgz docs/index.yaml docs/.nojekyll
-
-        # Check if there are changes to commit
-        if git diff --staged --quiet; then
-          echo "ℹ️  No changes to commit"
-          exit 0
-        fi
-
-        # Get chart version from Chart.yaml
         CHART_VERSION=$(grep '^version:' charts/zenith-operator/Chart.yaml | awk '{print $2}')
+        echo "version=${CHART_VERSION}" >> $GITHUB_OUTPUT
 
-        # Commit and push
-        git commit -m "chore: publish Helm chart v${CHART_VERSION}"
-        git push origin main
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v7
+      id: create-pr
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore: publish Helm chart v${{ steps.chart-version.outputs.version }}"
+        title: "chore: publish Helm chart v${{ steps.chart-version.outputs.version }}"
+        body: |
+          ## Helm Chart Publication
 
-        echo "✅ Helm chart published to GitHub Pages"
+          This PR publishes Helm chart version **v${{ steps.chart-version.outputs.version }}** to GitHub Pages.
+
+          ### Changes
+          - Updated packaged Helm chart (`.tgz`)
+          - Updated Helm repository index (`index.yaml`)
+
+          ### After Merge
+          The chart will be available at:
+          - Chart URL: https://lucasgois1.github.io/zenith-operator/zenith-operator-${{
+            steps.chart-version.outputs.version }}.tgz
+          - Repository index: https://lucasgois1.github.io/zenith-operator/index.yaml
+
+          ### Usage
+          ```bash
+          helm repo add zenith-operator https://lucasgois1.github.io/zenith-operator
+          helm repo update
+          helm install my-zenith zenith-operator/zenith-operator
+          ```
+
+          ---
+          *This PR was automatically created by the Helm publish workflow.*
+        branch: helm-publish/v${{ steps.chart-version.outputs.version }}
+        delete-branch: true
+        add-paths: |
+          docs/*.tgz
+          docs/index.yaml
+          docs/.nojekyll
+        reviewers: LucasGois1
 
     - name: Summary
+      if: steps.create-pr.outputs.pull-request-number
       run: |
-        CHART_VERSION=$(grep '^version:' charts/zenith-operator/Chart.yaml | awk '{print $2}')
-        echo "🎉 Helm chart v${CHART_VERSION} published successfully!"
+        echo "Helm chart v${{ steps.chart-version.outputs.version }} PR created!"
         echo ""
-        echo "📦 Chart URL: https://lucasgois1.github.io/zenith-operator/zenith-operator-${CHART_VERSION}.tgz"
-        echo "📋 Repository index: https://lucasgois1.github.io/zenith-operator/index.yaml"
+        echo "Pull Request: ${{ steps.create-pr.outputs.pull-request-url }}"
         echo ""
-        echo "To use this Helm repository:"
-        echo "  helm repo add zenith-operator https://lucasgois1.github.io/zenith-operator"
-        echo "  helm repo update"
-        echo "  helm install my-zenith zenith-operator/zenith-operator"
+        echo "After the PR is merged, the chart will be available at:"
+        VERSION="${{ steps.chart-version.outputs.version }}"
+        echo "  Chart URL: https://lucasgois1.github.io/zenith-operator/zenith-operator-${VERSION}.tgz"
+        echo "  Repository index: https://lucasgois1.github.io/zenith-operator/index.yaml"
+
+    - name: No changes summary
+      if: steps.create-pr.outputs.pull-request-number == ''
+      run: |
+        echo "No changes detected. No PR was created."
