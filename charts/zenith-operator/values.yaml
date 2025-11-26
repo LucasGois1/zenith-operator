@@ -8,13 +8,8 @@ installStack: true
 tekton:
   enabled: true
   version: "v0.68.0"
-  clusterTasks:
-    gitClone:
-      enabled: true
-      version: "0.9"
-    buildpacksPhases:
-      enabled: true
-      version: "0.4"
+  # Note: Tekton Tasks (git-clone, buildpacks-phases) are created dynamically
+  # by the operator in the Function's namespace. No ClusterTasks are used.
 
 knativeServing:
   enabled: true

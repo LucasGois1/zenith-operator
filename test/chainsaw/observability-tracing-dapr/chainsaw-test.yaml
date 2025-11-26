@@ -14,14 +14,6 @@ spec:
     assert: 10m
     delete: 1m
   steps:
-    - name: install-tekton-tasks
-      description: Install Tekton tasks in the test namespace
-      try:
-        - apply:
-            file: git-clone-task.yaml
-        - apply:
-            file: buildpacks-phases-task.yaml
-    
     - name: create-git-auth-secret
       description: Create Git authentication secret (requires GITHUB_TOKEN env var)
       try:
@@ -130,8 +122,8 @@ spec:
               echo "OTEL_SERVICE_NAME: $OTEL_SERVICE_NAME"
               echo "OTEL_TRACES_EXPORTER: $OTEL_EXPORTER"
               
-              # Verify values
-              [ "$OTEL_ENDPOINT" = "http://otel-collector.opentelemetry-operator-system.svc.cluster.local:4317" ] || { echo "ERROR: OTEL_EXPORTER_OTLP_ENDPOINT incorrect"; exit 1; }
+              # Verify values - the operator uses the actual collector service name and HTTP port
+              [ "$OTEL_ENDPOINT" = "http://otel-collector-collector.opentelemetry-operator-system.svc.cluster.local:4318" ] || { echo "ERROR: OTEL_EXPORTER_OTLP_ENDPOINT incorrect"; exit 1; }
               [ "$OTEL_SERVICE_NAME" = "$FN_NAME" ] || { echo "ERROR: OTEL_SERVICE_NAME incorrect"; exit 1; }
               [ "$OTEL_EXPORTER" = "otlp" ] || { echo "ERROR: OTEL_TRACES_EXPORTER incorrect"; exit 1; }
               

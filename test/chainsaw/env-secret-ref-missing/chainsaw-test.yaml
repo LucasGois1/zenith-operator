@@ -14,14 +14,6 @@ spec:
     assert: 5m
     delete: 1m
   steps:
-    - name: install-tekton-tasks
-      description: Install Tekton tasks in the test namespace
-      try:
-        - apply:
-            file: ../e2e-http-basic/git-clone-task.yaml
-        - apply:
-            file: ../e2e-http-basic/buildpacks-phases-task.yaml
-    
     - name: create-git-auth-secret
       description: Create Git authentication secret
       try:
