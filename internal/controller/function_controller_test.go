@@ -2021,4 +2021,301 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			Expect(message).To(Equal("Pipeline failed"))
 		})
 	})
+
+	Context("Tekton Task Management", func() {
+		It("should create git-clone Task when it doesn't exist", func() {
+			ctx := context.Background()
+			namespace := "test-task-creation"
+
+			// Create the namespace first
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, ns)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Ensure git-clone Task is created
+			err := reconciler.ensureGitCloneTask(ctx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify Task was created
+			task := &tektonv1.Task{}
+			taskKey := types.NamespacedName{Name: GitCloneTaskName, Namespace: namespace}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, taskKey, task)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			// Verify Task has correct labels
+			Expect(task.Labels[ManagedByLabel]).To(Equal(ManagedByValue))
+			Expect(task.Labels[TaskVersionLabel]).To(Equal("0.9"))
+
+			// Cleanup
+			_ = k8sClient.Delete(ctx, task)
+		})
+
+		It("should create buildpacks-phases Task when it doesn't exist", func() {
+			ctx := context.Background()
+			namespace := "test-buildpacks-task"
+
+			// Create the namespace first
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, ns)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Ensure buildpacks-phases Task is created
+			err := reconciler.ensureBuildpacksPhasesTask(ctx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify Task was created
+			task := &tektonv1.Task{}
+			taskKey := types.NamespacedName{Name: BuildpacksPhasesTaskName, Namespace: namespace}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, taskKey, task)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			// Verify Task has correct labels
+			Expect(task.Labels[ManagedByLabel]).To(Equal(ManagedByValue))
+			Expect(task.Labels[TaskVersionLabel]).To(Equal("0.4"))
+
+			// Cleanup
+			_ = k8sClient.Delete(ctx, task)
+		})
+
+		It("should not overwrite existing Task not managed by operator", func() {
+			ctx := context.Background()
+			namespace := "test-task-not-overwrite"
+
+			// Create the namespace first
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, ns)
+			}()
+
+			// Create a Task without the managed-by label (simulating user-created Task)
+			existingTask := &tektonv1.Task{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      GitCloneTaskName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						"custom-label": "custom-value",
+					},
+				},
+				Spec: tektonv1.TaskSpec{
+					Description: "User-created git-clone task",
+				},
+			}
+			Expect(k8sClient.Create(ctx, existingTask)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, existingTask)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Ensure git-clone Task - should not overwrite
+			err := reconciler.ensureGitCloneTask(ctx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify Task still has original labels (not overwritten)
+			task := &tektonv1.Task{}
+			taskKey := types.NamespacedName{Name: GitCloneTaskName, Namespace: namespace}
+			Expect(k8sClient.Get(ctx, taskKey, task)).To(Succeed())
+			Expect(task.Labels["custom-label"]).To(Equal("custom-value"))
+			Expect(task.Labels[ManagedByLabel]).To(BeEmpty())
+		})
+
+		It("should skip creation if Task already exists and is managed by operator", func() {
+			ctx := context.Background()
+			namespace := "test-task-skip-existing"
+
+			// Create the namespace first
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, ns)
+			}()
+
+			// Create a Task with the managed-by label
+			existingTask := &tektonv1.Task{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      GitCloneTaskName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						ManagedByLabel:   ManagedByValue,
+						TaskVersionLabel: "0.8", // Old version
+					},
+				},
+				Spec: tektonv1.TaskSpec{
+					Description: "Operator-managed git-clone task",
+				},
+			}
+			Expect(k8sClient.Create(ctx, existingTask)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, existingTask)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Ensure git-clone Task - should skip (not update)
+			err := reconciler.ensureGitCloneTask(ctx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify Task still has old version (not updated)
+			task := &tektonv1.Task{}
+			taskKey := types.NamespacedName{Name: GitCloneTaskName, Namespace: namespace}
+			Expect(k8sClient.Get(ctx, taskKey, task)).To(Succeed())
+			Expect(task.Labels[TaskVersionLabel]).To(Equal("0.8"))
+		})
+
+		It("should ensure all Tekton Tasks in namespace", func() {
+			ctx := context.Background()
+			namespace := "test-ensure-all-tasks"
+
+			// Create the namespace first
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, ns)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Ensure all Tekton Tasks
+			err := reconciler.ensureTektonTasks(ctx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify both Tasks were created
+			gitCloneTask := &tektonv1.Task{}
+			gitCloneKey := types.NamespacedName{Name: GitCloneTaskName, Namespace: namespace}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, gitCloneKey, gitCloneTask)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			buildpacksTask := &tektonv1.Task{}
+			buildpacksKey := types.NamespacedName{Name: BuildpacksPhasesTaskName, Namespace: namespace}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, buildpacksKey, buildpacksTask)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			// Cleanup
+			_ = k8sClient.Delete(ctx, gitCloneTask)
+			_ = k8sClient.Delete(ctx, buildpacksTask)
+		})
+
+		It("should build git-clone Task with correct structure", func() {
+			namespace := "test-build-git-clone"
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			task := reconciler.buildGitCloneTask(namespace)
+
+			// Verify metadata
+			Expect(task.Name).To(Equal(GitCloneTaskName))
+			Expect(task.Namespace).To(Equal(namespace))
+			Expect(task.Labels[ManagedByLabel]).To(Equal(ManagedByValue))
+
+			// Verify spec has required workspaces
+			Expect(task.Spec.Workspaces).To(HaveLen(4))
+			workspaceNames := make([]string, len(task.Spec.Workspaces))
+			for i, ws := range task.Spec.Workspaces {
+				workspaceNames[i] = ws.Name
+			}
+			Expect(workspaceNames).To(ContainElements("output", "ssh-directory", "basic-auth", "ssl-ca-directory"))
+
+			// Verify spec has required params
+			Expect(len(task.Spec.Params)).To(BeNumerically(">=", 10))
+
+			// Verify spec has results
+			Expect(task.Spec.Results).To(HaveLen(3))
+
+			// Verify spec has steps
+			Expect(task.Spec.Steps).To(HaveLen(1))
+			Expect(task.Spec.Steps[0].Name).To(Equal("clone"))
+		})
+
+		It("should build buildpacks-phases Task with correct structure", func() {
+			namespace := "test-build-buildpacks"
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			task := reconciler.buildBuildpacksPhasesTask(namespace)
+
+			// Verify metadata
+			Expect(task.Name).To(Equal(BuildpacksPhasesTaskName))
+			Expect(task.Namespace).To(Equal(namespace))
+			Expect(task.Labels[ManagedByLabel]).To(Equal(ManagedByValue))
+
+			// Verify spec has required workspaces
+			Expect(task.Spec.Workspaces).To(HaveLen(2))
+			workspaceNames := make([]string, len(task.Spec.Workspaces))
+			for i, ws := range task.Spec.Workspaces {
+				workspaceNames[i] = ws.Name
+			}
+			Expect(workspaceNames).To(ContainElements("source", "cache"))
+
+			// Verify spec has required params
+			Expect(len(task.Spec.Params)).To(BeNumerically(">=", 15))
+
+			// Verify spec has results
+			Expect(task.Spec.Results).To(HaveLen(1))
+			Expect(task.Spec.Results[0].Name).To(Equal("APP_IMAGE_DIGEST"))
+
+			// Verify spec has steps
+			Expect(len(task.Spec.Steps)).To(BeNumerically(">=", 5))
+
+			// Verify spec has volumes
+			Expect(task.Spec.Volumes).To(HaveLen(4))
+		})
+	})
 })

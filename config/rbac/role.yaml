@@ -87,6 +87,7 @@ rules:
   - tekton.dev
   resources:
   - pipelineruns
+  - tasks
   verbs:
   - create
   - delete

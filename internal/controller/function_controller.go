@@ -61,6 +61,7 @@ const (
 // +kubebuilder:rbac:groups=functions.zenith.com,resources=functions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=functions.zenith.com,resources=functions/finalizers,verbs=update
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=tekton.dev,resources=tasks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=serving.knative.dev,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eventing.knative.dev,resources=triggers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eventing.knative.dev,resources=brokers,verbs=get;list;watch
@@ -201,6 +202,24 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Verifica se o PipelineRun não existe
 	if err != nil && errors.IsNotFound(err) {
 		log.Info("PipelineRun não encontrado. Criando um novo...", "PipelineRun.Name", pipelineRunName)
+
+		// Ensure Tekton Tasks exist in the namespace before creating PipelineRun
+		if err := r.ensureTektonTasks(ctx, function.Namespace); err != nil {
+			log.Error(err, "Failed to ensure Tekton Tasks exist in namespace", "namespace", function.Namespace)
+			// Update status to indicate the failure
+			taskFailedCondition := metav1.Condition{
+				Type:    "Ready",
+				Status:  metav1.ConditionFalse,
+				Reason:  "TaskSetupFailed",
+				Message: fmt.Sprintf("Failed to create required Tekton Tasks: %v", err),
+			}
+			meta.SetStatusCondition(&function.Status.Conditions, taskFailedCondition)
+			function.Status.ObservedGeneration = function.Generation
+			if statusErr := r.Status().Update(ctx, &function); statusErr != nil {
+				log.Error(statusErr, "Failed to update status after Task setup failure")
+			}
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
 
 		// Validate environment variable references before creating PipelineRun
 		if result, err := r.validateEnvReferences(ctx, &function); err != nil || !result.IsZero() {
