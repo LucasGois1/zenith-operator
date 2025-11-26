@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -468,6 +469,14 @@ func buildBuildpacksSteps() []tektonv1.Step {
 			Image:           "$(params.CNB_BUILDER_IMAGE)",
 			ImagePullPolicy: corev1.PullAlways,
 			Command:         []string{"/cnb/lifecycle/extender"},
+			// Only run extender when builder image includes extensions (EXTENSION_LABELS is NOT "empty")
+			When: tektonv1.StepWhenExpressions{
+				{
+					Input:    "$(steps.get-labels-and-env.results.EXTENSION_LABELS)",
+					Operator: selection.NotIn,
+					Values:   []string{"empty"},
+				},
+			},
 			Env: []corev1.EnvVar{
 				{Name: "CNB_PLATFORM_API", Value: "$(steps.get-labels-and-env.results.CNB_PLATFORM_API)"},
 			},
@@ -498,6 +507,14 @@ func buildBuildpacksSteps() []tektonv1.Step {
 			Image:           "$(params.CNB_BUILDER_IMAGE)",
 			ImagePullPolicy: corev1.PullAlways,
 			Command:         []string{"/cnb/lifecycle/builder"},
+			// Only run build when builder image does NOT include extensions (EXTENSION_LABELS is "empty")
+			When: tektonv1.StepWhenExpressions{
+				{
+					Input:    "$(steps.get-labels-and-env.results.EXTENSION_LABELS)",
+					Operator: selection.In,
+					Values:   []string{"empty"},
+				},
+			},
 			Env: []corev1.EnvVar{
 				{Name: "CNB_PLATFORM_API", Value: "$(steps.get-labels-and-env.results.CNB_PLATFORM_API)"},
 			},
