@@ -14,12 +14,8 @@ Components Installed:
   ✓ Zenith Operator
   {{- if .Values.tekton.enabled }}
   ✓ Tekton Pipelines ({{ .Values.tekton.version }})
-    {{- if .Values.tekton.clusterTasks.gitClone.enabled }}
-    ✓ git-clone ClusterTask (v{{ .Values.tekton.clusterTasks.gitClone.version }})
-    {{- end }}
-    {{- if .Values.tekton.clusterTasks.buildpacksPhases.enabled }}
-    ✓ buildpacks-phases ClusterTask (v{{ .Values.tekton.clusterTasks.buildpacksPhases.version }})
-    {{- end }}
+    Note: Tekton Tasks (git-clone, buildpacks-phases) are created dynamically
+    by the operator in each Function's namespace.
   {{- end }}
   {{- if .Values.knativeServing.enabled }}
   ✓ Knative Serving ({{ .Values.knativeServing.version }})

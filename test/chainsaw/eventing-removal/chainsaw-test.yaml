@@ -14,11 +14,9 @@ spec:
     assert: 12m
     delete: 1m
   steps:
-    - name: install-tekton-tasks
-      description: Install Tekton tasks in the test namespace
+    - name: install-custom-buildpacks-task
+      description: Install fast buildpacks task for quicker test execution
       try:
-        - apply:
-            file: git-clone-task.yaml
         - apply:
             file: buildpacks-phases-task-fast.yaml
     

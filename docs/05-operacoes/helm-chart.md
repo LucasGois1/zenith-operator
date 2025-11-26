@@ -142,13 +142,8 @@ helm install zenith-operator ./charts/zenith-operator \
 tekton:
   enabled: true
   version: "v0.68.0"
-  clusterTasks:
-    gitClone:
-      enabled: true
-      version: "0.9"
-    buildpacksPhases:
-      enabled: true
-      version: "0.3"
+  # Note: Tekton Tasks (git-clone, buildpacks-phases) are created dynamically
+  # by the operator in the Function's namespace. No ClusterTasks are used.
 ```
 
 ### Knative Configuration
@@ -280,7 +275,6 @@ The Helm chart uses hooks to ensure proper installation ordering:
    - OpenTelemetry Operator
    - Dapr (via dependency)
    - Local Registry
-   - Tekton ClusterTasks
    - Operator Deployment
 3. **Post-install** (weight: 10-15): Knative configuration job
 
@@ -363,8 +357,8 @@ kubectl get pods -n envoy-gateway-system
 # Check CRDs
 kubectl get crds | grep -E "tekton|knative|gateway|functions"
 
-# Check ClusterTasks
-kubectl get clustertasks
+# Check Tekton Tasks (created by operator in Function namespaces)
+kubectl get tasks -A -l app.kubernetes.io/managed-by=zenith-operator
 ```
 
 ### Test Function Deployment

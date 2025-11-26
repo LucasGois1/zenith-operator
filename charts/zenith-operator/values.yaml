@@ -8,16 +8,8 @@ installStack: true
 tekton:
   enabled: true
   version: "v0.68.0"
-  # ClusterTasks are deprecated in Tekton v1 API.
-  # The operator now creates namespaced Tasks dynamically in the Function's namespace.
-  # These ClusterTasks are kept for backward compatibility but disabled by default.
-  clusterTasks:
-    gitClone:
-      enabled: false
-      version: "0.9"
-    buildpacksPhases:
-      enabled: false
-      version: "0.4"
+  # Note: Tekton Tasks (git-clone, buildpacks-phases) are created dynamically
+  # by the operator in the Function's namespace. No ClusterTasks are used.
 
 knativeServing:
   enabled: true

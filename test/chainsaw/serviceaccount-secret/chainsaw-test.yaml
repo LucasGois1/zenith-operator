@@ -13,14 +13,6 @@ spec:
     assert: 3m
     delete: 1m
   steps:
-    - name: install-tekton-tasks
-      description: Install Tekton tasks in the test namespace
-      try:
-        - apply:
-            file: git-clone-task.yaml
-        - apply:
-            file: buildpacks-phases-task.yaml
-    
     - name: create-registry-secret
       description: Create a mock registry secret
       try:
