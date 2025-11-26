@@ -36,10 +36,12 @@ jobs:
           echo "- The operator image will be automatically published by the image-publish workflow" >> $GITHUB_STEP_SUMMARY
 
       - name: PR Summary
-        if: ${{ steps.release.outputs.pr }}
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        env:
+          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr).number }}
         run: |
-          echo "## Release PR Updated" >> $GITHUB_STEP_SUMMARY
+          echo "## Release PR Created" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "A release PR has been created or updated: ${{ steps.release.outputs.pr }}" >> $GITHUB_STEP_SUMMARY
+          echo "A release PR has been created: [#${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Review and merge the PR to create a new release." >> $GITHUB_STEP_SUMMARY
