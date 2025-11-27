@@ -124,7 +124,13 @@ operator:
   imagePullSecrets: []
 
   controller:
-    insecureRegistries: []
+    # Insecure registries that the operator should trust for image builds.
+    # These are passed to buildpacks via CNB_INSECURE_REGISTRIES.
+    # Default includes the in-cluster registry addresses for kind/local development.
+    insecureRegistries:
+      - "registry.registry.svc.cluster.local:5000"
+      - "127.0.0.1:30500"
+      - "localhost:30500"
 
 preflight:
   enabled: true
