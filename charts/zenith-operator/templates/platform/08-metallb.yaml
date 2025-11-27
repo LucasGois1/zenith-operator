@@ -94,22 +94,6 @@ spec:
           
           echo "Configuring MetalLB IP address pool..."
           
-          # Determine the IP address pool
-          {{- if eq .Values.metallb.addressPool "auto" }}
-          # Auto-detect IP pool from node's internal IP
-          NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-          if [ -z "$NODE_IP" ]; then
-            echo "ERROR: Could not detect node IP. Please set metallb.addressPool manually in values.yaml"
-            exit 1
-          fi
-          IP_PREFIX=$(echo "$NODE_IP" | cut -d'.' -f1-2)
-          ADDRESS_POOL="${IP_PREFIX}.255.200-${IP_PREFIX}.255.250"
-          echo "Auto-detected IP pool from node IP $NODE_IP: $ADDRESS_POOL"
-          {{- else }}
-          ADDRESS_POOL="{{ .Values.metallb.addressPool }}"
-          echo "Using configured IP pool: $ADDRESS_POOL"
-          {{- end }}
-          
           cat <<EOF | kubectl apply -f -
           apiVersion: metallb.io/v1beta1
           kind: IPAddressPool
@@ -118,7 +102,7 @@ spec:
             namespace: metallb-system
           spec:
             addresses:
-            - $ADDRESS_POOL
+            - {{ .Values.metallb.addressPool }}
           ---
           apiVersion: metallb.io/v1beta1
           kind: L2Advertisement
@@ -130,5 +114,5 @@ spec:
             - kind-pool
           EOF
           
-          echo "✓ MetalLB configured with IP pool $ADDRESS_POOL"
+          echo "✓ MetalLB configured with IP pool {{ .Values.metallb.addressPool }}"
 {{- end }}

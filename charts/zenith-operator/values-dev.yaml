@@ -44,7 +44,7 @@ envoyGateway:
 metallb:
   enabled: true
   version: "v0.14.9"
-  addressPool: "auto"  # Auto-detect from node IPs for kind clusters
+  addressPool: "172.18.255.200-172.18.255.250"
 
 dapr:
   enabled: true
@@ -110,11 +110,8 @@ operator:
   imagePullSecrets: []
 
   controller:
-    # Insecure registries for kind/local development
     insecureRegistries:
       - "registry.registry.svc.cluster.local:5000"
-      - "127.0.0.1:30500"
-      - "localhost:30500"
 
 preflight:
   enabled: true

@@ -326,47 +326,6 @@ FUNCTION_HOST=$(kubectl get function my-function -o jsonpath='{.status.url}' | s
 curl -H "Host: $FUNCTION_HOST" http://$ENVOY_IP/
 ```
 
-### LoadBalancer Service em Estado "Pending" (kind/Minikube)
-
-**Sintoma**: O Service do Envoy Gateway fica em estado "Pending" e não recebe IP externo
-
-**Verificação**:
-```bash
-# Verificar status do Service
-kubectl get svc -n envoy-gateway-system
-
-# Se EXTERNAL-IP mostrar <pending>, o MetalLB não está funcionando
-```
-
-**Causa**: Clusters locais (kind/Minikube) não possuem suporte nativo a LoadBalancer. O MetalLB é necessário para fornecer IPs externos.
-
-**Solução**:
-
-1. **Verificar se o MetalLB foi habilitado na instalação:**
-```bash
-# Verificar se o MetalLB está instalado
-kubectl get pods -n metallb-system
-
-# Se não houver pods, reinstale usando o values-dev.yaml:
-curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
-helm upgrade zenith-operator zenith/zenith-operator \
-  -f values-dev.yaml \
-  --namespace zenith-operator-system
-```
-
-2. **Verificar se o IPAddressPool foi criado:**
-```bash
-kubectl get ipaddresspool -n metallb-system
-kubectl get l2advertisement -n metallb-system
-```
-
-3. **Verificar logs do MetalLB:**
-```bash
-kubectl logs -n metallb-system -l app=metallb -c controller
-```
-
-> **Nota:** Em clouds gerenciadas (GKE/EKS/AKS), NÃO habilite o MetalLB. O LoadBalancer nativo da cloud é usado automaticamente.
-
 ### Status da Function Mostra "GitAuthMissing"
 
 **Sintoma**: Condition com reason `GitAuthMissing`
