@@ -106,10 +106,25 @@ spec:
               echo "Function imageDigest: $FUNCTION_DIGEST"
               echo "KService image: $KSVC_IMAGE"
               
-              if [ "$KSVC_IMAGE" = "$FUNCTION_DIGEST" ]; then
-                echo "SUCCESS: KService image matches Function imageDigest"
+              # Extract the digest portion (sha256:...) from both URLs
+              # The operator intentionally transforms the registry URL from internal DNS
+              # (registry.registry.svc.cluster.local:5000) to NodePort (127.0.0.1:30500)
+              # so the container runtime can pull the image
+              FUNCTION_SHA=$(echo "$FUNCTION_DIGEST" | grep -oP '@sha256:[a-f0-9]+' || echo "")
+              KSVC_SHA=$(echo "$KSVC_IMAGE" | grep -oP '@sha256:[a-f0-9]+' || echo "")
+              
+              echo "Function SHA: $FUNCTION_SHA"
+              echo "KService SHA: $KSVC_SHA"
+              
+              if [ -z "$FUNCTION_SHA" ] || [ -z "$KSVC_SHA" ]; then
+                echo "ERROR: Could not extract SHA digest from images"
+                exit 1
+              fi
+              
+              if [ "$FUNCTION_SHA" = "$KSVC_SHA" ]; then
+                echo "SUCCESS: KService image digest matches Function imageDigest"
               else
-                echo "ERROR: KService image ($KSVC_IMAGE) does not match Function imageDigest ($FUNCTION_DIGEST)"
+                echo "ERROR: KService image digest ($KSVC_SHA) does not match Function imageDigest ($FUNCTION_SHA)"
                 exit 1
               fi
     
