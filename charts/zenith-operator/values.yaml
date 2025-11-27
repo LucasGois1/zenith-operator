@@ -56,7 +56,7 @@ opentelemetry:
     enabled: true  # Enable Jaeger for trace visualization (recommended for development)
 
 registry:
-  enabled: false
+  enabled: true
   image:
     repository: registry
     tag: "2"
@@ -65,8 +65,9 @@ registry:
     size: "10Gi"
     storageClass: ""  # Use default StorageClass
   service:
-    type: ClusterIP
+    type: NodePort
     port: 5000
+    nodePort: 30500
   hostname: "registry.registry.svc.cluster.local"
 
 operator:

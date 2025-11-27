@@ -1129,9 +1129,20 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	// Usa diretamente os campos nativos do Kubernetes para Env e EnvFrom
 	// IMPORTANTE: Knative não suporta fieldRef/resourceFieldRef, então resolve-se esses valores aqui
 	resolvedEnv := r.resolveEnvVars(function)
+
+	// Lógica para resolver o endereço da imagem
+	// Se estivermos usando o registry interno, precisamos trocar o endereço para o NodePort
+	// para que o runtime do container consiga acessar (pois ele roda no host/node)
+	image := function.Status.ImageDigest
+	if strings.HasPrefix(image, "registry.registry.svc.cluster.local:5000") {
+		// Substituir pelo endereço "localhost:30500" (ou configurável via env var futuramente)
+		// Isso funciona no Minikube/Kind e na maioria dos setups onde a porta é exposta no nó
+		image = strings.Replace(image, "registry.registry.svc.cluster.local:5000", "127.0.0.1:30500", 1)
+	}
+
 	container := v1.Container{
 		// Usa o digest do build bem-sucedido da Fase 3.3
-		Image: function.Status.ImageDigest,
+		Image: image,
 		Ports: []v1.ContainerPort{ // Ports é um slice
 			{
 				// Informa ao Knative a porta que o contêiner da aplicação escuta

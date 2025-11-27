@@ -98,6 +98,9 @@ spec:
     targetPort: registry
     protocol: TCP
     name: registry
+    {{- if and (eq .Values.registry.service.type "NodePort") .Values.registry.service.nodePort }}
+    nodePort: {{ .Values.registry.service.nodePort }}
+    {{- end }}
   selector:
     app: registry
 {{- end }}
