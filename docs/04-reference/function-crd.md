@@ -1,8 +1,8 @@
-# Function CRD - Especificação Completa
+# Function CRD - Complete Specification
 
-Esta documentação descreve a especificação completa do Custom Resource Definition (CRD) `Function`.
+This documentation describes the complete specification of the `Function` Custom Resource Definition (CRD).
 
-## API Group e Version
+## API Group and Version
 
 - **API Group**: `functions.zenith.com`
 - **Version**: `v1alpha1`
@@ -11,7 +11,7 @@ Esta documentação descreve a especificação completa do Custom Resource Defin
 - **Singular**: `function`
 - **Short Names**: `fn`, `func`
 
-## Exemplo Completo
+## Complete Example
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -71,7 +71,7 @@ status:
 
 **Type**: `string`
 
-**Description**: URL do repositório Git contendo o código-fonte da função.
+**Description**: URL of the Git repository containing the function source code.
 
 **Supported Protocols**:
 - HTTPS: `https://github.com/myorg/my-function`
@@ -98,7 +98,7 @@ gitRepo: https://git.example.com/myorg/my-function
 
 **Default**: `main`
 
-**Description**: Revisão Git a ser usada (branch, tag, ou commit hash).
+**Description**: Git revision to use (branch, tag, or commit hash).
 
 **Examples**:
 ```yaml
@@ -120,15 +120,15 @@ gitRevision: 1234567890abcdef1234567890abcdef12345678
 
 **Type**: `string`
 
-**Description**: Nome do Secret usado para autenticar com o repositório Git privado.
+**Description**: Name of the Secret used to authenticate with private Git repository.
 
-**Secret Type**: `kubernetes.io/basic-auth` ou `kubernetes.io/ssh-auth`
+**Secret Type**: `kubernetes.io/basic-auth` or `kubernetes.io/ssh-auth`
 
 **Required Annotation**: `tekton.dev/git-0: <git-server>`
 
 **Examples**:
 ```yaml
-# Para repositórios privados
+# For private repositories
 gitAuthSecretName: github-auth
 gitAuthSecretName: gitlab-credentials
 ```
@@ -151,13 +151,13 @@ stringData:
 
 **Type**: `BuildSpec`
 
-**Description**: Configuração do pipeline de build.
+**Description**: Build pipeline configuration.
 
 #### build.image (Required)
 
 **Type**: `string`
 
-**Description**: Nome completo da imagem de destino (sem tag ou digest).
+**Description**: Full name of target image (without tag or digest).
 
 **Format**: `<registry>/<repository>/<image>`
 
@@ -179,13 +179,13 @@ image: myregistry.azurecr.io/my-function
 image: registry.registry.svc.cluster.local:5000/my-function
 ```
 
-**Note**: O operator adiciona automaticamente o digest após o build: `image@sha256:...`
+**Note**: The operator automatically adds the digest after build: `image@sha256:...`
 
 #### build.registrySecretName (Optional)
 
 **Type**: `string`
 
-**Description**: Nome do Secret usado para autenticar com o container registry.
+**Description**: Name of the Secret used to authenticate with container registry.
 
 **Secret Type**: `kubernetes.io/dockerconfigjson`
 
@@ -210,19 +210,19 @@ data:
 
 **Type**: `DeploySpec`
 
-**Description**: Configuração de deployment da função.
+**Description**: Function deployment configuration.
 
 #### deploy.dapr (Optional)
 
 **Type**: `DaprConfig`
 
-**Description**: Configuração do sidecar Dapr.
+**Description**: Dapr sidecar configuration.
 
 ##### deploy.dapr.enabled (Required if dapr specified)
 
 **Type**: `boolean`
 
-**Description**: Se `true`, injeta o sidecar Dapr no pod.
+**Description**: If `true`, injects Dapr sidecar into the pod.
 
 **Default**: `false`
 
@@ -236,12 +236,12 @@ dapr:
 
 **Type**: `string`
 
-**Description**: ID único da aplicação Dapr.
+**Description**: Unique Dapr application ID.
 
 **Constraints**:
-- Deve ser único no namespace
-- Lowercase alphanumeric e hífens
-- Máximo 63 caracteres
+- Must be unique within namespace
+- Lowercase alphanumeric and hyphens
+- Maximum 63 characters
 
 **Examples**:
 ```yaml
@@ -256,9 +256,9 @@ dapr:
 
 **Type**: `integer`
 
-**Description**: Porta em que a aplicação escuta.
+**Description**: Port where application listens.
 
-**Default**: Nenhum (deve ser especificado)
+**Default**: None (must be specified)
 
 **Common Values**: `8080`, `3000`, `8000`
 
@@ -274,28 +274,28 @@ dapr:
 
 **Type**: `[]corev1.EnvVar`
 
-**Description**: Lista de variáveis de ambiente para injetar no container da função. Suporta valores estáticos, referências a Secrets/ConfigMaps, e referências a campos do Pod.
+**Description**: List of environment variables to inject into function container. Supports static values, references to Secrets/ConfigMaps, and Pod fields.
 
 **EnvVar Fields**:
-- `name` (string, required): Nome da variável de ambiente
-- `value` (string, optional): Valor estático da variável
-- `valueFrom` (object, optional): Fonte para o valor da variável (não pode ser usado com `value`)
-  - `secretKeyRef`: Referência a uma chave em um Secret
-    - `name` (string): Nome do Secret
-    - `key` (string): Chave dentro do Secret
-    - `optional` (boolean): Se true, não falha se o Secret não existir
-  - `configMapKeyRef`: Referência a uma chave em um ConfigMap
-    - `name` (string): Nome do ConfigMap
-    - `key` (string): Chave dentro do ConfigMap
-    - `optional` (boolean): Se true, não falha se o ConfigMap não existir
-  - `fieldRef`: Referência a um campo do Pod
-    - `fieldPath` (string): Caminho do campo (ex: metadata.name, metadata.namespace)
-  - `resourceFieldRef`: Referência a recursos do container
-    - `resource` (string): Nome do recurso (ex: limits.cpu, requests.memory)
+- `name` (string, required): Name of environment variable
+- `value` (string, optional): Static value
+- `valueFrom` (object, optional): Source for value (cannot be used with `value`)
+  - `secretKeyRef`: Reference to a key in a Secret
+    - `name` (string): Secret name
+    - `key` (string): Key inside Secret
+    - `optional` (boolean): If true, does not fail if Secret does not exist
+  - `configMapKeyRef`: Reference to a key in a ConfigMap
+    - `name` (string): ConfigMap name
+    - `key` (string): Key inside ConfigMap
+    - `optional` (boolean): If true, does not fail if ConfigMap does not exist
+  - `fieldRef`: Reference to a Pod field
+    - `fieldPath` (string): Field path (e.g., metadata.name, metadata.namespace)
+  - `resourceFieldRef`: Reference to container resources
+    - `resource` (string): Resource name (e.g., limits.cpu, requests.memory)
 
 **Examples**:
 
-**Valores estáticos**:
+**Static values**:
 ```yaml
 env:
   - name: DATABASE_URL
@@ -306,7 +306,7 @@ env:
     value: "true"
 ```
 
-**Referências a Secrets**:
+**References to Secrets**:
 ```yaml
 env:
   - name: API_KEY
@@ -327,7 +327,7 @@ env:
         optional: true
 ```
 
-**Referências a ConfigMaps**:
+**References to ConfigMaps**:
 ```yaml
 env:
   - name: APP_CONFIG
@@ -342,7 +342,7 @@ env:
         key: flags
 ```
 
-**Referências a campos do Pod**:
+**References to Pod fields**:
 ```yaml
 env:
   - name: POD_NAME
@@ -359,7 +359,7 @@ env:
         fieldPath: status.podIP
 ```
 
-**Referências a recursos**:
+**References to resources**:
 ```yaml
 env:
   - name: CPU_LIMIT
@@ -372,7 +372,7 @@ env:
         resource: requests.memory
 ```
 
-**Exemplo combinado**:
+**Combined example**:
 ```yaml
 env:
   - name: APP_ENV
@@ -394,43 +394,43 @@ env:
 ```
 
 **Important Notes**:
-- O operator valida que Secrets e ConfigMaps referenciados existem antes de deployar a função
-- Se um Secret ou ConfigMap não existir, a função ficará com status `Ready=False` e reason `SecretNotFound` ou `ConfigMapNotFound`
-- Use `optional: true` para recursos que podem não existir
-- Mudanças nas variáveis de ambiente disparam uma nova revisão do Knative Service
+- The operator validates that referenced Secrets and ConfigMaps exist before deploying the function
+- If a Secret or ConfigMap does not exist, function status will be `Ready=False` with reason `SecretNotFound` or `ConfigMapNotFound`
+- Use `optional: true` for resources that may not exist
+- Changes to environment variables trigger a new Knative Service revision
 
 #### deploy.envFrom (Optional)
 
 **Type**: `[]corev1.EnvFromSource`
 
-**Description**: Lista de fontes para popular variáveis de ambiente no container. Todas as chaves do Secret ou ConfigMap serão expostas como variáveis de ambiente.
+**Description**: List of sources to populate environment variables in container. All keys from Secret or ConfigMap will be exposed as environment variables.
 
 **EnvFromSource Fields**:
-- `secretRef`: Referência a um Secret
-  - `name` (string): Nome do Secret
-  - `optional` (boolean): Se true, não falha se o Secret não existir
-- `configMapRef`: Referência a um ConfigMap
-  - `name` (string): Nome do ConfigMap
-  - `optional` (boolean): Se true, não falha se o ConfigMap não existir
-- `prefix` (string, optional): Prefixo para adicionar aos nomes das variáveis
+- `secretRef`: Reference to a Secret
+  - `name` (string): Secret name
+  - `optional` (boolean): If true, does not fail if Secret does not exist
+- `configMapRef`: Reference to a ConfigMap
+  - `name` (string): ConfigMap name
+  - `optional` (boolean): If true, does not fail if ConfigMap does not exist
+- `prefix` (string, optional): Prefix to add to variable names
 
 **Examples**:
 
-**Injetar todas as chaves de um Secret**:
+**Inject all keys from a Secret**:
 ```yaml
 envFrom:
   - secretRef:
       name: api-credentials
 ```
 
-**Injetar todas as chaves de um ConfigMap**:
+**Inject all keys from a ConfigMap**:
 ```yaml
 envFrom:
   - configMapRef:
       name: app-config
 ```
 
-**Com prefixo**:
+**With prefix**:
 ```yaml
 envFrom:
   - prefix: DB_
@@ -441,7 +441,7 @@ envFrom:
       name: redis-config
 ```
 
-**Múltiplas fontes**:
+**Multiple sources**:
 ```yaml
 envFrom:
   - secretRef:
@@ -453,7 +453,7 @@ envFrom:
       optional: true
 ```
 
-**Exemplo combinado com env**:
+**Combined example with env**:
 ```yaml
 deploy:
   env:
@@ -474,15 +474,15 @@ deploy:
 
 **Type**: `ScaleSpec`
 
-**Description**: Configuração de autoscaling para controlar o número mínimo e máximo de réplicas.
+**Description**: Autoscaling configuration to control minimum and maximum replicas.
 
 ##### deploy.scale.minScale (Optional)
 
 **Type**: `integer`
 
-**Description**: Número mínimo de réplicas a manter. Se definido como 1 ou mais, previne scale-to-zero e elimina cold starts.
+**Description**: Minimum number of replicas to maintain. If set to 1 or more, prevents scale-to-zero and eliminates cold starts.
 
-**Default**: `0` (scale-to-zero habilitado)
+**Default**: `0` (scale-to-zero enabled)
 
 **Minimum**: `0`
 
@@ -490,16 +490,16 @@ deploy:
 ```yaml
 deploy:
   scale:
-    minScale: 1  # Sempre mantém 1 réplica ativa
+    minScale: 1  # Always keep 1 replica active
 ```
 
 ##### deploy.scale.maxScale (Optional)
 
 **Type**: `integer`
 
-**Description**: Número máximo de réplicas permitido. Se definido como 0, não há limite máximo.
+**Description**: Maximum number of replicas allowed. If set to 0, no maximum limit.
 
-**Default**: `0` (sem limite)
+**Default**: `0` (no limit)
 
 **Minimum**: `0`
 
@@ -507,37 +507,37 @@ deploy:
 ```yaml
 deploy:
   scale:
-    maxScale: 10  # Limita a 10 réplicas máximo
+    maxScale: 10  # Limits to 10 replicas maximum
 ```
 
 **Combined Example**:
 ```yaml
 deploy:
   scale:
-    minScale: 1    # Elimina cold starts
-    maxScale: 50   # Controla custos máximos
+    minScale: 1    # Eliminates cold starts
+    maxScale: 50   # Controls maximum costs
   env:
     - name: LOG_LEVEL
       value: info
 ```
 
 **Use Cases**:
-- **APIs críticas**: Use `minScale: 1` para eliminar cold starts
-- **Controle de custos**: Use `maxScale` para limitar recursos máximos
-- **Desenvolvimento**: Mantenha defaults (scale-to-zero) para economizar recursos
+- **Critical APIs**: Use `minScale: 1` to eliminate cold starts
+- **Cost control**: Use `maxScale` to limit maximum resources
+- **Development**: Keep defaults (scale-to-zero) to save resources
 
 **Knative Annotations**:
-Quando configurado, o operator adiciona as seguintes anotações ao template do Knative Service:
-- `autoscaling.knative.dev/min-scale`: Valor de minScale
-- `autoscaling.knative.dev/max-scale`: Valor de maxScale
+When configured, the operator adds the following annotations to Knative Service template:
+- `autoscaling.knative.dev/min-scale`: Value of minScale
+- `autoscaling.knative.dev/max-scale`: Value of maxScale
 
 ### eventing (Optional)
 
 **Type**: `EventingSpec`
 
-**Description**: Configuração de subscrição a eventos via Knative Eventing.
+**Description**: Event subscription configuration via Knative Eventing.
 
-**Note**: Se especificado, o operator cria um Knative Trigger.
+**Note**: If specified, the operator creates a Knative Trigger.
 
 #### eventing.broker (Optional)
 
@@ -545,7 +545,7 @@ Quando configurado, o operator adiciona as seguintes anotações ao template do 
 
 **Default**: `default`
 
-**Description**: Nome do Knative Broker para subscrever.
+**Description**: Name of Knative Broker to subscribe to.
 
 **Examples**:
 ```yaml
@@ -555,36 +555,36 @@ eventing:
   broker: staging
 ```
 
-**Note**: O Broker deve existir no mesmo namespace.
+**Note**: Broker must exist in the same namespace.
 
 #### eventing.filters (Optional)
 
 **Type**: `map[string]string`
 
-**Description**: Mapa de atributos CloudEvents para filtrar eventos.
+**Description**: Map of CloudEvents attributes to filter events.
 
 **Common Attributes**:
-- `type`: Tipo do evento
-- `source`: Origem do evento
-- `subject`: Assunto do evento
+- `type`: Event type
+- `source`: Event source
+- `subject`: Event subject
 - Custom attributes
 
 **Examples**:
 ```yaml
-# Filtrar por type
+# Filter by type
 eventing:
   broker: default
   filters:
     type: com.example.order.created
 
-# Filtrar por type e source
+# Filter by type and source
 eventing:
   broker: default
   filters:
     type: com.example.order.created
     source: payment-service
 
-# Múltiplos filtros (AND)
+# Multiple filters (AND)
 eventing:
   broker: default
   filters:
@@ -592,33 +592,33 @@ eventing:
     source: payment-service
     subject: orders
 
-# Sem filtros (todos os eventos)
+# No filters (all events)
 eventing:
   broker: default
   filters: {}
 ```
 
-**Note**: Todos os filtros devem corresponder (operação AND).
+**Note**: All filters must match (AND operation).
 
 ### observability (Optional)
 
 **Type**: `ObservabilitySpec`
 
-**Description**: Configuração de observabilidade e distributed tracing via OpenTelemetry.
+**Description**: Observability and distributed tracing configuration via OpenTelemetry.
 
-**Note**: Se especificado, o operator injeta variáveis de ambiente OpenTelemetry no container.
+**Note**: If specified, the operator injects OpenTelemetry environment variables into container.
 
 #### observability.tracing (Optional)
 
 **Type**: `TracingConfig`
 
-**Description**: Configuração de distributed tracing.
+**Description**: Distributed tracing configuration.
 
 ##### observability.tracing.enabled (Required if tracing specified)
 
 **Type**: `boolean`
 
-**Description**: Se `true`, habilita distributed tracing via OpenTelemetry.
+**Description**: If `true`, enables distributed tracing via OpenTelemetry.
 
 **Default**: `false`
 
@@ -630,30 +630,30 @@ observability:
 ```
 
 **Behavior**:
-- Quando habilitado, o operator injeta automaticamente variáveis de ambiente OpenTelemetry no container
-- Se Dapr também estiver habilitado, o operator configura Dapr para propagar trace context
+- When enabled, the operator automatically injects OpenTelemetry environment variables into container
+- If Dapr is also enabled, the operator configures Dapr to propagate trace context
 
 **Environment Variables Injected**:
-- `OTEL_EXPORTER_OTLP_ENDPOINT`: Endpoint do OpenTelemetry Collector
-- `OTEL_SERVICE_NAME`: Nome da função (usado para identificar o serviço nos traces)
-- `OTEL_RESOURCE_ATTRIBUTES`: Atributos de recurso (namespace, version)
-- `OTEL_TRACES_EXPORTER`: Protocolo de exportação (otlp)
-- `OTEL_TRACES_SAMPLER`: Tipo de sampler (se samplingRate especificado)
-- `OTEL_TRACES_SAMPLER_ARG`: Argumento do sampler (se samplingRate especificado)
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: Endpoint of OpenTelemetry Collector
+- `OTEL_SERVICE_NAME`: Function name (used to identify service in traces)
+- `OTEL_RESOURCE_ATTRIBUTES`: Resource attributes (namespace, version)
+- `OTEL_TRACES_EXPORTER`: Export protocol (otlp)
+- `OTEL_TRACES_SAMPLER`: Sampler type (if samplingRate specified)
+- `OTEL_TRACES_SAMPLER_ARG`: Sampler argument (if samplingRate specified)
 
 ##### observability.tracing.samplingRate (Optional)
 
 **Type**: `string`
 
-**Description**: Taxa de amostragem de traces (0.0 a 1.0). Se não especificado, usa a taxa padrão do OpenTelemetry Collector.
+**Description**: Trace sampling rate (0.0 to 1.0). If not specified, uses OpenTelemetry Collector default rate.
 
-**Format**: String representando um número decimal entre 0.0 e 1.0
+**Format**: String representing a decimal number between 0.0 and 1.0
 
-**Validation**: Deve corresponder ao padrão regex `^(0(\.\d+)?|1(\.0+)?)$`
+**Validation**: Must match regex pattern `^(0(\.\d+)?|1(\.0+)?)$`
 
 **Examples**:
 ```yaml
-# 100% sampling (captura todos os traces)
+# 100% sampling (captures all traces)
 observability:
   tracing:
     enabled: true
@@ -679,9 +679,9 @@ observability:
 ```
 
 **Recommendations**:
-- **Development**: Use `"1.0"` (100%) para capturar todos os traces
-- **Staging**: Use `"0.5"` a `"1.0"` (50-100%) para funções críticas
-- **Production**: Use `"0.01"` a `"0.1"` (1-10%) para funções de alto tráfego
+- **Development**: Use `"1.0"` (100%) to capture all traces
+- **Staging**: Use `"0.5"` to `"1.0"` (50-100%) for critical functions
+- **Production**: Use `"0.01"` to `"0.1"` (1-10%) for high traffic functions
 
 **Example with Dapr**:
 ```yaml
@@ -705,29 +705,29 @@ spec:
       samplingRate: "0.1"
 ```
 
-**Note**: Quando Dapr e tracing estão habilitados, o operator adiciona automaticamente a anotação `dapr.io/config: tracing-config` ao pod template.
+**Note**: When Dapr and tracing are enabled, the operator automatically adds annotation `dapr.io/config: tracing-config` to pod template.
 
 ## Status Fields
 
-O operator atualiza automaticamente o campo `status` da Function.
+The operator automatically updates the `status` field of the Function.
 
 ### conditions
 
 **Type**: `[]metav1.Condition`
 
-**Description**: Lista de condições que descrevem o estado da função.
+**Description**: List of conditions describing function state.
 
 **Condition Types**:
-- `Ready`: Indica se a função está pronta para receber requisições
-- `BuildSucceeded`: Indica se o build foi bem-sucedido
-- `DeploySucceeded`: Indica se o deploy foi bem-sucedido
+- `Ready`: Indicates if function is ready to receive requests
+- `BuildSucceeded`: Indicates if build was successful
+- `DeploySucceeded`: Indicates if deploy was successful
 
 **Condition Fields**:
-- `type` (string): Tipo da condição
-- `status` (string): `True`, `False`, ou `Unknown`
-- `reason` (string): Razão legível por máquina
-- `message` (string): Mensagem legível por humano
-- `lastTransitionTime` (timestamp): Última vez que a condição mudou
+- `type` (string): Condition type
+- `status` (string): `True`, `False`, or `Unknown`
+- `reason` (string): Machine-readable reason
+- `message` (string): Human-readable message
+- `lastTransitionTime` (timestamp): Last time condition changed
 
 **Examples**:
 ```yaml
@@ -750,7 +750,7 @@ status:
 
 **Type**: `string`
 
-**Description**: Referência imutável da imagem construída (com digest SHA256).
+**Description**: Immutable reference of built image (with SHA256 digest).
 
 **Format**: `<registry>/<repository>/<image>@sha256:<hash>`
 
@@ -760,34 +760,34 @@ imageDigest: registry.example.com/my-function@sha256:abc123def456...
 imageDigest: docker.io/myorg/my-function@sha256:1234567890abcdef...
 ```
 
-**Note**: Populado após build bem-sucedido.
+**Note**: Populated after successful build.
 
 ### url
 
 **Type**: `string`
 
-**Description**: URL publicamente acessível da função (do Knative Service).
+**Description**: Publicly accessible URL of the function (from Knative Service).
 
 **Format**: `http://<function-name>.<namespace>.<domain>`
 
 **Examples**:
 ```yaml
-# URL interna (cluster)
+# Internal URL (cluster)
 url: http://my-function.default.svc.cluster.local
 
-# URL externa (pública)
+# External URL (public)
 url: http://my-function.default.example.com
 ```
 
-**Note**: Populado após deploy bem-sucedido.
+**Note**: Populated after successful deploy.
 
 ### observedGeneration
 
 **Type**: `integer`
 
-**Description**: Geração do spec que foi observada pelo operator.
+**Description**: Spec generation observed by the operator.
 
-**Usage**: Usado para detectar se o operator já processou a última mudança no spec.
+**Usage**: Used to detect if operator has processed latest spec change.
 
 **Examples**:
 ```yaml
@@ -795,11 +795,11 @@ observedGeneration: 1
 observedGeneration: 5
 ```
 
-## Condições de Status
+## Status Conditions
 
-### Progressão de Status
+### Status Progression
 
-O operator atualiza as condições conforme a função progride:
+The operator updates conditions as function progresses:
 
 #### 1. Initial State
 
@@ -872,9 +872,9 @@ status:
   observedGeneration: 1
 ```
 
-## Próximos Passos
+## Next Steps
 
-- [Referência do Operator](operator-reference.md) - Comportamento e integrações do operator
-- [Troubleshooting](troubleshooting.md) - Solução de problemas comuns
-- [Guia de Funções HTTP](../02-guias/funcoes-http.md)
-- [Guia de Funções com Eventos](../02-guias/funcoes-eventos.md)
+- [Operator Reference](operator-reference.md) - Operator behavior and integrations
+- [Troubleshooting](troubleshooting.md) - Common issues troubleshooting
+- [HTTP Functions Guide](../02-guides/http-functions.md)
+- [Event Functions Guide](../02-guides/event-functions.md)

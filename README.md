@@ -5,9 +5,9 @@
 [![Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test.yml)
 [![E2E Tests](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml/badge.svg)](https://github.com/LucasGois1/zenith-operator/actions/workflows/test-e2e.yml)
 
-Zenith Operator é um operador Kubernetes que fornece uma plataforma serverless para funções, orquestrando builds (Tekton Pipelines), deployments (Knative Serving) e invocações orientadas a eventos (Knative Eventing) através de um único Custom Resource `Function`.
+Zenith Operator is a Kubernetes operator that provides a serverless platform for functions, orchestrating builds (Tekton Pipelines), deployments (Knative Serving), and event-driven invocations (Knative Eventing) through a single `Function` Custom Resource.
 
-## 🚀 Início Rápido
+## 🚀 Quick Start
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -22,44 +22,44 @@ spec:
   deploy: {}
 ```
 
-## 📖 Documentação
+## 📖 Documentation
 
-**[Acesse a documentação completa →](docs/)**
+**[Access full documentation →](docs/)**
 
-- **[Introdução](docs/01-introducao/)** - Visão geral, instalação e início rápido
-- **[Guias](docs/02-guias/)** - Tutoriais práticos para criar funções
-- **[Conceitos](docs/03-conceitos/)** - Arquitetura e conceitos fundamentais
-- **[Referência](docs/04-referencia/)** - Especificação completa da API
-- **[Operações](docs/05-operacoes/)** - Configuração e gerenciamento
+- **[Introduction](docs/01-introduction/)** - Overview, installation and quick start
+- **[Guides](docs/02-guides/)** - Practical tutorials for creating functions
+- **[Concepts](docs/03-concepts/)** - Architecture and fundamental concepts
+- **[Reference](docs/04-reference/)** - Complete API specification
+- **[Operations](docs/05-operations/)** - Configuration and management
 
-## ✨ Principais Características
+## ✨ Key Features
 
-- **Build Automático**: Clona repositórios Git e constrói imagens usando Tekton Pipelines e Buildpacks
-- **Serverless Deployment**: Deploy automático como Knative Services com scale-to-zero
-- **Event-Driven**: Subscrição a eventos via Knative Eventing com filtros
-- **Service Mesh**: Integração opcional com Dapr para service discovery e pub/sub
-- **Distributed Tracing**: Rastreamento automático via OpenTelemetry
-- **Imagens Imutáveis**: Rastreamento de image digests para reprodutibilidade
+- **Automatic Build**: Clones Git repositories and builds images using Tekton Pipelines and Buildpacks
+- **Serverless Deployment**: Automatic deployment as Knative Services with scale-to-zero
+- **Event-Driven**: Event subscription via Knative Eventing with filters
+- **Service Mesh**: Optional integration with Dapr for service discovery and pub/sub
+- **Distributed Tracing**: Automatic tracing via OpenTelemetry
+- **Immutable Images**: Image digest tracking for reproducibility
 
-## 🛠️ Instalação
+## 🛠️ Installation
 
 ### Via Helm
 
-**Desenvolvimento Local (kind/Minikube):**
+**Local Development (kind/Minikube):**
 ```bash
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 
-# Baixar o values-dev.yaml
+# Download values-dev.yaml
 curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
 
-# Instalar com o profile de desenvolvimento (já inclui MetalLB, registry local, etc.)
+# Install with development profile (includes MetalLB, local registry, etc.)
 helm install zenith-operator zenith/zenith-operator \
   -f values-dev.yaml \
   --namespace zenith-operator-system \
   --create-namespace
 ```
 
-**Produção (GKE/EKS/AKS):**
+**Production (GKE/EKS/AKS):**
 ```bash
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 helm install zenith-operator zenith/zenith-operator \
@@ -67,58 +67,58 @@ helm install zenith-operator zenith/zenith-operator \
   --create-namespace
 ```
 
-> **Nota:** O MetalLB é necessário apenas em clusters locais (kind/Minikube) que não possuem suporte nativo a LoadBalancer. Em clouds gerenciadas (GKE, EKS, AKS), o load balancer da cloud é usado automaticamente.
+> **Note:** MetalLB is only required on local clusters (kind/Minikube) that do not have native LoadBalancer support. On managed clouds (GKE, EKS, AKS), the cloud load balancer is used automatically.
 
 ### Via Kustomize
 
 ```bash
-make install  # Instalar CRDs
+make install  # Install CRDs
 make deploy IMG=ghcr.io/lucasgois1/zenith-operator:latest
 ```
 
-**[Guia completo de instalação →](docs/01-introducao/instalacao.md)**
+**[Complete installation guide →](docs/01-introduction/installation.md)**
 
-## 🎯 Casos de Uso
+## 🎯 Use Cases
 
-### Funções HTTP Síncronas
-APIs REST, webhooks e microserviços que respondem a requisições HTTP.
+### Synchronous HTTP Functions
+REST APIs, webhooks and microservices that respond to HTTP requests.
 
-**[Ver guia →](docs/02-guias/funcoes-http.md)**
+**[See guide →](docs/02-guides/http-functions.md)**
 
-### Funções Assíncronas com Eventos
-Processamento de eventos, notificações e workflows event-driven.
+### Asynchronous Functions with Events
+Event processing, notifications and event-driven workflows.
 
-**[Ver guia →](docs/02-guias/funcoes-eventos.md)**
+**[See guide →](docs/02-guides/event-functions.md)**
 
-### Comunicação entre Funções
-Arquiteturas de microserviços com múltiplas funções se comunicando.
+### Function Communication
+Microservices architectures with multiple communicating functions.
 
-**[Ver guia →](docs/02-guias/comunicacao-funcoes.md)**
+**[See guide →](docs/02-guides/function-communication.md)**
 
-## 🧪 Desenvolvimento
+## 🧪 Development
 
 ```bash
-# Setup completo do ambiente
+# Complete environment setup
 make dev-up
 
-# Rebuild e redeploy rápido
+# Fast rebuild and redeploy
 make dev-redeploy
 
-# Executar testes
+# Run tests
 make test
 make test-chainsaw
 ```
 
-## 📄 Licença
+## 📄 License
 
-Apache License 2.0 - veja [LICENSE](LICENSE) para detalhes.
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
-## 🤝 Contribuindo
+## 🤝 Contributing
 
-Contribuições são bem-vindas! Abra issues e pull requests no GitHub.
+Contributions are welcome! Open issues and pull requests on GitHub.
 
 ## 🔗 Links
 
-- [Documentação](docs/)
-- [Exemplos](config/samples/)
+- [Documentation](docs/)
+- [Examples](config/samples/)
 - [Issues](https://github.com/LucasGois1/zenith-operator/issues)
