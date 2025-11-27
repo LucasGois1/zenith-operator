@@ -43,7 +43,7 @@ metallb:
   version: "v0.14.9"
   # The addressPool can be set to "auto" to automatically detect the IP range
   # from the cluster's node IPs, or set to a specific range like "172.18.255.200-172.18.255.250"
-  # 
+  #
   # When set to "auto" (default for kind clusters):
   #   - The installer Job will detect the first node's InternalIP
   #   - It will calculate the pool as <first-two-octets>.255.200-<first-two-octets>.255.250
