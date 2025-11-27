@@ -9,6 +9,9 @@ GITHUB_USERNAME="${GITHUB_USERNAME:-LucasGois1}"
 echo "🚀 Configurando ambiente de desenvolvimento..."
 echo ""
 
+# =============================================================================
+# SECTION 1: Install Dependencies
+# =============================================================================
 echo "🔍 Verificando e instalando dependências..."
 
 if ! command -v go &> /dev/null; then
@@ -50,6 +53,13 @@ else
   echo "✅ Docker já instalado"
 fi
 
+if ! command -v helm &> /dev/null; then
+  echo "📦 Instalando Helm..."
+  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+else
+  echo "✅ Helm já instalado"
+fi
+
 if ! command -v chainsaw &> /dev/null; then
   echo "📦 Instalando Chainsaw..."
   bash hack/install-chainsaw.sh
@@ -60,6 +70,9 @@ fi
 
 echo ""
 
+# =============================================================================
+# SECTION 2: Create Local Docker Registry
+# =============================================================================
 REGISTRY_NAME="kind-registry"
 REGISTRY_PORT="5001"
 
@@ -78,7 +91,9 @@ else
   echo "✅ Registry criado em localhost:${REGISTRY_PORT}"
 fi
 
-# Create kind cluster if it doesn't exist
+# =============================================================================
+# SECTION 3: Create Kind Cluster
+# =============================================================================
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
   echo "📦 Criando cluster kind com configuração de registry..."
   cat <<EOF > /tmp/kind-config.yaml
@@ -109,164 +124,11 @@ else
   echo "✅ Registry já está conectado à rede kind"
 fi
 
-if ! kubectl get apiservices v1.tekton.dev 2>/dev/null | grep -q "v1.tekton.dev"; then
-  echo "📦 Instalando Tekton Pipelines..."
-  kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
-  echo "⏳ Aguardando Tekton Pipelines ficar pronto..."
-  # Wait for pods to be created before waiting for them to be ready
-  for i in {1..30}; do
-    if kubectl get pod -l app=tekton-pipelines-controller -n tekton-pipelines 2>/dev/null | grep -q tekton; then
-      break
-    fi
-    sleep 2
-  done
-  kubectl wait --for=condition=ready pod -l app=tekton-pipelines-controller -n tekton-pipelines --timeout=300s
-  
-  # Enable step-actions feature flag required for buildpacks-phases Task
-  # This Task uses Step Results and Step When expressions
-  echo "📦 Configurando Tekton feature flags..."
-  kubectl patch configmap feature-flags -n tekton-pipelines --type merge -p '{"data":{"enable-step-actions":"true"}}'
-else
-  echo "✅ Tekton Pipelines já instalado"
-  # Ensure feature flag is set even if Tekton was already installed
-  kubectl patch configmap feature-flags -n tekton-pipelines --type merge -p '{"data":{"enable-step-actions":"true"}}' 2>/dev/null || true
-fi
-
-if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.serving.knative.dev"; then
-  echo "📦 Instalando Knative Serving..."
-  kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-crds.yaml
-  kubectl apply -f https://github.com/knative/serving/releases/latest/download/serving-core.yaml
-  
-  echo "📦 Configurando Knative para Kubernetes 1.33.0..."
-  kubectl set env deployment/controller -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
-  kubectl set env deployment/webhook -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
-  kubectl set env deployment/activator -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
-  kubectl set env deployment/autoscaler -n knative-serving KUBERNETES_MIN_VERSION=1.33.0
-  
-  echo "⏳ Aguardando Knative Serving ficar pronto..."
-  # Wait for pods to be created before waiting for them to be ready
-  for i in {1..30}; do
-    if kubectl get pod -l app=controller -n knative-serving 2>/dev/null | grep -q controller; then
-      break
-    fi
-    sleep 2
-  done
-  kubectl wait --for=condition=ready pod -l app=controller -n knative-serving --timeout=300s
-  kubectl wait --for=condition=ready pod -l app=autoscaler -n knative-serving --timeout=300s
-  kubectl wait --for=condition=ready pod -l app=activator -n knative-serving --timeout=300s
-  kubectl wait --for=condition=ready pod -l app=webhook -n knative-serving --timeout=300s
-else
-  echo "✅ Knative Serving já instalado"
-fi
-
-if ! kubectl get apiservices v1.eventing.knative.dev 2>/dev/null | grep -q "v1.eventing.knative.dev"; then
-  echo "📦 Instalando Knative Eventing..."
-  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-crds.yaml
-  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.20.0/eventing-core.yaml
-  echo "⏳ Aguardando Knative Eventing ficar pronto..."
-  # Wait for pods to be created before waiting for them to be ready
-  for i in {1..30}; do
-    if kubectl get pod -l app=eventing-controller -n knative-eventing 2>/dev/null | grep -q eventing; then
-      break
-    fi
-    sleep 2
-  done
-  kubectl wait --for=condition=ready pod -l app=eventing-controller -n knative-eventing --timeout=300s
-else
-  echo "✅ Knative Eventing já instalado"
-fi
-
-if ! kubectl get crd gateways.gateway.networking.k8s.io 2>/dev/null; then
-  echo "📦 Instalando Gateway API CRDs..."
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.3.0/standard-install.yaml
-else
-  echo "✅ Gateway API CRDs já instalados"
-fi
-
-if ! kubectl get namespace metallb-system 2>/dev/null; then
-  echo "📦 Instalando MetalLB para LoadBalancer support em kind..."
-  kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
-  
-  echo "⏳ Aguardando MetalLB ficar pronto..."
-  # Wait for pods to be created before waiting for them to be ready
-  for i in {1..30}; do
-    if kubectl get pod -l app=metallb -n metallb-system 2>/dev/null | grep -q metallb; then
-      break
-    fi
-    sleep 2
-  done
-  kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s
-  
-  echo "📦 Configurando MetalLB IP address pool..."
-  # Extract only the IPv4 subnet (contains dots, not colons)
-  DOCKER_NETWORK=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' | grep '\.' | head -n1)
-  # Get the network base IP (e.g., 172.19.0.0/24 -> 172.19.0.0)
-  NETWORK_IP=$(echo ${DOCKER_NETWORK} | cut -d'/' -f1)
-  # Get the first three octets to stay within the subnet (e.g., 172.19.0)
-  IP_PREFIX=$(echo ${NETWORK_IP} | cut -d'.' -f1-3)
-  
-  cat <<EOF | kubectl apply -f -
-apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
-metadata:
-  name: kind-pool
-  namespace: metallb-system
-spec:
-  addresses:
-  - ${IP_PREFIX}.200-${IP_PREFIX}.250
----
-apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
-metadata:
-  name: kind-l2
-  namespace: metallb-system
-spec:
-  ipAddressPools:
-  - kind-pool
-EOF
-  
-  echo "✅ MetalLB configurado com IP pool ${IP_PREFIX}.200-${IP_PREFIX}.250"
-else
-  echo "✅ MetalLB já instalado"
-fi
-
-if ! command -v helm &> /dev/null; then
-  echo "📦 Instalando Helm..."
-  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-else
-  echo "✅ Helm já instalado"
-fi
-
-if ! kubectl get namespace envoy-gateway-system 2>/dev/null; then
-  echo "📦 Instalando Envoy Gateway..."
-  
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-  
-  curl -sL https://github.com/envoyproxy/gateway/releases/download/v1.6.0/install.yaml > /tmp/envoy-gateway-install.yaml
-  cd /tmp && csplit -s -f envoy-gateway- envoy-gateway-install.yaml '/^---$/' '{*}'
-  
-  for file in envoy-gateway-*; do
-    if ! grep -q "kind: CustomResourceDefinition" "$file"; then
-      kubectl apply -f "$file" 2>&1 | grep -v "unchanged" || true
-    fi
-  done
-  
-  cd "${PROJECT_ROOT}"
-  
-  echo "⏳ Aguardando Envoy Gateway ficar pronto..."
-  # Wait for deployment to be created before waiting for it to be available
-  for i in {1..30}; do
-    if kubectl get deployment envoy-gateway -n envoy-gateway-system 2>/dev/null | grep -q envoy-gateway; then
-      break
-    fi
-    sleep 2
-  done
-  kubectl wait --for=condition=available --timeout=300s deployment/envoy-gateway -n envoy-gateway-system
-else
-  echo "✅ Envoy Gateway já instalado"
-fi
-
+# =============================================================================
+# SECTION 4: Create Registry Service in Cluster
+# =============================================================================
+# This needs to be done before helm install because the registry service
+# must exist for the operator to push images to it
 if ! kubectl get namespace registry 2>/dev/null; then
   echo "📦 Criando namespace e Service para registry..."
   kubectl create namespace registry
@@ -302,265 +164,70 @@ else
   echo "✅ Registry Service já instalado"
 fi
 
-if ! kubectl get deployment net-gateway-api-controller -n knative-serving 2>/dev/null; then
-  echo "📦 Instalando Knative net-gateway-api..."
-  kubectl apply -f https://github.com/knative-extensions/net-gateway-api/releases/download/knative-v1.20.0/net-gateway-api.yaml
+# =============================================================================
+# SECTION 5: Install Platform Stack via Helm
+# =============================================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+if ! helm list -n zenith-operator-system 2>/dev/null | grep -q "zenith-operator"; then
+  echo "📦 Instalando plataforma via Helm chart (values-dev.yaml)..."
+  echo "   Isso inclui: Tekton, Knative, Gateway API, MetalLB, Envoy Gateway, OpenTelemetry, Dapr"
   
-  echo "⏳ Aguardando net-gateway-api ficar pronto..."
-  # Wait for pods to be created before waiting for them to be ready
-  for i in {1..30}; do
-    if kubectl get pod -l app=net-gateway-api-controller -n knative-serving 2>/dev/null | grep -q net-gateway; then
-      break
-    fi
-    sleep 2
-  done
-  kubectl wait --for=condition=ready pod -l app=net-gateway-api-controller -n knative-serving --timeout=300s
+  helm install zenith-operator "${PROJECT_ROOT}/charts/zenith-operator" \
+    -f "${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml" \
+    --namespace zenith-operator-system \
+    --create-namespace \
+    --wait \
+    --timeout 20m
+  
+  echo "✅ Plataforma instalada via Helm"
 else
-  echo "✅ Knative net-gateway-api já instalado"
+  echo "✅ Plataforma já instalada via Helm"
+  echo "   Para atualizar: helm upgrade zenith-operator ${PROJECT_ROOT}/charts/zenith-operator -f ${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml -n zenith-operator-system"
 fi
 
-if ! kubectl get configmap config-network -n knative-serving -o yaml | grep -q "ingress-class: gateway-api.ingress.networking.knative.dev"; then
-  echo "📦 Configurando Knative para usar Gateway API..."
-  kubectl patch configmap/config-network -n knative-serving --type merge -p '{"data":{"ingress-class":"gateway-api.ingress.networking.knative.dev"}}'
-fi
+# =============================================================================
+# SECTION 6: Post-Helm Configuration
+# =============================================================================
+# Some configurations need to be done after Helm install because they depend
+# on dynamically created resources (like Envoy Gateway services)
 
-if ! kubectl get gatewayclass envoy 2>/dev/null; then
-  echo "📦 Criando GatewayClass e Gateways para Envoy..."
-  cat <<EOF | kubectl apply -f -
-apiVersion: gateway.networking.k8s.io/v1
-kind: GatewayClass
-metadata:
-  name: envoy
-spec:
-  controllerName: gateway.envoyproxy.io/gatewayclass-controller
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: knative-gateway
-  namespace: knative-serving
-spec:
-  gatewayClassName: envoy
-  listeners:
-  - name: http
-    protocol: HTTP
-    port: 80
-    allowedRoutes:
-      namespaces:
-        from: All
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: knative-local-gateway
-  namespace: knative-serving
-spec:
-  gatewayClassName: envoy
-  listeners:
-  - name: http
-    protocol: HTTP
-    port: 80
-    allowedRoutes:
-      namespaces:
-        from: All
-EOF
-  echo "⏳ Aguardando Gateways ficarem prontos..."
-  sleep 15
-  
-  ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-  LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-  
-  if [ -n "$ENVOY_SVC" ]; then
-    echo "📍 Envoy Gateway (external) service: envoy-gateway-system/${ENVOY_SVC}"
-  fi
-  if [ -n "$LOCAL_ENVOY_SVC" ]; then
-    echo "📍 Envoy Gateway (local) service: envoy-gateway-system/${LOCAL_ENVOY_SVC}"
-  fi
-fi
+echo "📦 Verificando configuração do Knative Gateway..."
 
-if ! kubectl get configmap config-gateway -n knative-serving -o yaml | grep -q "class: envoy"; then
-  echo "📦 Configurando Knative Gateway para usar Envoy (external + local)..."
-  
+# Wait for Envoy Gateway services to be created
+echo "⏳ Aguardando Envoy Gateway services serem criados..."
+for i in {1..60}; do
   ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
   LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
   
   if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
+    break
+  fi
+  sleep 5
+done
+
+if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
+  echo "📍 Envoy Gateway (external) service: envoy-gateway-system/${ENVOY_SVC}"
+  echo "📍 Envoy Gateway (local) service: envoy-gateway-system/${LOCAL_ENVOY_SVC}"
+  
+  # Configure Knative to use Envoy Gateway services
+  if ! kubectl get configmap config-gateway -n knative-serving -o yaml 2>/dev/null | grep -q "class: envoy"; then
+    echo "📦 Configurando Knative Gateway para usar Envoy (external + local)..."
     kubectl patch configmap/config-gateway -n knative-serving --type merge -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\",\"local-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-local-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${LOCAL_ENVOY_SVC}\\\"}]\"}}"
     echo "✅ Configurado external-gateways e local-gateways"
   else
-    echo "⚠️  Envoy Gateway services not found yet, will be configured on first reconciliation"
+    echo "✅ Knative Gateway já configurado para usar Envoy"
   fi
-fi
-
-if ! kubectl get namespace cert-manager 2>/dev/null; then
-  echo "📦 Instalando cert-manager (prerequisite for OpenTelemetry Operator)..."
-  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
-  
-  echo "⏳ Aguardando cert-manager ficar pronto..."
-  # Wait for pods to be created before waiting for them to be ready
-  for i in {1..30}; do
-    if kubectl get pod -l app=cert-manager -n cert-manager 2>/dev/null | grep -q cert-manager; then
-      break
-    fi
-    sleep 2
-  done
-  kubectl wait --for=condition=ready pod -l app=cert-manager -n cert-manager --timeout=300s
-  kubectl wait --for=condition=ready pod -l app=webhook -n cert-manager --timeout=300s
-  kubectl wait --for=condition=ready pod -l app=cainjector -n cert-manager --timeout=300s
 else
-  echo "✅ cert-manager já instalado"
+  echo "⚠️  Envoy Gateway services não encontrados. Verifique a instalação do Helm chart."
+  echo "   Tente: kubectl get svc -n envoy-gateway-system"
 fi
 
-if ! kubectl get namespace opentelemetry-operator-system 2>/dev/null; then
-  echo "📦 Instalando OpenTelemetry Operator..."
-  
-  # Add OpenTelemetry Helm repository
-  helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts 2>/dev/null || true
-  helm repo update
-  
-  # Install OpenTelemetry Operator
-  helm install opentelemetry-operator open-telemetry/opentelemetry-operator \
-    --namespace opentelemetry-operator-system \
-    --create-namespace \
-    --version 0.99.2 \
-    --set "manager.collectorImage.repository=otel/opentelemetry-collector-k8s" \
-    --wait --timeout=300s
-  
-  echo "⏳ Aguardando OpenTelemetry Operator ficar pronto..."
-  kubectl wait --for=condition=available --timeout=300s deployment/opentelemetry-operator -n opentelemetry-operator-system
-  
-  echo "📦 Criando namespace observability para Jaeger..."
-  kubectl create namespace observability 2>/dev/null || true
-  
-  echo "📦 Instalando Jaeger all-in-one..."
-  cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: jaeger
-  namespace: observability
-  labels:
-    app: jaeger
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: jaeger
-  template:
-    metadata:
-      labels:
-        app: jaeger
-    spec:
-      containers:
-      - name: jaeger
-        image: jaegertracing/all-in-one:latest
-        env:
-        - name: COLLECTOR_OTLP_ENABLED
-          value: "true"
-        ports:
-        - containerPort: 16686
-          name: ui
-        - containerPort: 4317
-          name: otlp-grpc
-        - containerPort: 4318
-          name: otlp-http
-        - containerPort: 14250
-          name: model-proto
-        resources:
-          limits:
-            memory: 512Mi
-          requests:
-            memory: 256Mi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: jaeger
-  namespace: observability
-  labels:
-    app: jaeger
-spec:
-  type: ClusterIP
-  ports:
-  - port: 16686
-    targetPort: ui
-    name: ui
-  - port: 4317
-    targetPort: otlp-grpc
-    name: otlp-grpc
-  - port: 4318
-    targetPort: otlp-http
-    name: otlp-http
-  - port: 14250
-    targetPort: model-proto
-    name: model-proto
-  selector:
-    app: jaeger
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: jaeger-ui
-  namespace: observability
-  labels:
-    app: jaeger
-spec:
-  type: NodePort
-  ports:
-  - port: 16686
-    targetPort: ui
-    nodePort: 30686
-    name: ui
-  selector:
-    app: jaeger
-EOF
-  
-  echo "⏳ Aguardando Jaeger ficar pronto..."
-  kubectl wait --for=condition=available --timeout=300s deployment/jaeger -n observability
-  
-  echo "📦 Criando OpenTelemetry Collector com exporters para debug e Jaeger..."
-  cat <<EOF | kubectl apply -f -
-apiVersion: opentelemetry.io/v1beta1
-kind: OpenTelemetryCollector
-metadata:
-  name: otel-collector
-  namespace: opentelemetry-operator-system
-spec:
-  mode: deployment
-  config:
-    receivers:
-      otlp:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:4317
-          http:
-            endpoint: 0.0.0.0:4318
-    processors:
-      batch: {}
-    exporters:
-      debug:
-        verbosity: detailed
-      otlp/jaeger:
-        endpoint: jaeger.observability.svc.cluster.local:4317
-        tls:
-          insecure: true
-    service:
-      pipelines:
-        traces:
-          receivers: [otlp]
-          processors: [batch]
-          exporters: [debug, otlp/jaeger]
-EOF
-  
-  echo "⏳ Aguardando OpenTelemetry Collector ficar pronto..."
-  sleep 10
-  kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=opentelemetry-collector -n opentelemetry-operator-system --timeout=300s
-  
-  echo "✅ OpenTelemetry Operator, Collector e Jaeger instalados"
-else
-  echo "✅ OpenTelemetry Operator já instalado"
-fi
-
+# =============================================================================
+# SECTION 7: Build and Deploy Operator
+# =============================================================================
+echo ""
 echo "🔨 Building operator image..."
 make docker-build IMG="${IMG}"
 
@@ -575,11 +242,28 @@ fi
 echo "🚀 Deploying operator..."
 make deploy IMG="${IMG}"
 
+# =============================================================================
+# SECTION 8: Verify GitHub Token
+# =============================================================================
 echo "🔐 Verificando GITHUB_TOKEN..."
 bash hack/verify-github-token.sh
 
+# =============================================================================
+# SECTION 9: Final Output
+# =============================================================================
 echo ""
 echo "✅ Ambiente pronto!"
+echo ""
+echo "📦 Componentes instalados via Helm chart:"
+echo "  - Tekton Pipelines"
+echo "  - Knative Serving"
+echo "  - Knative Eventing"
+echo "  - Gateway API CRDs"
+echo "  - Envoy Gateway"
+echo "  - MetalLB (com auto-detecção de IP)"
+echo "  - OpenTelemetry Operator"
+echo "  - Dapr"
+echo "  - Registry local"
 echo ""
 echo "🔍 Jaeger UI (Visualização de Traces):"
 echo "  URL: http://localhost:30686"
@@ -591,6 +275,11 @@ echo "  bash hack/test-debug.sh <suite>       # Executar teste com namespace pre
 echo "  bash hack/dev-redeploy.sh             # Rebuild e redeploy rápido do operator"
 echo "  bash hack/wait-pr.sh <ns> <fn>        # Aguardar PipelineRun completar"
 echo "  make test-chainsaw                    # Executar todos os testes (~10 min)"
+echo ""
+echo "Helm commands:"
+echo "  helm list -n zenith-operator-system   # Ver releases instalados"
+echo "  helm upgrade zenith-operator ./charts/zenith-operator -f ./charts/zenith-operator/values-dev.yaml -n zenith-operator-system  # Atualizar"
+echo "  helm uninstall zenith-operator -n zenith-operator-system  # Desinstalar"
 echo ""
 echo "Exemplos:"
 echo "  bash hack/test-single.sh eventing-trigger"
