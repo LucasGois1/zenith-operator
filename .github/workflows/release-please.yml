@@ -38,7 +38,7 @@ jobs:
       - name: PR Summary
         if: ${{ steps.release.outputs.prs_created == 'true' }}
         env:
-          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr).number }}
+          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr || '{"number":0}').number }}
         run: |
           echo "## Release PR Created" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
