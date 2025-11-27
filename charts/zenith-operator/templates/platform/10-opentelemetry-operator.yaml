@@ -91,9 +91,9 @@ spec:
             kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
             
             echo "Waiting for cert-manager to be ready..."
-            kubectl wait --for=condition=available --timeout=300s deployment/cert-manager -n cert-manager || true
-            kubectl wait --for=condition=available --timeout=300s deployment/cert-manager-webhook -n cert-manager || true
-            kubectl wait --for=condition=available --timeout=300s deployment/cert-manager-cainjector -n cert-manager || true
+            kubectl wait --for=condition=available --timeout=60s deployment/cert-manager -n cert-manager || true
+            kubectl wait --for=condition=available --timeout=60s deployment/cert-manager-webhook -n cert-manager || true
+            kubectl wait --for=condition=available --timeout=60s deployment/cert-manager-cainjector -n cert-manager || true
             
             echo "✓ cert-manager installed and ready"
           else
@@ -107,7 +107,7 @@ spec:
           echo "✓ OpenTelemetry Operator installed"
           
           echo "Waiting for OpenTelemetry Operator to be ready..."
-          kubectl wait --for=condition=available --timeout=300s deployment/opentelemetry-operator-controller-manager -n opentelemetry-operator-system || true
+          kubectl wait --for=condition=available --timeout=60s deployment/opentelemetry-operator-controller-manager -n opentelemetry-operator-system || true
           
           echo "✓ OpenTelemetry Operator is ready"
           
