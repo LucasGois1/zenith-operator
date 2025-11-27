@@ -50,7 +50,7 @@ metadata:
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "15"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook-delete-policy": before-hook-creation
   labels:
     app.kubernetes.io/name: knative-config-setup
     app.kubernetes.io/instance: {{ .Release.Name }}
@@ -147,16 +147,30 @@ spec:
             echo "Checking for External IP to configure DNS..."
             
             DNS_RETRIES=0
-            MAX_DNS_RETRIES=12 # 60s
+            MAX_DNS_RETRIES=60 # 60 * 5s = 300s (5 min) timeout for LoadBalancer
             
             while [ $DNS_RETRIES -lt $MAX_DNS_RETRIES ]; do
+              # Try getting IP first
               EXTERNAL_IP=$(kubectl get svc -n envoy-gateway-system "$ENVOY_SVC" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
               
+              # If no IP, try Hostname (AWS ELB style)
+              if [ -z "$EXTERNAL_IP" ]; then
+                 EXTERNAL_IP=$(kubectl get svc -n envoy-gateway-system "$ENVOY_SVC" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+              fi
+              
               if [ -n "$EXTERNAL_IP" ]; then
-                echo "✓ Detected External IP: $EXTERNAL_IP"
-                # Configure sslip.io
-                kubectl patch configmap/config-domain -n knative-serving --type merge -p "{\"data\":{\"${EXTERNAL_IP}.sslip.io\":\"\"}}"
-                echo "✓ Configured sslip.io domain for Knative: ${EXTERNAL_IP}.sslip.io"
+                echo "✓ Detected External Address: $EXTERNAL_IP"
+                
+                # If it looks like an IP, use sslip.io
+                if [[ "$EXTERNAL_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    DOMAIN="${EXTERNAL_IP}.sslip.io"
+                    echo "✓ Configuring sslip.io domain: $DOMAIN"
+                    kubectl patch configmap/config-domain -n knative-serving --type merge -p "{\"data\":{\"${DOMAIN}\":\"\"}}"
+                else
+                    # If it's a hostname, we can't use sslip.io easily without resolving it.
+                    # For now, we just log it. Or we could configure it directly if it's a wildcard DNS.
+                    echo "⚠️  Detected hostname ($EXTERNAL_IP) instead of IP. Skipping sslip.io auto-configuration. Please configure DNS manually."
+                fi
                 break
               fi
               
