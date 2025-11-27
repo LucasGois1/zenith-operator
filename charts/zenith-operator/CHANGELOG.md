@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.3...zenith-operator-0.2.4) (2025-11-27)
+
+
+### Bug Fixes
+
+* **helm:** add missing RBAC permissions for Tekton tasks and taskruns ([#48](https://github.com/LucasGois1/zenith-operator/issues/48)) ([66b9f9b](https://github.com/LucasGois1/zenith-operator/commit/66b9f9bb9053edefb4cb89ac1a9e1ec84a7607b8))
+
 ## [0.2.3](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.2...zenith-operator-0.2.3) (2025-11-27)
 
 
