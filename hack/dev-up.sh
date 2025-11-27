@@ -125,44 +125,13 @@ else
 fi
 
 # =============================================================================
-# SECTION 4: Create Registry Service in Cluster
+# SECTION 4: Registry Service Configuration
 # =============================================================================
-# This needs to be done before helm install because the registry service
-# must exist for the operator to push images to it
-if ! kubectl get namespace registry 2>/dev/null; then
-  echo "📦 Creating namespace and Service for registry..."
-  kubectl create namespace registry
-  
-  REGISTRY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind -f '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' "${REGISTRY_NAME}")
-  
-  cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: registry
-  namespace: registry
-spec:
-  type: ClusterIP
-  ports:
-  - port: 5000
-    targetPort: 5000
----
-apiVersion: v1
-kind: Endpoints
-metadata:
-  name: registry
-  namespace: registry
-subsets:
-- addresses:
-  - ip: ${REGISTRY_IP}
-  ports:
-  - port: 5000
-EOF
-  echo "📍 Registry accessible at: registry.registry.svc.cluster.local:5000"
-  echo "📍 Registry also accessible at: localhost:${REGISTRY_PORT}"
-else
-  echo "✅ Registry Service already installed"
-fi
+# Note: The registry namespace and service are now created by the Helm chart.
+# We only need to ensure the Docker registry container is running and connected
+# to the kind network (done in sections 2 and 3).
+echo "📍 Registry will be configured by Helm chart"
+echo "📍 External registry accessible at: localhost:${REGISTRY_PORT}"
 
 # =============================================================================
 # SECTION 5: Install Platform Stack via Helm
