@@ -315,7 +315,8 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	for _, result := range pipelineRun.Status.Results {
 		// O nome 'APP_IMAGE_DIGEST' é definido pela Task 'buildpacks-phases'
 		if result.Name == "APP_IMAGE_DIGEST" { //
-			imageDigest = result.Value.StringVal
+			// Trim whitespace/newlines that may be present in the result
+			imageDigest = strings.TrimSpace(result.Value.StringVal)
 			break
 		}
 	}
