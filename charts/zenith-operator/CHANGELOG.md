@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.4...zenith-operator-0.2.5) (2025-11-27)
+
+
+### Bug Fixes
+
+* **tekton:** enable step-actions feature flag for buildpacks-phases Task ([#52](https://github.com/LucasGois1/zenith-operator/issues/52)) ([48eb54a](https://github.com/LucasGois1/zenith-operator/commit/48eb54a4b10ee67aa5a10743889a64fc7dd39dda))
+
 ## [0.2.4](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.3...zenith-operator-0.2.4) (2025-11-27)
 
 
