@@ -2112,8 +2112,6 @@ spec:
             # TODO(https://github.com/knative/pkg/pull/953): Remove stackdriver specific config
             - name: METRICS_DOMAIN
               value: knative.dev/internal/serving
-            - name: KUBERNETES_MIN_VERSION
-              value: "1.33.0"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -2270,8 +2268,6 @@ spec:
             # TODO(https://github.com/knative/pkg/pull/953): Remove stackdriver specific config
             - name: METRICS_DOMAIN
               value: knative.dev/serving
-            - name: KUBERNETES_MIN_VERSION
-              value: "1.33.0"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -2398,8 +2394,6 @@ spec:
             # TODO(https://github.com/knative/pkg/pull/953): Remove stackdriver specific config
             - name: METRICS_DOMAIN
               value: knative.dev/internal/serving
-            - name: KUBERNETES_MIN_VERSION
-              value: "1.33.0"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -2594,8 +2588,6 @@ spec:
             # TODO(https://github.com/knative/pkg/pull/953): Remove stackdriver specific config
             - name: METRICS_DOMAIN
               value: knative.dev/internal/serving
-            - name: KUBERNETES_MIN_VERSION
-              value: "1.33.0"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
