@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.5...zenith-operator-0.2.6) (2025-11-27)
+
+
+### Features
+
+* add NodePort support for internal registry and fix image pull in Knative ([055259b](https://github.com/LucasGois1/zenith-operator/commit/055259bf1d4dfe6de13033b2721a35eed9cda0d5))
+
 ## [0.2.5](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.4...zenith-operator-0.2.5) (2025-11-27)
 
 
