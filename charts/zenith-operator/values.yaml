@@ -41,6 +41,11 @@ envoyGateway:
 metallb:
   enabled: false
   version: "v0.14.9"
+  # IMPORTANT: The addressPool must be within your cluster's network range.
+  # For kind clusters, this should be within the Docker "kind" network subnet.
+  # To find your kind network range: docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+  # Example: If subnet is 172.19.0.0/16, use "172.19.255.200-172.19.255.250"
+  # The default value assumes the kind network is 172.18.0.0/16
   addressPool: "172.18.255.200-172.18.255.250"
 
 dapr:
