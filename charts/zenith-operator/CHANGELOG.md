@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.14](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.13...zenith-operator-0.2.14) (2025-11-27)
+
+
+### Bug Fixes
+
+* improve Envoy Gateway service detection and DNS configuration in config-setup-job ([8bd804d](https://github.com/LucasGois1/zenith-operator/commit/8bd804de610fea03d586d2da738d121b3c7cf929))
+
 ## [0.2.13](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.12...zenith-operator-0.2.13) (2025-11-27)
 
 
