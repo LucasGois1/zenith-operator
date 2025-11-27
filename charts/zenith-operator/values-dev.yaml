@@ -58,6 +58,11 @@ opentelemetry:
 
 registry:
   enabled: true
+  # External registry mode: Use a registry running outside the cluster (e.g., kind-registry Docker container)
+  # When enabled, the Helm chart creates only a Service without a Deployment.
+  # The dev-up.sh script creates the Endpoints pointing to the kind-registry container IP.
+  external:
+    enabled: true
   image:
     repository: registry
     tag: "2"

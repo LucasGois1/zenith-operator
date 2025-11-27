@@ -127,10 +127,10 @@ fi
 # =============================================================================
 # SECTION 4: Registry Service Configuration
 # =============================================================================
-# Note: The registry namespace and service are now created by the Helm chart.
-# We only need to ensure the Docker registry container is running and connected
-# to the kind network (done in sections 2 and 3).
-echo "📍 Registry will be configured by Helm chart"
+# The Helm chart creates the registry namespace and Service (without selector).
+# We need to create the Endpoints pointing to the kind-registry container IP.
+# This is done after Helm install in Section 5.1.
+echo "📍 Registry will be configured by Helm chart + Endpoints"
 echo "📍 External registry accessible at: localhost:${REGISTRY_PORT}"
 
 # =============================================================================
@@ -154,6 +154,40 @@ if ! helm list -n zenith-operator-system 2>/dev/null | grep -q "zenith-operator"
 else
   echo "✅ Platform already installed via Helm"
   echo "   To upgrade: helm upgrade zenith-operator ${PROJECT_ROOT}/charts/zenith-operator -f ${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml -n zenith-operator-system"
+fi
+
+# =============================================================================
+# SECTION 5.1: Create Registry Endpoints for External Registry Mode
+# =============================================================================
+# The Helm chart creates a Service without selector in external mode.
+# We need to create Endpoints pointing to the kind-registry container IP.
+echo "📦 Configuring registry Endpoints..."
+
+# Get the kind-registry container IP on the kind network
+REGISTRY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind -f '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' "${REGISTRY_NAME}")
+
+if [ -n "$REGISTRY_IP" ]; then
+  echo "📍 Registry container IP: ${REGISTRY_IP}"
+  
+  # Create or update the Endpoints
+  cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: registry
+  namespace: registry
+  labels:
+    app: registry
+subsets:
+- addresses:
+  - ip: ${REGISTRY_IP}
+  ports:
+  - port: 5000
+    name: registry
+EOF
+  echo "✅ Registry Endpoints created pointing to ${REGISTRY_IP}"
+else
+  echo "⚠️  Could not determine registry container IP. Registry may not work correctly."
 fi
 
 # =============================================================================
