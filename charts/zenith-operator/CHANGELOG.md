@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.13](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.12...zenith-operator-0.2.13) (2025-11-27)
+
+
+### Bug Fixes
+
+* add missing Tekton Pipelines CRDs to Helm chart ([#82](https://github.com/LucasGois1/zenith-operator/issues/82)) ([6487950](https://github.com/LucasGois1/zenith-operator/commit/64879500c77576759d6add0268df67e5e9ce560c))
+
 ## [0.2.12](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.11...zenith-operator-0.2.12) (2025-11-27)
 
 
