@@ -24,11 +24,15 @@ helm repo update
 **Para Desenvolvimento Local (kind/Minikube):**
 
 ```bash
+# Baixar o values-dev.yaml (já inclui MetalLB, registry local, Dapr, etc.)
+curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
+
+# Instalar com o profile de desenvolvimento
 helm install zenith-operator zenith-operator/zenith-operator \
-  --set metallb.enabled=true
+  -f values-dev.yaml
 ```
 
-> **Importante:** O MetalLB é obrigatório em clusters locais (kind/Minikube) para que o Envoy Gateway receba um IP externo. Sem ele, os Services do tipo LoadBalancer ficam em estado "Pending".
+> **Importante:** O `values-dev.yaml` já vem configurado com MetalLB habilitado, registry local, e outras configurações otimizadas para desenvolvimento. Isso é obrigatório em clusters locais (kind/Minikube) para que o Envoy Gateway receba um IP externo.
 
 **Para Produção (GKE/EKS/AKS):**
 

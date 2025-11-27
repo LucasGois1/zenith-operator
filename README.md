@@ -48,10 +48,15 @@ spec:
 **Desenvolvimento Local (kind/Minikube):**
 ```bash
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
+
+# Baixar o values-dev.yaml
+curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
+
+# Instalar com o profile de desenvolvimento (já inclui MetalLB, registry local, etc.)
 helm install zenith-operator zenith/zenith-operator \
+  -f values-dev.yaml \
   --namespace zenith-operator-system \
-  --create-namespace \
-  --set metallb.enabled=true
+  --create-namespace
 ```
 
 **Produção (GKE/EKS/AKS):**

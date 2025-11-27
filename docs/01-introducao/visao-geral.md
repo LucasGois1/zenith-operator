@@ -115,11 +115,14 @@ spec:
 # Adicionar o repositório Helm
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 
-# Instalar o operator com MetalLB (obrigatório para clusters locais)
+# Baixar o values-dev.yaml (já inclui MetalLB, registry local, Dapr, etc.)
+curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
+
+# Instalar o operator com o profile de desenvolvimento
 helm install zenith-operator zenith/zenith-operator \
+  -f values-dev.yaml \
   --namespace zenith-operator-system \
-  --create-namespace \
-  --set metallb.enabled=true
+  --create-namespace
 ```
 
 **Para Produção (GKE/EKS/AKS):**
