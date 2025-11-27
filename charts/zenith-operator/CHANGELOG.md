@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.7...zenith-operator-0.2.8) (2025-11-27)
+
+
+### Bug Fixes
+
+* helm chart crds ([#63](https://github.com/LucasGois1/zenith-operator/issues/63)) ([8ea9180](https://github.com/LucasGois1/zenith-operator/commit/8ea9180bda7317063c3290de34ca378bbb064622))
+
 ## [0.2.7](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.6...zenith-operator-0.2.7) (2025-11-27)
 
 
