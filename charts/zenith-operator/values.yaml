@@ -41,12 +41,18 @@ envoyGateway:
 metallb:
   enabled: false
   version: "v0.14.9"
-  # IMPORTANT: The addressPool must be within your cluster's network range.
-  # For kind clusters, this should be within the Docker "kind" network subnet.
-  # To find your kind network range: docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
-  # Example: If subnet is 172.19.0.0/16, use "172.19.255.200-172.19.255.250"
-  # The default value assumes the kind network is 172.18.0.0/16
-  addressPool: "172.18.255.200-172.18.255.250"
+  # The addressPool can be set to "auto" to automatically detect the IP range
+  # from the cluster's node IPs, or set to a specific range like "172.18.255.200-172.18.255.250"
+  # 
+  # When set to "auto" (default for kind clusters):
+  #   - The installer Job will detect the first node's InternalIP
+  #   - It will calculate the pool as <first-two-octets>.255.200-<first-two-octets>.255.250
+  #   - Example: If node IP is 172.19.0.2, pool becomes 172.19.255.200-172.19.255.250
+  #
+  # For manual configuration:
+  #   - Set to a specific range matching your cluster's network
+  #   - For kind: docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+  addressPool: "auto"
 
 dapr:
   enabled: false
