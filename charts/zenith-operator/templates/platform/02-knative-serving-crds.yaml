@@ -1,2 +1,1 @@
----
----
+# Knative Serving CRDs are in crds/02-knative-serving-crds.yaml
