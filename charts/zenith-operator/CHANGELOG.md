@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.9](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.8...zenith-operator-0.2.9) (2025-11-27)
+
+
+### Bug Fixes
+
+* helm chartinstallation ([#69](https://github.com/LucasGois1/zenith-operator/issues/69)) ([58917d5](https://github.com/LucasGois1/zenith-operator/commit/58917d5255536904a4225bfec68dd4ad82d29f2b))
+
 ## [0.2.8](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.7...zenith-operator-0.2.8) (2025-11-27)
 
 
