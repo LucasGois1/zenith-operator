@@ -4,8 +4,8 @@ description: >-
   A Helm chart for Kubernetes to install the Zenith Operator and its
   dependencies
 type: application
-version: 0.2.6
-appVersion: 0.2.6
+version: 0.2.7
+appVersion: 0.2.7
 kubeVersion: '>= 1.33.0-0'
 home: https://github.com/LucasGois1/zenith-operator
 sources:

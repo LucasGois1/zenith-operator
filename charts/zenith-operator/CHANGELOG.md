@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.6...zenith-operator-0.2.7) (2025-11-27)
+
+
+### Bug Fixes
+
+* **helm:** add missing CRDs, KUBERNETES_MIN_VERSION, MetalLB auto-detection, and registry config ([#59](https://github.com/LucasGois1/zenith-operator/issues/59)) ([f51b682](https://github.com/LucasGois1/zenith-operator/commit/f51b68290a580b7406b1cf06a00ee28bee6aca63))
+
 ## [0.2.6](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.5...zenith-operator-0.2.6) (2025-11-27)
 
 
