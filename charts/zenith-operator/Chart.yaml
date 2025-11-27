@@ -1,10 +1,12 @@
 apiVersion: v2
 name: zenith-operator
-description: A Helm chart for Kubernetes to install the Zenith Operator and its dependencies
+description: >-
+  A Helm chart for Kubernetes to install the Zenith Operator and its
+  dependencies
 type: application
-version: 0.2.1
-appVersion: "0.0.1"
-kubeVersion: ">= 1.33.0-0"
+version: 0.2.2
+appVersion: 0.2.2
+kubeVersion: '>= 1.33.0-0'
 home: https://github.com/LucasGois1/zenith-operator
 sources:
   - https://github.com/LucasGois1/zenith-operator
@@ -17,9 +19,8 @@ keywords:
   - knative
   - tekton
   - operator
-
 dependencies:
   - name: dapr
-    version: "1.14.4"
-    repository: "https://dapr.github.io/helm-charts/"
+    version: 1.14.4
+    repository: https://dapr.github.io/helm-charts/
     condition: dapr.enabled
