@@ -26,34 +26,16 @@ This Helm chart simplifies installation by automatically deploying all required 
   - 8 GB memory
   - 20 GB storage
 
-## Ambientes Suportados
-
-O Zenith Operator pode ser instalado em diferentes tipos de clusters Kubernetes. A principal diferença está no suporte a LoadBalancer:
-
-| Ambiente | Arquivo de Valores | Motivo |
-|----------|-------------------|--------|
-| **kind** | `values-dev.yaml` | kind não tem suporte nativo a LoadBalancer (MetalLB incluído) |
-| **Minikube** | `values-dev.yaml` | Minikube não tem suporte nativo a LoadBalancer (MetalLB incluído) |
-| **GKE** | `values.yaml` (padrão) | Google Cloud fornece LoadBalancer nativo |
-| **EKS** | `values.yaml` (padrão) | AWS fornece LoadBalancer nativo |
-| **AKS** | `values.yaml` (padrão) | Azure fornece LoadBalancer nativo |
-| **Bare-metal** | Depende | Pode usar `values-dev.yaml` com MetalLB ou configuração customizada |
-
-> **Importante:** O MetalLB é necessário para que o Envoy Gateway receba um IP externo e as rotas HTTP funcionem corretamente. Sem ele, os Services do tipo LoadBalancer ficam em estado "Pending" indefinidamente.
-
 ## Quick Start
 
-### Desenvolvimento Local (kind/Minikube)
+### Development Installation (Kind/Minikube)
 
 ```bash
-# Adicionar repositório Helm
+# Add Helm repository (if published)
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 helm repo update
 
-# Baixar o values-dev.yaml (já inclui MetalLB, registry local, Dapr, etc.)
-curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
-
-# Instalar com o profile de desenvolvimento
+# Install with development profile
 helm install zenith-operator zenith/zenith-operator \
   -f values-dev.yaml \
   --create-namespace \
@@ -62,16 +44,10 @@ helm install zenith-operator zenith/zenith-operator \
   --timeout 15m
 ```
 
-> **Importante:** O arquivo `values-dev.yaml` já inclui todas as configurações necessárias para desenvolvimento local:
-> - `metallb.enabled: true` com auto-detecção de IP
-> - Registry local habilitado
-> - Dapr habilitado
-> - Configuração de registries inseguros para desenvolvimento
-
-### Produção (GKE/EKS/AKS)
+### Production Installation
 
 ```bash
-# Instalar SEM MetalLB (o cloud provider fornece LoadBalancer)
+# Install with standard profile
 helm install zenith-operator zenith/zenith-operator \
   --create-namespace \
   --namespace zenith-operator-system \
@@ -79,25 +55,16 @@ helm install zenith-operator zenith/zenith-operator \
   --timeout 15m
 ```
 
-> **Importante:** Em ambientes de produção em clouds gerenciadas, NÃO habilite o MetalLB. O load balancer nativo da cloud é mais confiável e integrado.
-
-### Instalação Local (a partir do código fonte)
+### Local Installation (from source)
 
 ```bash
-# Clonar o repositório
+# Clone the repository
 git clone https://github.com/LucasGois1/zenith-operator.git
 cd zenith-operator
 
-# Para desenvolvimento local (kind/Minikube)
+# Install from local chart
 helm install zenith-operator ./charts/zenith-operator \
   -f ./charts/zenith-operator/values-dev.yaml \
-  --create-namespace \
-  --namespace zenith-operator-system \
-  --wait \
-  --timeout 15m
-
-# Para produção (GKE/EKS/AKS)
-helm install zenith-operator ./charts/zenith-operator \
   --create-namespace \
   --namespace zenith-operator-system \
   --wait \
@@ -108,15 +75,13 @@ helm install zenith-operator ./charts/zenith-operator \
 
 ### Development Profile (`values-dev.yaml`)
 
-Otimizado para desenvolvimento local com kind/Minikube:
-- ✅ Todas as dependências habilitadas (Tekton, Knative, Envoy Gateway, OpenTelemetry, Dapr)
-- ✅ MetalLB habilitado com auto-detecção de IP
-- ✅ Registry local incluído
-- ✅ Configuração de registries inseguros para desenvolvimento
-- ✅ Recursos menores para rodar em máquinas locais
+Optimized for local development with Kind/Minikube:
+- ✅ All dependencies enabled (Tekton, Knative, Envoy Gateway, OpenTelemetry, Dapr)
+- ✅ Local container registry included
+- ✅ Insecure registry configuration
+- ✅ Smaller resource requests
 
 ```bash
-# Para kind/Minikube - usa values-dev.yaml que já tem MetalLB habilitado
 helm install zenith-operator ./charts/zenith-operator \
   -f ./charts/zenith-operator/values-dev.yaml \
   --namespace zenith-operator-system \
@@ -125,23 +90,21 @@ helm install zenith-operator ./charts/zenith-operator \
 
 ### Standard Profile (`values.yaml`)
 
-Configurações padrão para produção em clouds gerenciadas (GKE/EKS/AKS):
-- ✅ Todas as dependências habilitadas
-- ❌ MetalLB desabilitado (usa LoadBalancer nativo da cloud)
-- ❌ Registry local desabilitado (use registry externo como Docker Hub, GCR, ECR)
-- ✅ Limites de recursos para produção
-- ❌ Dapr desabilitado por padrão
+Production-ready defaults:
+- ✅ All dependencies enabled
+- ❌ Local registry disabled (use external registry)
+- ✅ Production resource limits
+- ❌ Dapr disabled by default
 
 ```bash
-# Para GKE/EKS/AKS - NÃO habilite MetalLB
 helm install zenith-operator ./charts/zenith-operator \
   --namespace zenith-operator-system \
   --create-namespace
 ```
 
-### Minimal Profile (Apenas Operator)
+### Minimal Profile (Operator Only)
 
-Instala apenas o operator em um cluster que já possui as dependências:
+Install only the operator in an existing cluster with dependencies:
 
 ```bash
 helm install zenith-operator ./charts/zenith-operator \
