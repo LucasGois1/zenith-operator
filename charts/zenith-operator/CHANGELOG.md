@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.12](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.11...zenith-operator-0.2.12) (2025-11-27)
+
+
+### Bug Fixes
+
+* enable MetalLB and Dapr in values.yaml ([73033ba](https://github.com/LucasGois1/zenith-operator/commit/73033baa9b63c71d56657894ea1d046589446dd7))
+
 ## [0.2.11](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.10...zenith-operator-0.2.11) (2025-11-27)
 
 
