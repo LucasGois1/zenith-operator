@@ -3,7 +3,7 @@ entries:
   zenith-operator:
   - apiVersion: v2
     appVersion: 0.2.10
-    created: "2025-11-27T16:19:32.935891457Z"
+    created: "2025-11-27T16:44:27.900937522Z"
     dependencies:
     - condition: dapr.enabled
       name: dapr
@@ -11,7 +11,7 @@ entries:
       version: 1.14.4
     description: A Helm chart for Kubernetes to install the Zenith Operator and its
       dependencies
-    digest: 9d52dc10258002e82589b20c3a86f56274cfe44bf1bc9e88f413ed0044ec414d
+    digest: 62176819224c9ee7d5db561539fdea0778a11334a7d21565e36cd123bb1c4daf
     home: https://github.com/LucasGois1/zenith-operator
     keywords:
     - serverless
@@ -30,4 +30,4 @@ entries:
     urls:
     - https://lucasgois1.github.io/zenith-operator/zenith-operator-0.2.10.tgz
     version: 0.2.10
-generated: "2025-11-27T16:19:32.927910712Z"
+generated: "2025-11-27T16:44:27.892370901Z"
