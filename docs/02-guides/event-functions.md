@@ -1,49 +1,49 @@
-# Criando Funções Assíncronas com Eventos
+# Creating Asynchronous Event Functions
 
-Este guia mostra como criar funções que processam eventos de forma assíncrona usando Knative Eventing e o Zenith Operator.
+This guide shows how to create functions that process events asynchronously using Knative Eventing and Zenith Operator.
 
-## Visão Geral
+## Overview
 
-Funções event-driven (orientadas a eventos) são ideais para:
-- Processamento assíncrono de dados
-- Workflows event-driven
-- Notificações e alertas
-- Integração entre sistemas
-- Processamento de mensagens de filas
+Event-driven functions are ideal for:
+- Asynchronous data processing
+- Event-driven workflows
+- Notifications and alerts
+- System integration
+- Queue message processing
 
-O Zenith Operator automaticamente:
-1. Clona seu repositório Git e constrói a imagem
-2. Faz deploy como um Knative Service
-3. Cria um Knative Trigger para subscrever eventos
-4. Roteia eventos do Broker para sua função
+Zenith Operator automatically:
+1. Clones your Git repository and builds the image
+2. Deploys as a Knative Service
+3. Creates a Knative Trigger to subscribe to events
+4. Routes events from Broker to your function
 
-## Pré-requisitos
+## Prerequisites
 
-- Cluster Kubernetes com Zenith Operator instalado
-- Knative Eventing instalado
-- Knative Broker criado no namespace
-- Repositório Git com código da função
-- Secret de autenticação Git (se repositório privado)
+- Kubernetes cluster with Zenith Operator installed
+- Knative Eventing installed
+- Knative Broker created in the namespace
+- Git repository with function code
+- Git authentication Secret (if private repository)
 
-## Arquitetura Event-Driven
+## Event-Driven Architecture
 
 ```
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
 │   Producer  │─────▶│   Broker    │─────▶│   Trigger   │─────▶│  Function   │
-│  (Sistema)  │      │  (default)  │      │  (filtros)  │      │   (Sua)     │
+│  (System)   │      │  (default)  │      │  (filters)  │      │   (Yours)   │
 └─────────────┘      └─────────────┘      └─────────────┘      └─────────────┘
 ```
 
-1. **Producer**: Sistema que envia eventos (CloudEvents) para o Broker
-2. **Broker**: Recebe e distribui eventos
-3. **Trigger**: Filtra eventos baseado em atributos e roteia para a função
-4. **Function**: Sua função que processa os eventos
+1. **Producer**: System that sends events (CloudEvents) to the Broker
+2. **Broker**: Receives and distributes events
+3. **Trigger**: Filters events based on attributes and routes to the function
+4. **Function**: Your function that processes the events
 
-## Estrutura do Código da Função
+## Function Code Structure
 
-Sua função deve receber requisições HTTP POST com eventos no formato CloudEvents:
+Your function must receive HTTP POST requests with events in CloudEvents format:
 
-### Exemplo em Go
+### Go Example
 
 ```go
 package main
@@ -56,7 +56,7 @@ import (
     "os"
 )
 
-// CloudEvent representa um evento no formato CloudEvents
+// CloudEvent represents an event in CloudEvents format
 type CloudEvent struct {
     SpecVersion     string                 `json:"specversion"`
     Type            string                 `json:"type"`
@@ -73,22 +73,22 @@ type Response struct {
 }
 
 func eventHandler(w http.ResponseWriter, r *http.Request) {
-    // Decodificar o CloudEvent
+    // Decode CloudEvent
     var event CloudEvent
     if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
     
-    // Processar o evento
+    // Process event
     log.Printf("Received event: type=%s, source=%s, id=%s", 
         event.Type, event.Source, event.ID)
     log.Printf("Event data: %+v", event.Data)
     
-    // Sua lógica de processamento aqui
+    // Your processing logic here
     processEvent(event)
     
-    // Retornar resposta
+    // Return response
     response := Response{
         Status:  "processed",
         Message: fmt.Sprintf("Event %s processed successfully", event.ID),
@@ -99,8 +99,8 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func processEvent(event CloudEvent) {
-    // Implementar sua lógica de processamento
-    // Exemplo: salvar em banco de dados, enviar notificação, etc.
+    // Implement your processing logic
+    // Example: save to database, send notification, etc.
     log.Printf("Processing event of type: %s", event.Type)
 }
 
@@ -116,7 +116,7 @@ func main() {
 }
 ```
 
-### Exemplo em Python
+### Python Example
 
 ```python
 from flask import Flask, request, jsonify
@@ -128,37 +128,37 @@ logging.basicConfig(level=logging.INFO)
 
 @app.route('/', methods=['POST'])
 def event_handler():
-    # Receber o CloudEvent
+    # Receive CloudEvent
     event = request.get_json()
     
-    # Log do evento
+    # Log event
     logging.info(f"Received event: type={event.get('type')}, "
                 f"source={event.get('source')}, id={event.get('id')}")
     logging.info(f"Event data: {event.get('data')}")
     
-    # Processar o evento
+    # Process event
     process_event(event)
     
-    # Retornar resposta
+    # Return response
     return jsonify({
         'status': 'processed',
         'message': f"Event {event.get('id')} processed successfully"
     })
 
 def process_event(event):
-    # Implementar sua lógica de processamento
+    # Implement your processing logic
     event_type = event.get('type')
     data = event.get('data', {})
     
     logging.info(f"Processing event of type: {event_type}")
-    # Sua lógica aqui
+    # Your logic here
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=8080)
 ```
 
-### Exemplo em Node.js
+### Node.js Example
 
 ```javascript
 const express = require('express');
@@ -167,17 +167,17 @@ const app = express();
 app.use(express.json());
 
 app.post('/', (req, res) => {
-    // Receber o CloudEvent
+    // Receive CloudEvent
     const event = req.body;
     
-    // Log do evento
+    // Log event
     console.log(`Received event: type=${event.type}, source=${event.source}, id=${event.id}`);
     console.log(`Event data:`, event.data);
     
-    // Processar o evento
+    // Process event
     processEvent(event);
     
-    // Retornar resposta
+    // Return response
     res.json({
         status: 'processed',
         message: `Event ${event.id} processed successfully`
@@ -185,9 +185,9 @@ app.post('/', (req, res) => {
 });
 
 function processEvent(event) {
-    // Implementar sua lógica de processamento
+    // Implement your processing logic
     console.log(`Processing event of type: ${event.type}`);
-    // Sua lógica aqui
+    // Your logic here
 }
 
 const port = process.env.PORT || 8080;
@@ -196,9 +196,9 @@ app.listen(port, () => {
 });
 ```
 
-## Passo 1: Criar o Knative Broker
+## Step 1: Create Knative Broker
 
-Primeiro, crie um Broker no namespace onde sua função será deployada:
+First, create a Broker in the namespace where your function will be deployed:
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -210,15 +210,15 @@ metadata:
 EOF
 ```
 
-Verifique se o Broker está pronto:
+Verify if Broker is ready:
 
 ```bash
 kubectl get broker default
 ```
 
-## Passo 2: Criar o Custom Resource Function com Eventing
+## Step 2: Create Function Custom Resource with Eventing
 
-Crie um arquivo YAML com a definição da função incluindo configuração de eventing:
+Create a YAML file with the function definition including eventing configuration:
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -227,42 +227,42 @@ metadata:
   name: order-processor
   namespace: default
 spec:
-  # Repositório Git com o código
+  # Git repository with code
   gitRepo: https://github.com/myorg/order-processor
   gitRevision: main
   
-  # Secret de autenticação (opcional)
+  # Authentication secret (optional)
   gitAuthSecretName: github-auth
   
-  # Configuração de build
+  # Build configuration
   build:
     image: registry.example.com/order-processor:latest
   
-  # Configuração de deploy
+  # Deploy configuration
   deploy: {}
   
-  # Configuração de eventing
+  # Eventing configuration
   eventing:
-    # Nome do Broker para subscrever
+    # Broker name to subscribe to
     broker: default
     
-    # Filtros de eventos (CloudEvents attributes)
+    # Event filters (CloudEvents attributes)
     filters:
       type: com.example.order.created
       source: payment-service
 ```
 
-Aplique o recurso:
+Apply the resource:
 
 ```bash
 kubectl apply -f order-processor.yaml
 ```
 
-## Passo 3: Entender os Filtros de Eventos
+## Step 3: Understand Event Filters
 
-Os filtros são baseados em atributos do CloudEvents. Você pode filtrar por:
+Filters are based on CloudEvents attributes. You can filter by:
 
-### Filtro por Type
+### Filter by Type
 
 ```yaml
 eventing:
@@ -271,9 +271,9 @@ eventing:
     type: com.example.order.created
 ```
 
-Apenas eventos com `type: com.example.order.created` serão roteados para sua função.
+Only events with `type: com.example.order.created` will be routed to your function.
 
-### Filtro por Source
+### Filter by Source
 
 ```yaml
 eventing:
@@ -282,9 +282,9 @@ eventing:
     source: payment-service
 ```
 
-Apenas eventos originados de `payment-service` serão processados.
+Only events originating from `payment-service` will be processed.
 
-### Múltiplos Filtros (AND)
+### Multiple Filters (AND)
 
 ```yaml
 eventing:
@@ -295,9 +295,9 @@ eventing:
     subject: orders
 ```
 
-Todos os filtros devem corresponder (operação AND).
+All filters must match (AND operation).
 
-### Sem Filtros (Todos os Eventos)
+### No Filters (All Events)
 
 ```yaml
 eventing:
@@ -305,37 +305,37 @@ eventing:
   filters: {}
 ```
 
-Sua função receberá todos os eventos do Broker.
+Your function will receive all events from the Broker.
 
-## Passo 4: Monitorar o Deploy
+## Step 4: Monitor Deployment
 
-Verifique o status da função e do Trigger:
+Check the status of the function and Trigger:
 
 ```bash
-# Ver status da função
+# Check function status
 kubectl get functions
 
-# Ver detalhes da função
+# Check function details
 kubectl describe function order-processor
 
-# Ver Trigger criado
+# Check created Trigger
 kubectl get triggers
 
-# Ver detalhes do Trigger
+# Check Trigger details
 kubectl describe trigger order-processor-trigger
 ```
 
-## Passo 5: Enviar Eventos de Teste
+## Step 5: Send Test Events
 
-Para testar sua função, envie um evento para o Broker:
+To test your function, send an event to the Broker:
 
-### Usando curl com CloudEvents
+### Using curl with CloudEvents
 
 ```bash
-# Obter a URL do Broker
+# Get Broker URL
 BROKER_URL=$(kubectl get broker default -o jsonpath='{.status.address.url}')
 
-# Enviar um evento
+# Send an event
 curl -v "$BROKER_URL" \
   -X POST \
   -H "Ce-Id: 12345" \
@@ -350,13 +350,13 @@ curl -v "$BROKER_URL" \
   }'
 ```
 
-### Usando um Pod de Teste
+### Using a Test Pod
 
 ```bash
-# Criar um pod para enviar eventos
+# Create a pod to send events
 kubectl run curl-pod --image=curlimages/curl --rm -it --restart=Never -- sh
 
-# Dentro do pod, enviar evento
+# Inside pod, send event
 curl -v http://broker-ingress.knative-eventing.svc.cluster.local/default/default \
   -X POST \
   -H "Ce-Id: 12345" \
@@ -367,23 +367,23 @@ curl -v http://broker-ingress.knative-eventing.svc.cluster.local/default/default
   -d '{"orderId":"ORD-001","amount":99.99}'
 ```
 
-## Passo 6: Verificar Processamento
+## Step 6: Verify Processing
 
-Verifique os logs da função para confirmar que o evento foi processado:
+Check function logs to confirm the event was processed:
 
 ```bash
-# Ver pods da função
+# Check function pods
 kubectl get pods -l serving.knative.dev/service=order-processor
 
-# Ver logs da função
+# Check function logs
 kubectl logs -l serving.knative.dev/service=order-processor -f
 ```
 
-Você deve ver logs indicando que o evento foi recebido e processado.
+You should see logs indicating the event was received and processed.
 
-## Casos de Uso Comuns
+## Common Use Cases
 
-### 1. Processamento de Pedidos
+### 1. Order Processing
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -405,7 +405,7 @@ spec:
       type: com.example.order.created
 ```
 
-### 2. Notificações por Email
+### 2. Email Notifications
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -429,7 +429,7 @@ spec:
       type: com.example.notification.email
 ```
 
-### 3. Processamento de Logs
+### 3. Log Processing
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -449,12 +449,12 @@ spec:
       source: application-backend
 ```
 
-## Integração com Múltiplos Brokers
+## Integration with Multiple Brokers
 
-Você pode ter múltiplos Brokers para diferentes propósitos:
+You can have multiple Brokers for different purposes:
 
 ```bash
-# Criar Broker para produção
+# Create Broker for production
 kubectl create -f - <<EOF
 apiVersion: eventing.knative.dev/v1
 kind: Broker
@@ -463,7 +463,7 @@ metadata:
   namespace: default
 EOF
 
-# Criar Broker para staging
+# Create Broker for staging
 kubectl create -f - <<EOF
 apiVersion: eventing.knative.dev/v1
 kind: Broker
@@ -473,20 +473,20 @@ metadata:
 EOF
 ```
 
-E referenciar no Function:
+And reference in Function:
 
 ```yaml
 eventing:
-  broker: production  # ou staging
+  broker: production  # or staging
   filters:
     type: com.example.order.created
 ```
 
-## Padrões Avançados
+## Advanced Patterns
 
 ### Dead Letter Queue (DLQ)
 
-Configure um DLQ para eventos que falharem no processamento:
+Configure a DLQ for events that fail processing:
 
 ```yaml
 apiVersion: eventing.knative.dev/v1
@@ -512,12 +512,12 @@ spec:
     retry: 3
 ```
 
-### Fan-out (Múltiplas Funções)
+### Fan-out (Multiple Functions)
 
-Múltiplas funções podem processar o mesmo evento:
+Multiple functions can process the same event:
 
 ```yaml
-# Função 1: Salvar no banco
+# Function 1: Save to database
 apiVersion: functions.zenith.com/v1alpha1
 kind: Function
 metadata:
@@ -529,7 +529,7 @@ spec:
     filters:
       type: com.example.order.created
 ---
-# Função 2: Enviar email
+# Function 2: Send email
 apiVersion: functions.zenith.com/v1alpha1
 kind: Function
 metadata:
@@ -542,30 +542,30 @@ spec:
       type: com.example.order.created
 ```
 
-Ambas as funções receberão o mesmo evento.
+Both functions will receive the same event.
 
 ## Troubleshooting
 
-### Eventos Não Chegam na Função
+### Events Not Reaching Function
 
-1. **Verificar Broker**:
+1. **Check Broker**:
 ```bash
 kubectl get broker default
 kubectl describe broker default
 ```
 
-2. **Verificar Trigger**:
+2. **Check Trigger**:
 ```bash
 kubectl get trigger
 kubectl describe trigger order-processor-trigger
 ```
 
-3. **Verificar Filtros**:
-Certifique-se de que os atributos do evento correspondem aos filtros.
+3. **Check Filters**:
+Ensure event attributes match the filters.
 
-4. **Testar Conectividade**:
+4. **Test Connectivity**:
 ```bash
-# Enviar evento de teste
+# Send test event
 kubectl run curl-pod --image=curlimages/curl --rm -it --restart=Never -- \
   curl -v http://broker-ingress.knative-eventing.svc.cluster.local/default/default \
   -X POST \
@@ -577,18 +577,18 @@ kubectl run curl-pod --image=curlimages/curl --rm -it --restart=Never -- \
   -d '{"test": true}'
 ```
 
-### Função Não Processa Eventos Corretamente
+### Function Not Processing Events Correctly
 
-1. **Ver Logs**:
+1. **Check Logs**:
 ```bash
 kubectl logs -l serving.knative.dev/service=order-processor -f
 ```
 
-2. **Verificar Formato do Evento**:
-Certifique-se de que sua função está decodificando o CloudEvent corretamente.
+2. **Check Event Format**:
+Ensure your function is decoding the CloudEvent correctly.
 
-3. **Testar Localmente**:
-Envie um CloudEvent de teste diretamente para a função:
+3. **Test Locally**:
+Send a test CloudEvent directly to the function:
 ```bash
 FUNCTION_URL=$(kubectl get function order-processor -o jsonpath='{.status.url}')
 curl -v "$FUNCTION_URL" \
@@ -601,15 +601,15 @@ curl -v "$FUNCTION_URL" \
   -d '{"test": true}'
 ```
 
-## Exemplos Completos
+## Complete Examples
 
-Veja exemplos completos:
-- [test/chainsaw/eventing-trigger/](https://github.com/LucasGois1/zenith-operator/tree/main/test/chainsaw/eventing-trigger) - Teste E2E de eventing
-- [config/samples/](https://github.com/LucasGois1/zenith-operator/tree/main/config/samples) - Exemplos de Function CRs
+See complete examples:
+- [test/chainsaw/eventing-trigger/](https://github.com/LucasGois1/zenith-operator/tree/main/test/chainsaw/eventing-trigger) - Eventing E2E Test
+- [config/samples/](https://github.com/LucasGois1/zenith-operator/tree/main/config/samples) - Function CR Examples
 
-## Próximos Passos
+## Next Steps
 
-- [Criando Funções HTTP Síncronas](funcoes-http.md)
-- [Comunicação entre Funções](comunicacao-funcoes.md)
-- [Especificação do CRD Function](../04-referencia/function-crd.md)
-- [Referência do Operator](../04-referencia/operator-reference.md)
+- [Creating Synchronous HTTP Functions](http-functions.md)
+- [Function Communication](function-communication.md)
+- [Function CRD Specification](../04-reference/function-crd.md)
+- [Operator Reference](../04-reference/operator-reference.md)

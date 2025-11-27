@@ -6,66 +6,66 @@ CLUSTER_NAME="${CLUSTER_NAME:-zenith-operator-test-e2e}"
 IMG="${IMG:-zenith-operator:test}"
 GITHUB_USERNAME="${GITHUB_USERNAME:-LucasGois1}"
 
-echo "🚀 Configurando ambiente de desenvolvimento..."
+echo "🚀 Configuring development environment..."
 echo ""
 
 # =============================================================================
 # SECTION 1: Install Dependencies
 # =============================================================================
-echo "🔍 Verificando e instalando dependências..."
+echo "🔍 Checking and installing dependencies..."
 
 if ! command -v go &> /dev/null; then
-  echo "📦 Instalando Go..."
+  echo "📦 Installing Go..."
   GO_VERSION="1.25.4"
   curl -sL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | sudo tar -C /usr/local -xzf -
   export PATH="/usr/local/go/bin:$PATH"
   echo 'export PATH="/usr/local/go/bin:$PATH"' >> ~/.bashrc
 else
-  echo "✅ Go já instalado"
+  echo "✅ Go already installed"
 fi
 
 if ! command -v kubectl &> /dev/null; then
-  echo "📦 Instalando kubectl..."
+  echo "📦 Installing kubectl..."
   curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
   chmod +x kubectl
   sudo mv kubectl /usr/local/bin/
 else
-  echo "✅ kubectl já instalado"
+  echo "✅ kubectl already installed"
 fi
 
 REQUIRED_KIND_VERSION="v0.24.0"
 CURRENT_KIND_VERSION=$(kind version 2>/dev/null | grep -oP 'kind \K[^ ]+' || echo "none")
 
 if [ "$CURRENT_KIND_VERSION" != "$REQUIRED_KIND_VERSION" ]; then
-  echo "📦 Instalando kind ${REQUIRED_KIND_VERSION}..."
+  echo "📦 Installing kind ${REQUIRED_KIND_VERSION}..."
   curl -Lo ./kind "https://kind.sigs.k8s.io/dl/${REQUIRED_KIND_VERSION}/kind-linux-amd64"
   chmod +x ./kind
   sudo mv ./kind /usr/local/bin/kind
 else
-  echo "✅ kind ${REQUIRED_KIND_VERSION} já instalado"
+  echo "✅ kind ${REQUIRED_KIND_VERSION} already installed"
 fi
 
 if ! command -v docker &> /dev/null; then
-  echo "⚠️  Docker não está instalado. Por favor, instale Docker manualmente:"
+  echo "⚠️  Docker is not installed. Please install Docker manually:"
   echo "   https://docs.docker.com/get-docker/"
   exit 1
 else
-  echo "✅ Docker já instalado"
+  echo "✅ Docker already installed"
 fi
 
 if ! command -v helm &> /dev/null; then
-  echo "📦 Instalando Helm..."
+  echo "📦 Installing Helm..."
   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 else
-  echo "✅ Helm já instalado"
+  echo "✅ Helm already installed"
 fi
 
 if ! command -v chainsaw &> /dev/null; then
-  echo "📦 Instalando Chainsaw..."
+  echo "📦 Installing Chainsaw..."
   bash hack/install-chainsaw.sh
   export PATH="$(pwd)/bin:$PATH"
 else
-  echo "✅ Chainsaw já instalado"
+  echo "✅ Chainsaw already installed"
 fi
 
 echo ""
@@ -80,22 +80,22 @@ REGISTRY_PORT="5001"
 if docker inspect "${REGISTRY_NAME}" >/dev/null 2>&1; then
   # Container exists, check if it's running
   if [ "$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}")" != "true" ]; then
-    echo "📦 Iniciando registry Docker existente..."
+    echo "📦 Starting existing Docker registry..."
     docker start "${REGISTRY_NAME}"
   fi
-  echo "✅ Registry Docker '${REGISTRY_NAME}' já existe"
+  echo "✅ Docker registry '${REGISTRY_NAME}' already exists"
 else
   # Container doesn't exist, create it
-  echo "📦 Criando registry Docker local..."
+  echo "📦 Creating local Docker registry..."
   docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --name "${REGISTRY_NAME}" registry:2
-  echo "✅ Registry criado em localhost:${REGISTRY_PORT}"
+  echo "✅ Registry created at localhost:${REGISTRY_PORT}"
 fi
 
 # =============================================================================
 # SECTION 3: Create Kind Cluster
 # =============================================================================
 if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
-  echo "📦 Criando cluster kind com configuração de registry..."
+  echo "📦 Creating kind cluster with registry configuration..."
   cat <<EOF > /tmp/kind-config.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -110,18 +110,18 @@ containerdConfigPatches:
 EOF
   kind create cluster --name "${CLUSTER_NAME}" --image kindest/node:v1.33.0 --config /tmp/kind-config.yaml
   rm /tmp/kind-config.yaml
-  echo "✅ Cluster kind '${CLUSTER_NAME}' criado"
+  echo "✅ Kind cluster '${CLUSTER_NAME}' created"
 else
-  echo "✅ Cluster kind '${CLUSTER_NAME}' já existe"
+  echo "✅ Kind cluster '${CLUSTER_NAME}' already exists"
 fi
 
 # Connect registry to kind network (idempotent)
 if ! docker network inspect kind 2>/dev/null | grep -q "${REGISTRY_NAME}"; then
-  echo "📦 Conectando registry à rede kind..."
+  echo "📦 Connecting registry to kind network..."
   docker network connect kind "${REGISTRY_NAME}"
-  echo "✅ Registry conectado à rede kind"
+  echo "✅ Registry connected to kind network"
 else
-  echo "✅ Registry já está conectado à rede kind"
+  echo "✅ Registry already connected to kind network"
 fi
 
 # =============================================================================
@@ -130,7 +130,7 @@ fi
 # This needs to be done before helm install because the registry service
 # must exist for the operator to push images to it
 if ! kubectl get namespace registry 2>/dev/null; then
-  echo "📦 Criando namespace e Service para registry..."
+  echo "📦 Creating namespace and Service for registry..."
   kubectl create namespace registry
   
   REGISTRY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind -f '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' "${REGISTRY_NAME}")
@@ -158,10 +158,10 @@ subsets:
   ports:
   - port: 5000
 EOF
-  echo "📍 Registry acessível em: registry.registry.svc.cluster.local:5000"
-  echo "📍 Registry também acessível em: localhost:${REGISTRY_PORT}"
+  echo "📍 Registry accessible at: registry.registry.svc.cluster.local:5000"
+  echo "📍 Registry also accessible at: localhost:${REGISTRY_PORT}"
 else
-  echo "✅ Registry Service já instalado"
+  echo "✅ Registry Service already installed"
 fi
 
 # =============================================================================
@@ -171,8 +171,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 if ! helm list -n zenith-operator-system 2>/dev/null | grep -q "zenith-operator"; then
-  echo "📦 Instalando plataforma via Helm chart (values-dev.yaml)..."
-  echo "   Isso inclui: Tekton, Knative, Gateway API, MetalLB, Envoy Gateway, OpenTelemetry, Dapr"
+  echo "📦 Installing platform via Helm chart (values-dev.yaml)..."
+  echo "   This includes: Tekton, Knative, Gateway API, MetalLB, Envoy Gateway, OpenTelemetry, Dapr"
   
   helm install zenith-operator "${PROJECT_ROOT}/charts/zenith-operator" \
     -f "${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml" \
@@ -181,10 +181,10 @@ if ! helm list -n zenith-operator-system 2>/dev/null | grep -q "zenith-operator"
     --wait \
     --timeout 20m
   
-  echo "✅ Plataforma instalada via Helm"
+  echo "✅ Platform installed via Helm"
 else
-  echo "✅ Plataforma já instalada via Helm"
-  echo "   Para atualizar: helm upgrade zenith-operator ${PROJECT_ROOT}/charts/zenith-operator -f ${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml -n zenith-operator-system"
+  echo "✅ Platform already installed via Helm"
+  echo "   To upgrade: helm upgrade zenith-operator ${PROJECT_ROOT}/charts/zenith-operator -f ${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml -n zenith-operator-system"
 fi
 
 # =============================================================================
@@ -193,10 +193,10 @@ fi
 # Some configurations need to be done after Helm install because they depend
 # on dynamically created resources (like Envoy Gateway services)
 
-echo "📦 Verificando configuração do Knative Gateway..."
+echo "📦 Checking Knative Gateway configuration..."
 
 # Wait for Envoy Gateway services to be created
-echo "⏳ Aguardando Envoy Gateway services serem criados..."
+echo "⏳ Waiting for Envoy Gateway services to be created..."
 for i in {1..60}; do
   ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
   LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
@@ -213,15 +213,15 @@ if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
   
   # Configure Knative to use Envoy Gateway services
   if ! kubectl get configmap config-gateway -n knative-serving -o yaml 2>/dev/null | grep -q "class: envoy"; then
-    echo "📦 Configurando Knative Gateway para usar Envoy (external + local)..."
+    echo "📦 Configuring Knative Gateway to use Envoy (external + local)..."
     kubectl patch configmap/config-gateway -n knative-serving --type merge -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\",\"local-gateways\":\"[{\\\"class\\\":\\\"envoy\\\",\\\"gateway\\\":\\\"knative-serving/knative-local-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${LOCAL_ENVOY_SVC}\\\"}]\"}}"
-    echo "✅ Configurado external-gateways e local-gateways"
+    echo "✅ Configured external-gateways and local-gateways"
   else
-    echo "✅ Knative Gateway já configurado para usar Envoy"
+    echo "✅ Knative Gateway already configured to use Envoy"
   fi
 else
-  echo "⚠️  Envoy Gateway services não encontrados. Verifique a instalação do Helm chart."
-  echo "   Tente: kubectl get svc -n envoy-gateway-system"
+  echo "⚠️  Envoy Gateway services not found. Check Helm chart installation."
+  echo "   Try: kubectl get svc -n envoy-gateway-system"
 fi
 
 # =============================================================================
@@ -245,43 +245,43 @@ make deploy IMG="${IMG}"
 # =============================================================================
 # SECTION 8: Verify GitHub Token
 # =============================================================================
-echo "🔐 Verificando GITHUB_TOKEN..."
+echo "🔐 Checking GITHUB_TOKEN..."
 bash hack/verify-github-token.sh
 
 # =============================================================================
 # SECTION 9: Final Output
 # =============================================================================
 echo ""
-echo "✅ Ambiente pronto!"
+echo "✅ Environment ready!"
 echo ""
-echo "📦 Componentes instalados via Helm chart:"
+echo "📦 Components installed via Helm chart:"
 echo "  - Tekton Pipelines"
 echo "  - Knative Serving"
 echo "  - Knative Eventing"
 echo "  - Gateway API CRDs"
 echo "  - Envoy Gateway"
-echo "  - MetalLB (com auto-detecção de IP)"
+echo "  - MetalLB (with IP auto-detection)"
 echo "  - OpenTelemetry Operator"
 echo "  - Dapr"
-echo "  - Registry local"
+echo "  - Local Registry"
 echo ""
-echo "🔍 Jaeger UI (Visualização de Traces):"
+echo "🔍 Jaeger UI (Trace Visualization):"
 echo "  URL: http://localhost:30686"
-echo "  Acesse para visualizar traces OpenTelemetry em tempo real"
+echo "  Access to view OpenTelemetry traces in real-time"
 echo ""
-echo "Comandos úteis:"
-echo "  bash hack/test-single.sh <suite>      # Executar um teste específico"
-echo "  bash hack/test-debug.sh <suite>       # Executar teste com namespace preservado"
-echo "  bash hack/dev-redeploy.sh             # Rebuild e redeploy rápido do operator"
-echo "  bash hack/wait-pr.sh <ns> <fn>        # Aguardar PipelineRun completar"
-echo "  make test-chainsaw                    # Executar todos os testes (~10 min)"
+echo "Useful commands:"
+echo "  bash hack/test-single.sh <suite>      # Run a specific test"
+echo "  bash hack/test-debug.sh <suite>       # Run test with preserved namespace"
+echo "  bash hack/dev-redeploy.sh             # Quick operator rebuild and redeploy"
+echo "  bash hack/wait-pr.sh <ns> <fn>        # Wait for PipelineRun to complete"
+echo "  make test-chainsaw                    # Run all tests (~10 min)"
 echo ""
 echo "Helm commands:"
-echo "  helm list -n zenith-operator-system   # Ver releases instalados"
-echo "  helm upgrade zenith-operator ./charts/zenith-operator -f ./charts/zenith-operator/values-dev.yaml -n zenith-operator-system  # Atualizar"
-echo "  helm uninstall zenith-operator -n zenith-operator-system  # Desinstalar"
+echo "  helm list -n zenith-operator-system   # View installed releases"
+echo "  helm upgrade zenith-operator ./charts/zenith-operator -f ./charts/zenith-operator/values-dev.yaml -n zenith-operator-system  # Upgrade"
+echo "  helm uninstall zenith-operator -n zenith-operator-system  # Uninstall"
 echo ""
-echo "Exemplos:"
+echo "Examples:"
 echo "  bash hack/test-single.sh eventing-trigger"
 echo "  bash hack/test-debug.sh e2e-http-basic"
 echo ""

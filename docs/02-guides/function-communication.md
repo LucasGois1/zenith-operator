@@ -1,22 +1,22 @@
-# Comunicação entre Funções
+# Function Communication
 
-Este guia mostra como implementar comunicação HTTP entre múltiplas funções usando o Zenith Operator.
+This guide shows how to implement HTTP communication between multiple functions using Zenith Operator.
 
-## Visão Geral
+## Overview
 
-A comunicação entre funções permite criar arquiteturas de microserviços onde funções se comunicam via HTTP para:
-- Dividir responsabilidades entre serviços
-- Criar workflows complexos
-- Implementar padrões como saga, orchestration, choreography
-- Construir sistemas distribuídos
+Function communication allows creating microservices architectures where functions communicate via HTTP to:
+- Divide responsibilities between services
+- Create complex workflows
+- Implement patterns like saga, orchestration, choreography
+- Build distributed systems
 
-O Zenith Operator facilita isso através de:
-1. URLs de serviço previsíveis (Knative Service URLs)
-2. Service discovery nativo do Kubernetes
-3. Comunicação intra-cluster otimizada
-4. Integração opcional com Dapr para service mesh
+Zenith Operator facilitates this through:
+1. Predictable Service URLs (Knative Service URLs)
+2. Native Kubernetes Service Discovery
+3. Optimized intra-cluster communication
+4. Optional integration with Dapr for service mesh
 
-## Arquitetura de Comunicação
+## Communication Architecture
 
 ```
 ┌──────────────────┐      HTTP      ┌──────────────────┐      HTTP      ┌──────────────────┐
@@ -26,49 +26,49 @@ O Zenith Operator facilita isso através de:
       Function 1                          Function 2                          Function 3
 ```
 
-Neste exemplo:
-1. **Transaction Processor** recebe requisição externa
-2. Chama **Balance Manager** para atualizar saldo
-3. **Balance Manager** chama **Audit Logger** para registrar operação
-4. Resposta retorna pela cadeia
+In this example:
+1. **Transaction Processor** receives external request
+2. Calls **Balance Manager** to update balance
+3. **Balance Manager** calls **Audit Logger** to log operation
+4. Response returns through the chain
 
-## Padrões de URL de Serviço
+## Service URL Patterns
 
-Cada função deployada pelo Zenith Operator recebe uma URL do Knative Service:
+Each function deployed by Zenith Operator receives a Knative Service URL:
 
-### URL Interna (Cluster)
+### Internal URL (Cluster)
 
 ```
 http://<function-name>.<namespace>.svc.cluster.local
 ```
 
-Exemplo:
+Example:
 ```
 http://balance-manager.default.svc.cluster.local
 ```
 
-### URL Externa (Pública)
+### External URL (Public)
 
 ```
 http://<function-name>.<namespace>.<domain>
 ```
 
-Exemplo:
+Example:
 ```
 http://balance-manager.default.example.com
 ```
 
-**Recomendação**: Use URLs internas para comunicação entre funções no mesmo cluster.
+**Recommendation**: Use internal URLs for communication between functions in the same cluster.
 
-## Passo 1: Criar as Funções
+## Step 1: Create Functions
 
-Vamos criar um sistema financeiro com três funções que se comunicam.
+Let's create a financial system with three communicating functions.
 
-### Função 1: Audit Logger
+### Function 1: Audit Logger
 
-Registra operações de auditoria.
+Logs audit operations.
 
-**Código (Go)**:
+**Code (Go)**:
 ```go
 package main
 
@@ -97,7 +97,7 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    // Registrar auditoria
+    // Log audit
     log.Printf("[AUDIT] Action: %s, Details: %+v", req.Action, req.Details)
     
     response := AuditResponse{
@@ -137,11 +137,11 @@ spec:
   deploy: {}
 ```
 
-### Função 2: Balance Manager
+### Function 2: Balance Manager
 
-Gerencia saldos e chama o Audit Logger.
+Manages balances and calls Audit Logger.
 
-**Código (Go)**:
+**Code (Go)**:
 ```go
 package main
 
@@ -179,13 +179,13 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    // Atualizar saldo
+    // Update balance
     balances[req.Account] += req.Amount
     newBalance := balances[req.Account]
     
     log.Printf("Updated balance for %s: %.2f", req.Account, newBalance)
     
-    // Chamar Audit Logger
+    // Call Audit Logger
     namespace := os.Getenv("POD_NAMESPACE")
     if namespace == "" {
         namespace = "default"
@@ -210,7 +210,7 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
         log.Printf("Audit logged successfully")
     }
     
-    // Retornar resposta
+    // Return response
     response := UpdateResponse{
         Status:     "updated",
         NewBalance: newBalance,
@@ -252,11 +252,11 @@ spec:
         value: default
 ```
 
-### Função 3: Transaction Processor
+### Function 3: Transaction Processor
 
-Processa transações e chama o Balance Manager.
+Processes transactions and calls Balance Manager.
 
-**Código (Go)**:
+**Code (Go)**:
 ```go
 package main
 
@@ -302,7 +302,7 @@ func transactionHandler(w http.ResponseWriter, r *http.Request) {
     
     log.Printf("Processing transaction: account=%s, amount=%.2f", req.Account, req.Amount)
     
-    // Chamar Balance Manager
+    // Call Balance Manager
     namespace := os.Getenv("POD_NAMESPACE")
     if namespace == "" {
         namespace = "default"
@@ -332,10 +332,10 @@ func transactionHandler(w http.ResponseWriter, r *http.Request) {
     
     log.Printf("Balance updated: %+v", updateResp)
     
-    // Gerar ID de transação
+    // Generate transaction ID
     transactionID := fmt.Sprintf("TXN-%d", time.Now().Unix())
     
-    // Retornar resposta
+    // Return response
     response := TransactionResponse{
         Status:        "success",
         TransactionID: transactionID,
@@ -378,9 +378,9 @@ spec:
         value: default
 ```
 
-## Passo 2: Deploy das Funções
+## Step 2: Deploy Functions
 
-Deploy todas as funções:
+Deploy all functions:
 
 ```bash
 kubectl apply -f audit-logger.yaml
@@ -388,7 +388,7 @@ kubectl apply -f balance-manager.yaml
 kubectl apply -f transaction-processor.yaml
 ```
 
-Aguarde até que todas estejam prontas:
+Wait until they are all ready:
 
 ```bash
 kubectl get functions
@@ -397,15 +397,15 @@ kubectl wait --for=condition=Ready function/balance-manager --timeout=10m
 kubectl wait --for=condition=Ready function/transaction-processor --timeout=10m
 ```
 
-## Passo 3: Testar a Comunicação
+## Step 3: Test Communication
 
-Envie uma requisição para o Transaction Processor:
+Send a request to the Transaction Processor:
 
 ```bash
-# Obter URL do Transaction Processor
+# Get Transaction Processor URL
 TRANSACTION_URL=$(kubectl get function transaction-processor -o jsonpath='{.status.url}')
 
-# Enviar transação
+# Send transaction
 curl -X POST "$TRANSACTION_URL/transaction" \
   -H "Content-Type: application/json" \
   -d '{
@@ -414,7 +414,7 @@ curl -X POST "$TRANSACTION_URL/transaction" \
   }'
 ```
 
-Resposta esperada:
+Expected response:
 ```json
 {
   "status": "success",
@@ -424,45 +424,45 @@ Resposta esperada:
 }
 ```
 
-## Passo 4: Verificar os Logs
+## Step 4: Check Logs
 
-Verifique os logs de cada função para ver a cadeia de chamadas:
+Check logs of each function to see the call chain:
 
 ```bash
-# Logs do Transaction Processor
+# Transaction Processor Logs
 kubectl logs -l serving.knative.dev/service=transaction-processor --tail=20
 
-# Logs do Balance Manager
+# Balance Manager Logs
 kubectl logs -l serving.knative.dev/service=balance-manager --tail=20
 
-# Logs do Audit Logger
+# Audit Logger Logs
 kubectl logs -l serving.knative.dev/service=audit-logger --tail=20
 ```
 
-Você verá:
-1. Transaction Processor recebeu a requisição
-2. Balance Manager atualizou o saldo
-3. Audit Logger registrou a operação
+You will see:
+1. Transaction Processor received request
+2. Balance Manager updated balance
+3. Audit Logger logged operation
 
-## Padrões de Comunicação
+## Communication Patterns
 
-### 1. Request-Response Síncrono
+### 1. Synchronous Request-Response
 
-Padrão usado nos exemplos acima. A função aguarda resposta antes de continuar.
+Pattern used in the examples above. The function waits for response before continuing.
 
-**Vantagens**:
-- Simples de implementar
-- Resposta imediata
-- Fácil tratamento de erros
+**Advantages**:
+- Simple to implement
+- Immediate response
+- Easy error handling
 
-**Desvantagens**:
-- Acoplamento temporal
-- Latência acumulada
-- Falha em cascata
+**Disadvantages**:
+- Temporal coupling
+- Accumulated latency
+- Cascading failure
 
-### 2. Fire-and-Forget Assíncrono
+### 2. Asynchronous Fire-and-Forget
 
-Enviar requisição sem aguardar resposta:
+Send request without waiting for response:
 
 ```go
 go func() {
@@ -470,21 +470,21 @@ go func() {
 }()
 ```
 
-**Vantagens**:
-- Baixa latência
-- Desacoplamento
-- Não bloqueia
+**Advantages**:
+- Low latency
+- Decoupling
+- Non-blocking
 
-**Desvantagens**:
-- Sem confirmação
-- Difícil tratamento de erros
+**Disadvantages**:
+- No confirmation
+- Hard error handling
 
 ### 3. Event-Driven via Broker
 
-Usar Knative Eventing para comunicação assíncrona:
+Use Knative Eventing for asynchronous communication:
 
 ```go
-// Transaction Processor envia evento
+// Transaction Processor sends event
 event := CloudEvent{
     Type:   "com.example.transaction.created",
     Source: "transaction-processor",
@@ -492,24 +492,24 @@ event := CloudEvent{
 }
 sendToEventBroker(event)
 
-// Balance Manager subscreve ao evento
-// (configurado via spec.eventing no Function CR)
+// Balance Manager subscribes to event
+// (configured via spec.eventing in Function CR)
 ```
 
-**Vantagens**:
-- Desacoplamento total
-- Escalabilidade
-- Resiliência
+**Advantages**:
+- Total decoupling
+- Scalability
+- Resilience
 
-**Desvantagens**:
-- Complexidade maior
+**Disadvantages**:
+- Higher complexity
 - Eventual consistency
 
-## Configurações Avançadas
+## Advanced Configurations
 
-### Service Discovery com Variáveis de Ambiente
+### Service Discovery with Environment Variables
 
-Torne as URLs configuráveis:
+Make URLs configurable:
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -526,15 +526,15 @@ spec:
         value: http://audit-logger.default.svc.cluster.local
 ```
 
-No código:
+In code:
 ```go
 balanceURL := os.Getenv("BALANCE_MANAGER_URL")
 auditURL := os.Getenv("AUDIT_LOGGER_URL")
 ```
 
-### Timeout e Retry
+### Timeout and Retry
 
-Implemente timeout e retry para resiliência:
+Implement timeout and retry for resilience:
 
 ```go
 import "time"
@@ -557,7 +557,7 @@ for i := 0; i < 3; i++ {
 
 ### Circuit Breaker
 
-Use bibliotecas como `github.com/sony/gobreaker`:
+Use libraries like `github.com/sony/gobreaker`:
 
 ```go
 import "github.com/sony/gobreaker"
@@ -580,9 +580,9 @@ func callBalanceManager() error {
 }
 ```
 
-### Integração com Dapr
+### Integration with Dapr
 
-Use Dapr para service discovery e resiliência:
+Use Dapr for service discovery and resilience:
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -598,7 +598,7 @@ spec:
       appPort: 8080
 ```
 
-No código, use Dapr SDK:
+In code, use Dapr SDK:
 ```go
 import "github.com/dapr/go-sdk/client"
 
@@ -608,47 +608,47 @@ resp, err := daprClient.InvokeMethod(ctx, "balance-manager", "update", "post")
 
 ## Troubleshooting
 
-### Erro: Connection Refused
+### Error: Connection Refused
 
-**Problema**: Função não consegue conectar a outra função.
+**Problem**: Function cannot connect to another function.
 
-**Soluções**:
-1. Verifique se a função de destino está rodando:
+**Solutions**:
+1. Check if target function is running:
 ```bash
 kubectl get ksvc
 kubectl get pods -l serving.knative.dev/service=balance-manager
 ```
 
-2. Verifique a URL:
+2. Check URL:
 ```bash
-# URL deve ser: http://<function-name>.<namespace>.svc.cluster.local
+# URL must be: http://<function-name>.<namespace>.svc.cluster.local
 kubectl get ksvc balance-manager -o jsonpath='{.status.url}'
 ```
 
-3. Teste conectividade:
+3. Test connectivity:
 ```bash
 kubectl run curl-pod --image=curlimages/curl --rm -it --restart=Never -- \
   curl -v http://balance-manager.default.svc.cluster.local
 ```
 
-### Erro: Timeout
+### Error: Timeout
 
-**Problema**: Requisição demora muito ou timeout.
+**Problem**: Request takes too long or times out.
 
-**Soluções**:
-1. Verifique se a função está em scale-to-zero:
+**Solutions**:
+1. Check if function is in scale-to-zero:
 ```bash
 kubectl get pods -l serving.knative.dev/service=balance-manager
 ```
 
-2. Configure timeout maior no cliente HTTP:
+2. Configure higher timeout in HTTP client:
 ```go
 client := &http.Client{
     Timeout: 30 * time.Second,
 }
 ```
 
-3. Aumente o timeout do Knative Service:
+3. Increase Knative Service timeout:
 ```yaml
 apiVersion: serving.knative.dev/v1
 kind: Service
@@ -660,34 +660,34 @@ spec:
       timeoutSeconds: 300
 ```
 
-### Erro: DNS Resolution Failed
+### Error: DNS Resolution Failed
 
-**Problema**: Nome do serviço não resolve.
+**Problem**: Service name does not resolve.
 
-**Soluções**:
-1. Verifique o namespace:
+**Solutions**:
+1. Check namespace:
 ```bash
 kubectl get ksvc -A
 ```
 
-2. Use FQDN completo:
+2. Use full FQDN:
 ```
 http://balance-manager.default.svc.cluster.local
 ```
 
-3. Verifique DNS do cluster:
+3. Check cluster DNS:
 ```bash
 kubectl run dnsutils --image=gcr.io/kubernetes-e2e-test-images/dnsutils:1.3 --rm -it --restart=Never -- nslookup balance-manager.default.svc.cluster.local
 ```
 
-## Exemplos Completos
+## Complete Examples
 
-Veja o exemplo completo de integração financeira:
-- [test/chainsaw/financial-integration/](https://github.com/LucasGois1/zenith-operator/tree/main/test/chainsaw/financial-integration) - Teste E2E completo
+See complete financial integration example:
+- [test/chainsaw/financial-integration/](https://github.com/LucasGois1/zenith-operator/tree/main/test/chainsaw/financial-integration) - Complete E2E Test
 
-## Próximos Passos
+## Next Steps
 
-- [Criando Funções HTTP Síncronas](funcoes-http.md)
-- [Criando Funções Assíncronas com Eventos](funcoes-eventos.md)
-- [Especificação do CRD Function](../04-referencia/function-crd.md)
-- [Referência do Operator](../04-referencia/operator-reference.md)
+- [Creating Synchronous HTTP Functions](http-functions.md)
+- [Creating Asynchronous Event Functions](event-functions.md)
+- [Function CRD Specification](../04-reference/function-crd.md)
+- [Operator Reference](../04-reference/operator-reference.md)

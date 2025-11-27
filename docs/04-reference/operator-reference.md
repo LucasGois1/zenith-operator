@@ -1,12 +1,12 @@
-# Referência do Operator - Comportamento e Integrações
+# Operator Reference - Behavior and Integrations
 
-Esta documentação descreve o comportamento do Zenith Operator e suas integrações com Tekton, Knative e Dapr.
+This documentation describes the behavior of Zenith Operator and its integrations with Tekton, Knative, and Dapr.
 
-## Visão Geral
+## Overview
 
-O Zenith Operator é um operador Kubernetes que gerencia o ciclo de vida completo de funções serverless através do Custom Resource `Function`.
+Zenith Operator is a Kubernetes operator that manages the complete lifecycle of serverless functions through the `Function` Custom Resource.
 
-### Arquitetura
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -24,87 +24,88 @@ O Zenith Operator é um operador Kubernetes que gerencia o ciclo de vida complet
 │                      │   Trigger    │                         │
 │                      │  (Eventing)  │                         │
 │                      └──────────────┘                         │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Fluxo de Reconciliação
+### Reconciliation Flow
 
-1. **Usuário cria Function CR** → Operator detecta novo recurso
-2. **Build Phase** → Operator cria PipelineRun do Tekton
-3. **PipelineRun executa** → Clona Git, constrói imagem, push para registry
-4. **Build completa** → Operator extrai image digest
-5. **Deploy Phase** → Operator cria Knative Service
-6. **Eventing Phase** (opcional) → Operator cria Knative Trigger
-7. **Status atualizado** → Function.status reflete estado atual
+1. **User creates Function CR** → Operator detects new resource
+2. **Build Phase** → Operator creates Tekton PipelineRun
+3. **PipelineRun executes** → Clones Git, builds image, pushes to registry
+4. **Build completes** → Operator extracts image digest
+5. **Deploy Phase** → Operator creates Knative Service
+6. **Eventing Phase** (optional) → Operator creates Knative Trigger
+7. **Status updated** → Function.status reflects current state
 
-## Comportamento do Operator
+## Operator Behavior
 
 ### Reconciliation Loop
 
-O operator reconcilia Functions continuamente:
+The operator continuously reconciles Functions:
 
-1. **Watch**: Monitora mudanças em Function CRs
-2. **Reconcile**: Processa cada Function
-3. **Update Status**: Atualiza status baseado no estado atual
-4. **Requeue**: Agenda próxima reconciliação se necessário
+1. **Watch**: Monitors changes in Function CRs
+2. **Reconcile**: Processes each Function
+3. **Update Status**: Updates status based on current state
+4. **Requeue**: Schedules next reconciliation if needed
 
-### Triggers de Reconciliação
+### Reconciliation Triggers
 
-O operator reconcilia quando:
-- Function CR é criada
-- Function CR é atualizada (spec mudou)
-- PipelineRun completa
-- Knative Service muda
-- Trigger muda
-- Reconciliação periódica (a cada 10 minutos)
+The operator reconciles when:
+- Function CR is created
+- Function CR is updated (spec changed)
+- PipelineRun completes
+- Knative Service changes
+- Trigger changes
+- Periodic reconciliation (every 10 minutes)
 
-### Idempotência
+### Idempotency
 
-O operator é idempotente:
-- Múltiplas reconciliações produzem o mesmo resultado
-- Recursos existentes não são recriados
-- Updates são aplicados apenas quando necessário
+The operator is idempotent:
+- Multiple reconciliations produce the same result
+- Existing resources are not recreated
+- Updates are applied only when necessary
 
 ### Garbage Collection
 
-O operator usa OwnerReferences para garbage collection:
-- PipelineRuns são owned pela Function
-- Knative Services são owned pela Function
-- Triggers são owned pela Function
-- ServiceAccounts são owned pela Function
+The operator uses OwnerReferences for garbage collection:
+- PipelineRuns are owned by Function
+- Knative Services are owned by Function
+- Triggers are owned by Function
+- ServiceAccounts are owned by Function
 
-Quando uma Function é deletada, todos os recursos owned são automaticamente deletados.
+When a Function is deleted, all owned resources are automatically deleted.
 
-## Integração com Tekton
+## Tekton Integration
 
 ### PipelineRun Creation
 
-O operator cria um PipelineRun para cada Function:
+The operator creates a PipelineRun for each Function:
 
-**Nome**: `<function-name>-<timestamp>`
+**Name**: `<function-name>-<timestamp>`
 
 **Tasks**:
-1. **git-clone**: Clona o repositório Git
-2. **buildpacks-phases**: Constrói a imagem usando Cloud Native Buildpacks
+1. **git-clone**: Clones Git repository
+2. **buildpacks-phases**: Builds image using Cloud Native Buildpacks
 
 **Parameters**:
-- `git-url`: URL do repositório Git
-- `git-revision`: Revisão Git
-- `image`: Nome da imagem de destino
+- `git-url`: Git repository URL
+- `git-revision`: Git revision
+- `image`: Target image name
 
 **Workspaces**:
-- `source`: Workspace para código-fonte
-- `cache`: Workspace para cache de build
+- `source`: Workspace for source code
+- `cache`: Workspace for build cache
 
 ### ServiceAccount Management
 
-O operator cria um ServiceAccount dedicado para cada Function:
+The operator creates a dedicated ServiceAccount for each Function:
 
-**Nome**: `<function-name>-sa`
+**Name**: `<function-name>-sa`
 
 **Purpose**:
-- Autenticação Git (via secrets)
-- Autenticação Registry (via imagePullSecrets)
+- Git Authentication (via secrets)
+- Registry Authentication (via imagePullSecrets)
 
 **Secrets Binding**:
 - Git auth secret → `serviceAccount.secrets`
@@ -112,18 +113,18 @@ O operator cria um ServiceAccount dedicado para cada Function:
 
 ### Image Digest Extraction
 
-Após build bem-sucedido, o operator:
-1. Aguarda PipelineRun completar
-2. Extrai image digest do PipelineRun status
-3. Atualiza Function.status.imageDigest
+After successful build, the operator:
+1. Waits for PipelineRun to complete
+2. Extracts image digest from PipelineRun status
+3. Updates Function.status.imageDigest
 
-## Integração com Knative
+## Knative Integration
 
 ### Service Creation
 
-O operator cria um Knative Service para cada Function:
+The operator creates a Knative Service for each Function:
 
-**Nome**: `<function-name>`
+**Name**: `<function-name>`
 
 **Spec**:
 ```yaml
@@ -158,22 +159,22 @@ spec:
 
 ### Auto-scaling
 
-Knative Services auto-scale baseado em tráfego:
-- **Scale-to-zero**: Pods são terminados quando não há tráfego
-- **Scale-from-zero**: Pods são criados quando tráfego chega
-- **Horizontal scaling**: Múltiplos pods para alto tráfego
+Knative Services auto-scale based on traffic:
+- **Scale-to-zero**: Pods are terminated when no traffic
+- **Scale-from-zero**: Pods are created when traffic arrives
+- **Horizontal scaling**: Multiple pods for high traffic
 
 ### URL Exposure
 
-Knative expõe URLs:
+Knative exposes URLs:
 - **Internal**: `http://<service-name>.<namespace>.svc.cluster.local`
 - **External**: `http://<service-name>.<namespace>.<domain>`
 
 ### Trigger Creation
 
-Se `spec.eventing` está configurado, o operator cria um Trigger:
+If `spec.eventing` is configured, the operator creates a Trigger:
 
-**Nome**: `<function-name>-trigger`
+**Name**: `<function-name>-trigger`
 
 **Spec**:
 ```yaml
@@ -198,11 +199,11 @@ spec:
       name: my-function
 ```
 
-## Integração com Dapr
+## Dapr Integration
 
 ### Sidecar Injection
 
-Quando `spec.deploy.dapr.enabled=true`, o operator adiciona annotations ao Knative Service:
+When `spec.deploy.dapr.enabled=true`, the operator adds annotations to Knative Service:
 
 ```yaml
 annotations:
@@ -213,7 +214,7 @@ annotations:
 
 ### Dapr Features
 
-Com Dapr habilitado, funções podem usar:
+With Dapr enabled, functions can use:
 
 #### Service Invocation
 
@@ -251,7 +252,7 @@ item, _ := daprClient.GetState(ctx, "statestore", "key", nil)
 secret, _ := daprClient.GetSecret(ctx, "secretstore", "key", nil)
 ```
 
-## Autenticação e Secrets
+## Authentication and Secrets
 
 ### Git Authentication
 
@@ -298,20 +299,20 @@ kubectl create secret docker-registry registry-credentials \
   --docker-email=myemail@example.com
 ```
 
-## Variáveis de Ambiente
+## Environment Variables
 
-### Variáveis Injetadas pelo Operator
+### Variables Injected by Operator
 
-O operator injeta automaticamente:
+The operator automatically injects:
 
-- `PORT`: Porta em que a aplicação deve escutar (padrão: `8080`)
-- `K_SERVICE`: Nome do Knative Service
-- `K_CONFIGURATION`: Nome da Configuration
-- `K_REVISION`: Nome da Revision
+- `PORT`: Port where application must listen (default: `8080`)
+- `K_SERVICE`: Knative Service Name
+- `K_CONFIGURATION`: Configuration Name
+- `K_REVISION`: Revision Name
 
-### Variáveis Customizadas
+### Custom Variables
 
-Adicione via `spec.deploy.env`:
+Add via `spec.deploy.env`:
 
 ```yaml
 spec:
@@ -323,9 +324,9 @@ spec:
         value: redis://redis.default.svc.cluster.local:6379
 ```
 
-### Variáveis de Secrets
+### Secret Variables
 
-Use `valueFrom` para referenciar Secrets:
+Use `valueFrom` to reference Secrets:
 
 ```yaml
 spec:
@@ -338,9 +339,9 @@ spec:
             key: api-key
 ```
 
-## Próximos Passos
+## Next Steps
 
-- [Especificação do CRD](function-crd.md) - Campos e configurações do Function CRD
-- [Troubleshooting](troubleshooting.md) - Solução de problemas comuns
-- [Guia de Autenticação Git](../02-guias/autenticacao-git.md)
-- [Configuração de Registry](../05-operacoes/configuracao-registry.md)
+- [CRD Specification](function-crd.md) - Function CRD fields and configuration
+- [Troubleshooting](troubleshooting.md) - Common issues troubleshooting
+- [Git Authentication Guide](../02-guides/git-authentication.md)
+- [Registry Configuration](../05-operations/registry-configuration.md)
