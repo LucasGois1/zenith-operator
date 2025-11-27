@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.10](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.9...zenith-operator-0.2.10) (2025-11-27)
+
+
+### Bug Fixes
+
+* add missing CRDs for Gateway API, Knative Serving, and Knative Eventing ([#72](https://github.com/LucasGois1/zenith-operator/issues/72)) ([2f1ab2c](https://github.com/LucasGois1/zenith-operator/commit/2f1ab2c7b98f6604346c5b1036cd4e5e294a5177))
+
 ## [0.2.9](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.8...zenith-operator-0.2.9) (2025-11-27)
 
 
