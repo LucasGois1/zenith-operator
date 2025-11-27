@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.11](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.10...zenith-operator-0.2.11) (2025-11-27)
+
+
+### Bug Fixes
+
+* remove test tag from operator image in values-dev.yaml ([2b2a519](https://github.com/LucasGois1/zenith-operator/commit/2b2a5191bd882da2bafae2a80b6377cec3709188))
+
 ## [0.2.10](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.9...zenith-operator-0.2.10) (2025-11-27)
 
 
