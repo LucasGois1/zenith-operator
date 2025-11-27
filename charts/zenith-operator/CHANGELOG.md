@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.15](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.14...zenith-operator-0.2.15) (2025-11-27)
+
+
+### Bug Fixes
+
+* improve LoadBalancer detection and DNS configuration in config-setup-job ([f00a99c](https://github.com/LucasGois1/zenith-operator/commit/f00a99c6eaf3e0d2d6cd758ff14564496c2f665f))
+
 ## [0.2.14](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.13...zenith-operator-0.2.14) (2025-11-27)
 
 
