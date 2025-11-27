@@ -8,6 +8,7 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
   - secrets
   verbs:
   - get
@@ -24,6 +25,14 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - eventing.knative.dev
+  resources:
+  - brokers
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - eventing.knative.dev
@@ -79,6 +88,8 @@ rules:
   - tekton.dev
   resources:
   - pipelineruns
+  - taskruns
+  - tasks
   verbs:
   - create
   - delete
