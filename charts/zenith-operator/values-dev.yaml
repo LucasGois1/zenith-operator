@@ -73,7 +73,7 @@ registry:
 operator:
   image:
     repository: ghcr.io/lucasgois1/zenith-operator
-    tag: "test"  # Use test tag for development
+    tag: ""
     pullPolicy: IfNotPresent
 
   replicaCount: 1
