@@ -39,7 +39,7 @@ envoyGateway:
   controllerName: "gateway.envoyproxy.io/gatewayclass-controller"
 
 metallb:
-  enabled: false
+  enabled: true
   version: "v0.14.9"
   # The addressPool can be set to "auto" to automatically detect the IP range
   # from the cluster's node IPs, or set to a specific range like "172.18.255.200-172.18.255.250"
@@ -55,7 +55,7 @@ metallb:
   addressPool: "auto"
 
 dapr:
-  enabled: false
+  enabled: true
   version: "1.14.0"
   repository: "https://dapr.github.io/helm-charts/"
 
@@ -105,7 +105,7 @@ operator:
     allowPrivilegeEscalation: false
     capabilities:
       drop:
-      - "ALL"
+        - "ALL"
 
   resources:
     limits:
