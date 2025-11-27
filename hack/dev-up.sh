@@ -121,8 +121,15 @@ if ! kubectl get apiservices v1.tekton.dev 2>/dev/null | grep -q "v1.tekton.dev"
     sleep 2
   done
   kubectl wait --for=condition=ready pod -l app=tekton-pipelines-controller -n tekton-pipelines --timeout=300s
+  
+  # Enable step-actions feature flag required for buildpacks-phases Task
+  # This Task uses Step Results and Step When expressions
+  echo "📦 Configurando Tekton feature flags..."
+  kubectl patch configmap feature-flags -n tekton-pipelines --type merge -p '{"data":{"enable-step-actions":"true"}}'
 else
   echo "✅ Tekton Pipelines já instalado"
+  # Ensure feature flag is set even if Tekton was already installed
+  kubectl patch configmap feature-flags -n tekton-pipelines --type merge -p '{"data":{"enable-step-actions":"true"}}' 2>/dev/null || true
 fi
 
 if ! kubectl get apiservices v1.serving.knative.dev 2>/dev/null | grep -q "v1.serving.knative.dev"; then
