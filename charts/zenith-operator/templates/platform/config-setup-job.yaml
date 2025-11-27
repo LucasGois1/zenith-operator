@@ -113,43 +113,40 @@ spec:
           
           echo "✓ Created Gateway"
           
-          # Wait for Envoy Gateway to reconcile and create the services
-          # This can take some time as Envoy Gateway is an operator
-          echo "Waiting for Envoy Gateway services..."
+          # Configure Knative's config-gateway to use Envoy Gateway
+          # Note: We omit the 'service' field - Knative's net-gateway-api will automatically
+          # discover the service from the Gateway's status address. This eliminates the race
+          # condition where we'd need to wait for Envoy Gateway to create its services.
+          echo "Configuring Knative Gateway API integration..."
           
-          RETRIES=0
-          MAX_RETRIES=24 # 24 * 5s = 120s timeout
+          EXTERNAL_GW="- class: {{ .Values.gatewayAPI.gateway.className }}\n  gateway: {{ .Values.gatewayAPI.gateway.namespace }}/{{ .Values.gatewayAPI.gateway.name }}"
+          LOCAL_GW="- class: {{ .Values.gatewayAPI.gateway.className }}\n  gateway: {{ .Values.gatewayAPI.gateway.namespace }}/knative-local-gateway"
           
-          while [ $RETRIES -lt $MAX_RETRIES ]; do
+          echo "Patching config-gateway ConfigMap..."
+          echo "  External gateway config: $EXTERNAL_GW"
+          echo "  Local gateway config: $LOCAL_GW"
+          
+          kubectl patch configmap/config-gateway \
+            -n knative-serving \
+            --type merge \
+            --patch "{\"data\":{\"external-gateways\":\"${EXTERNAL_GW}\",\"local-gateways\":\"${LOCAL_GW}\"}}"
+          
+          echo "✓ Configured Knative Gateway with Envoy Gateway"
+          echo "  - External: {{ .Values.gatewayAPI.gateway.namespace }}/{{ .Values.gatewayAPI.gateway.name }}"
+          echo "  - Local: {{ .Values.gatewayAPI.gateway.namespace }}/knative-local-gateway"
+          
+          # Try to configure DNS automatically if External IP is available
+          # Wait for Envoy Gateway to create services and get an external IP
+          echo "Checking for External IP to configure DNS..."
+          
+          DNS_RETRIES=0
+          MAX_DNS_RETRIES=24 # 120s - give Envoy Gateway time to create services
+          
+          while [ $DNS_RETRIES -lt $MAX_DNS_RETRIES ]; do
+            # Find the Envoy Gateway service for the external gateway
             ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name={{ .Values.gatewayAPI.gateway.name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-            LOCAL_ENVOY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=knative-local-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
             
-            if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
-              echo "✓ Found Envoy Gateway services!"
-              break
-            fi
-            
-            echo "Waiting for services... (Attempt $((RETRIES+1))/$MAX_RETRIES)"
-            sleep 5
-            RETRIES=$((RETRIES+1))
-          done
-          
-          if [ -n "$ENVOY_SVC" ] && [ -n "$LOCAL_ENVOY_SVC" ]; then
-            kubectl patch configmap/config-gateway \
-              -n knative-serving \
-              --type merge \
-              -p "{\"data\":{\"external-gateways\":\"[{\\\"class\\\":\\\"{{ .Values.gatewayAPI.gateway.className }}\\\",\\\"gateway\\\":\\\"{{ .Values.gatewayAPI.gateway.namespace }}/{{ .Values.gatewayAPI.gateway.name }}\\\",\\\"service\\\":\\\"envoy-gateway-system/${ENVOY_SVC}\\\"}]\",\"local-gateways\":\"[{\\\"class\\\":\\\"{{ .Values.gatewayAPI.gateway.className }}\\\",\\\"gateway\\\":\\\"{{ .Values.gatewayAPI.gateway.namespace }}/knative-local-gateway\\\",\\\"service\\\":\\\"envoy-gateway-system/${LOCAL_ENVOY_SVC}\\\"}]\"}}"
-            echo "✓ Configured Knative Gateway with Envoy services:"
-            echo "  - External: envoy-gateway-system/${ENVOY_SVC}"
-            echo "  - Local: envoy-gateway-system/${LOCAL_ENVOY_SVC}"
-            
-            # Try to configure DNS automatically if External IP is available
-            echo "Checking for External IP to configure DNS..."
-            
-            DNS_RETRIES=0
-            MAX_DNS_RETRIES=12 # 60s
-            
-            while [ $DNS_RETRIES -lt $MAX_DNS_RETRIES ]; do
+            if [ -n "$ENVOY_SVC" ]; then
               EXTERNAL_IP=$(kubectl get svc -n envoy-gateway-system "$ENVOY_SVC" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
               
               if [ -n "$EXTERNAL_IP" ]; then
@@ -159,22 +156,16 @@ spec:
                 echo "✓ Configured sslip.io domain for Knative: ${EXTERNAL_IP}.sslip.io"
                 break
               fi
-              
-              echo "Waiting for External IP... (Attempt $((DNS_RETRIES+1))/$MAX_DNS_RETRIES)"
-              sleep 5
-              DNS_RETRIES=$((DNS_RETRIES+1))
-            done
-            
-            if [ -z "$EXTERNAL_IP" ]; then
-               echo "⚠️  No External IP detected yet. Knative DNS (config-domain) might need manual configuration."
             fi
             
-          else
-            echo "❌ Timed out waiting for Envoy Gateway services. Knative ingress might not work until config-gateway is updated manually."
-            [ -z "$ENVOY_SVC" ] && echo "  - Missing external gateway service"
-            [ -z "$LOCAL_ENVOY_SVC" ] && echo "  - Missing local gateway service"
-            # We don't exit 1 here to avoid failing the whole chart installation, 
-            # but this should be investigated if it happens.
+            echo "Waiting for External IP... (Attempt $((DNS_RETRIES+1))/$MAX_DNS_RETRIES)"
+            sleep 5
+            DNS_RETRIES=$((DNS_RETRIES+1))
+          done
+          
+          if [ -z "$EXTERNAL_IP" ]; then
+             echo "⚠️  No External IP detected yet. Knative DNS (config-domain) might need manual configuration."
+             echo "    This is normal in environments without LoadBalancer support."
           fi
           {{- end }}
           
