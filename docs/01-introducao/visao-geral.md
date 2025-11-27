@@ -110,15 +110,30 @@ spec:
 
 ### Instalação via Helm
 
+**Para Desenvolvimento Local (kind/Minikube):**
 ```bash
 # Adicionar o repositório Helm
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 
-# Instalar o operator
+# Instalar o operator com MetalLB (obrigatório para clusters locais)
+helm install zenith-operator zenith/zenith-operator \
+  --namespace zenith-operator-system \
+  --create-namespace \
+  --set metallb.enabled=true
+```
+
+**Para Produção (GKE/EKS/AKS):**
+```bash
+# Adicionar o repositório Helm
+helm repo add zenith https://lucasgois1.github.io/zenith-operator
+
+# Instalar o operator (sem MetalLB - usa LoadBalancer nativo da cloud)
 helm install zenith-operator zenith/zenith-operator \
   --namespace zenith-operator-system \
   --create-namespace
 ```
+
+> **Nota:** O MetalLB é necessário apenas em clusters locais que não possuem suporte nativo a LoadBalancer.
 
 ### Instalação via Kustomize
 

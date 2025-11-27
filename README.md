@@ -45,12 +45,24 @@ spec:
 
 ### Via Helm
 
+**Desenvolvimento Local (kind/Minikube):**
+```bash
+helm repo add zenith https://lucasgois1.github.io/zenith-operator
+helm install zenith-operator zenith/zenith-operator \
+  --namespace zenith-operator-system \
+  --create-namespace \
+  --set metallb.enabled=true
+```
+
+**Produção (GKE/EKS/AKS):**
 ```bash
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 helm install zenith-operator zenith/zenith-operator \
   --namespace zenith-operator-system \
   --create-namespace
 ```
+
+> **Nota:** O MetalLB é necessário apenas em clusters locais (kind/Minikube) que não possuem suporte nativo a LoadBalancer. Em clouds gerenciadas (GKE, EKS, AKS), o load balancer da cloud é usado automaticamente.
 
 ### Via Kustomize
 
