@@ -99,7 +99,7 @@ spec:
           echo "✓ Envoy Gateway installed"
           
           echo "Waiting for Envoy Gateway to be ready..."
-          kubectl wait --for=condition=available --timeout=300s deployment/envoy-gateway -n envoy-gateway-system || true
+          kubectl wait --for=condition=available --timeout=60s deployment/envoy-gateway -n envoy-gateway-system || true
           
           echo "✓ Envoy Gateway is ready"
 {{- end }}

@@ -88,7 +88,7 @@ spec:
           echo "✓ MetalLB installed"
           
           echo "Waiting for MetalLB to be ready..."
-          kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=120s || true
+          kubectl wait --for=condition=ready pod -l app=metallb -n metallb-system --timeout=60s || true
           
           echo "✓ MetalLB is ready"
           
