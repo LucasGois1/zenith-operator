@@ -84,9 +84,12 @@ spec:
             content: |
               echo "Verifying Dapr annotations on Knative Service..."
               
-              DAPR_ENABLED=$(kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/enabled}')
-              DAPR_APP_ID=$(kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/app-id}')
-              DAPR_APP_PORT=$(kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o jsonpath='{.spec.template.metadata.annotations.dapr\.io/app-port}')
+              # Use grep to check annotations since jsonpath escaping for dots is unreliable in shell
+              KSVC_YAML=$(kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o yaml)
+              
+              DAPR_ENABLED=$(echo "$KSVC_YAML" | grep 'dapr.io/enabled:' | head -1 | awk '{print $2}' | tr -d '"')
+              DAPR_APP_ID=$(echo "$KSVC_YAML" | grep 'dapr.io/app-id:' | head -1 | awk '{print $2}' | tr -d '"')
+              DAPR_APP_PORT=$(echo "$KSVC_YAML" | grep 'dapr.io/app-port:' | head -1 | awk '{print $2}' | tr -d '"')
               
               echo "Dapr enabled: $DAPR_ENABLED"
               echo "Dapr app-id: $DAPR_APP_ID"
@@ -97,7 +100,7 @@ spec:
                 exit 0
               else
                 echo "ERROR: Dapr annotations are incorrect"
-                kubectl get service.serving.knative.dev test-function-eventing-dapr -n "$NAMESPACE" -o yaml
+                echo "$KSVC_YAML"
                 exit 1
               fi
             timeout: 30s

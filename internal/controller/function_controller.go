@@ -1091,7 +1091,9 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		podAnnotations["dapr.io/enabled"] = annotationValueTrue
 		podAnnotations["dapr.io/app-id"] = function.Spec.Deploy.Dapr.AppID
 		podAnnotations["dapr.io/app-port"] = strconv.Itoa(function.Spec.Deploy.Dapr.AppPort)
-		// (Adicione outras anotações Dapr conforme necessário, ex: config, log-level) [4]
+		// Use a different metrics port to avoid conflict with Knative's queue-proxy
+		// which also uses port 9090 for http-autometric
+		podAnnotations["dapr.io/metrics-port"] = "9095"
 
 		// Se tracing está habilitado, adicionar configuração de tracing do Dapr
 		if function.Spec.Observability.Tracing.Enabled {
