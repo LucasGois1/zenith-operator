@@ -65,6 +65,7 @@ spec:
         - apply:
             file: function.yaml
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-eventing-dapr
               for i in $(seq 1 60); do
