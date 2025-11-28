@@ -36,9 +36,10 @@ spec:
         APP_IMAGE="$(params.APP_IMAGE)"
         echo "Target image: $APP_IMAGE"
         
-        # Copy busybox image to the target registry
-        # This creates a real image that can be pulled
-        crane copy --insecure busybox:latest "$APP_IMAGE"
+        # Copy a simple HTTP server image to the target registry
+        # This creates a real image that can be pulled and runs a web server
+        # Using hello-app which listens on port 8080 by default
+        crane copy --insecure gcr.io/google-samples/hello-app:1.0 "$APP_IMAGE"
         
         # Get the actual digest of the pushed image
         DIGEST=$(crane digest --insecure "$APP_IMAGE")
