@@ -64,6 +64,7 @@ spec:
         - apply:
             file: function-initial.yaml
         - script:
+            timeout: 10m
             content: |
               FN_NAME=test-function-eventing-removal
               for i in $(seq 1 60); do
@@ -92,6 +93,27 @@ spec:
               echo "ERROR: Trigger not created after 120 seconds"
               exit 1
             timeout: 150s
+    
+    - name: wait-for-function-ready
+      description: Wait for Function to be Ready before removing eventing
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              echo "Waiting for Function to be Ready..."
+              for i in $(seq 1 90); do
+                READY=$(kubectl get function test-function-eventing-removal -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+                REASON=$(kubectl get function test-function-eventing-removal -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}')
+                if [ "$READY" = "True" ] && [ "$REASON" = "Ready" ]; then
+                  echo "SUCCESS: Function is Ready"
+                  exit 0
+                fi
+                echo "Function not ready yet: status=$READY, reason=$REASON"
+                sleep 2
+              done
+              echo "ERROR: Function not Ready after 180 seconds"
+              kubectl get function test-function-eventing-removal -n "$NAMESPACE" -o yaml
+              exit 1
     
     - name: remove-eventing
       description: Update Function to remove eventing configuration
