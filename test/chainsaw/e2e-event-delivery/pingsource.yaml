@@ -6,10 +6,8 @@ spec:
   schedule: "*/1 * * * *"
   contentType: "application/json"
   data: '{"message":"test event from pingsource"}'
-  ceOverrides:
-    extensions:
-      type: com.zenith.test.ping
-      source: /test/pingsource
+  # Note: ceOverrides.extensions cannot override CloudEvent spec attributes (type, source)
+  # PingSource always uses type=dev.knative.sources.ping and source=/apis/v1/namespaces/<ns>/pingsources/<name>
   sink:
     ref:
       apiVersion: eventing.knative.dev/v1

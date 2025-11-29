@@ -15,27 +15,36 @@ spec:
     - name: CNB_PROCESS_TYPE
       type: string
       default: ""
+    - name: CNB_INSECURE_REGISTRIES
+      type: string
+      default: ""
   workspaces:
     - name: source
   results:
     - name: APP_IMAGE_DIGEST
-      description: Digest of the image (fast-path for testing operator behavior)
+      description: Digest of the image pushed to the registry
   steps:
     - name: fast-build
-      image: alpine:3.19
+      image: gcr.io/go-containerregistry/crane:debug
       script: |
-        #!/bin/sh
+        #!/busybox/sh
         set -e
         
-        echo "Installing crane..."
-        wget -qO- https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz | tar xz -C /usr/local/bin crane
+        echo "Fast-path builder for testing operator behavior"
+        echo "This pushes a minimal image to the registry for testing"
         
-        echo "Copying busybox image to local registry..."
-        crane cp --insecure docker.io/library/busybox:1.36 $(params.APP_IMAGE)
+        APP_IMAGE="$(params.APP_IMAGE)"
+        echo "Target image: $APP_IMAGE"
         
-        echo "Getting digest..."
-        DIGEST=$(crane digest --insecure $(params.APP_IMAGE))
-        echo "Digest: $DIGEST"
+        # Copy a simple HTTP server image to the target registry
+        # This creates a real image that can be pulled and runs a web server
+        # Using hello-app which listens on port 8080 by default
+        crane copy --insecure gcr.io/google-samples/hello-app:1.0 "$APP_IMAGE"
         
-        echo -n "$DIGEST" > $(results.APP_IMAGE_DIGEST.path)
+        # Get the actual digest of the pushed image
+        DIGEST=$(crane digest --insecure "$APP_IMAGE")
+        echo "Pushed image with digest: $DIGEST"
+        
+        echo -n "$DIGEST" > "$(results.APP_IMAGE_DIGEST.path)"
+        
         echo "Fast build completed successfully"

@@ -205,12 +205,14 @@ func TestBuildKnativeService(t *testing.T) {
 				g.Expect(ksvc.Namespace).To(Equal("default"))
 
 				// Verify Dapr annotations
-				annotations := ksvc.Spec.Template.Annotations
-				g.Expect(annotations).To(HaveKeyWithValue("dapr.io/enabled", "true"))
-				g.Expect(annotations).To(HaveKeyWithValue("dapr.io/app-id", "test-app"))
-				g.Expect(annotations).To(HaveKeyWithValue("dapr.io/app-port", "8080"))
+					annotations := ksvc.Spec.Template.Annotations
+					g.Expect(annotations).To(HaveKeyWithValue("dapr.io/enabled", "true"))
+					g.Expect(annotations).To(HaveKeyWithValue("dapr.io/app-id", "test-app"))
+					g.Expect(annotations).To(HaveKeyWithValue("dapr.io/app-port", "8080"))
+					// Verify metrics-port is set to avoid conflict with Knative queue-proxy
+					g.Expect(annotations).To(HaveKeyWithValue("dapr.io/metrics-port", "9095"))
 
-				// Verify container spec
+					// Verify container spec
 				g.Expect(ksvc.Spec.Template.Spec.Containers).To(HaveLen(1))
 				container := ksvc.Spec.Template.Spec.Containers[0]
 				g.Expect(container.Image).To(Equal("registry.io/test@sha256:abc123def456"))

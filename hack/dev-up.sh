@@ -125,44 +125,13 @@ else
 fi
 
 # =============================================================================
-# SECTION 4: Create Registry Service in Cluster
+# SECTION 4: Registry Service Configuration
 # =============================================================================
-# This needs to be done before helm install because the registry service
-# must exist for the operator to push images to it
-if ! kubectl get namespace registry 2>/dev/null; then
-  echo "📦 Creating namespace and Service for registry..."
-  kubectl create namespace registry
-  
-  REGISTRY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind -f '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' "${REGISTRY_NAME}")
-  
-  cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: registry
-  namespace: registry
-spec:
-  type: ClusterIP
-  ports:
-  - port: 5000
-    targetPort: 5000
----
-apiVersion: v1
-kind: Endpoints
-metadata:
-  name: registry
-  namespace: registry
-subsets:
-- addresses:
-  - ip: ${REGISTRY_IP}
-  ports:
-  - port: 5000
-EOF
-  echo "📍 Registry accessible at: registry.registry.svc.cluster.local:5000"
-  echo "📍 Registry also accessible at: localhost:${REGISTRY_PORT}"
-else
-  echo "✅ Registry Service already installed"
-fi
+# The Helm chart creates the registry namespace and Service (without selector).
+# We need to create the Endpoints pointing to the kind-registry container IP.
+# This is done after Helm install in Section 5.1.
+echo "📍 Registry will be configured by Helm chart + Endpoints"
+echo "📍 External registry accessible at: localhost:${REGISTRY_PORT}"
 
 # =============================================================================
 # SECTION 5: Install Platform Stack via Helm
@@ -185,6 +154,40 @@ if ! helm list -n zenith-operator-system 2>/dev/null | grep -q "zenith-operator"
 else
   echo "✅ Platform already installed via Helm"
   echo "   To upgrade: helm upgrade zenith-operator ${PROJECT_ROOT}/charts/zenith-operator -f ${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml -n zenith-operator-system"
+fi
+
+# =============================================================================
+# SECTION 5.1: Create Registry Endpoints for External Registry Mode
+# =============================================================================
+# The Helm chart creates a Service without selector in external mode.
+# We need to create Endpoints pointing to the kind-registry container IP.
+echo "📦 Configuring registry Endpoints..."
+
+# Get the kind-registry container IP on the kind network
+REGISTRY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind -f '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' "${REGISTRY_NAME}")
+
+if [ -n "$REGISTRY_IP" ]; then
+  echo "📍 Registry container IP: ${REGISTRY_IP}"
+  
+  # Create or update the Endpoints
+  cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: registry
+  namespace: registry
+  labels:
+    app: registry
+subsets:
+- addresses:
+  - ip: ${REGISTRY_IP}
+  ports:
+  - port: 5000
+    name: registry
+EOF
+  echo "✅ Registry Endpoints created pointing to ${REGISTRY_IP}"
+else
+  echo "⚠️  Could not determine registry container IP. Registry may not work correctly."
 fi
 
 # =============================================================================

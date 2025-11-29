@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/name: registry
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- if not .Values.registry.external.enabled }}
+# In-cluster registry mode: Deploy a registry pod inside the cluster
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -103,4 +105,31 @@ spec:
     {{- end }}
   selector:
     app: registry
+{{- else }}
+# External registry mode: Create a Service/Endpoints pointing to an external registry
+# This is used for kind clusters where the registry runs as a Docker container
+# outside the cluster but connected to the kind network.
+# The dev-up.sh script creates a "kind-registry" container and configures
+# containerd to redirect registry.registry.svc.cluster.local:5000 to kind-registry:5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: registry
+  labels:
+    app: registry
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.registry.service.port }}
+    targetPort: {{ .Values.registry.service.port }}
+    protocol: TCP
+    name: registry
+# Note: No selector - this Service will use manually created Endpoints
+# The dev-up.sh script will create the Endpoints pointing to the kind-registry container IP
+{{- end }}
 {{- end }}

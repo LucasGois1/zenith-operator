@@ -106,6 +106,8 @@ spec:
               echo "Function imageDigest: $FUNCTION_DIGEST"
               echo "KService image: $KSVC_IMAGE"
               
+              # The KService image should match the Function imageDigest exactly
+              # Both use the internal registry DNS name (registry.registry.svc.cluster.local:5000)
               if [ "$KSVC_IMAGE" = "$FUNCTION_DIGEST" ]; then
                 echo "SUCCESS: KService image matches Function imageDigest"
               else

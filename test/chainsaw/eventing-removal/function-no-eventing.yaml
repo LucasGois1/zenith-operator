@@ -13,3 +13,5 @@ spec:
       enabled: false
       appID: ""
       appPort: 8080
+  eventing:
+    broker: ""

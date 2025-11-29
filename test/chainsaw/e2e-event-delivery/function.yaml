@@ -16,5 +16,6 @@ spec:
   eventing:
     broker: default
     filters:
-      type: com.zenith.test.ping
-      source: /test/pingsource
+      # PingSource always uses type=dev.knative.sources.ping
+      # Source filter removed as it includes dynamic namespace path
+      type: dev.knative.sources.ping

@@ -315,7 +315,8 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	for _, result := range pipelineRun.Status.Results {
 		// O nome 'APP_IMAGE_DIGEST' é definido pela Task 'buildpacks-phases'
 		if result.Name == "APP_IMAGE_DIGEST" { //
-			imageDigest = result.Value.StringVal
+			// Trim whitespace/newlines that may be present in the result
+			imageDigest = strings.TrimSpace(result.Value.StringVal)
 			break
 		}
 	}
@@ -1090,7 +1091,9 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		podAnnotations["dapr.io/enabled"] = annotationValueTrue
 		podAnnotations["dapr.io/app-id"] = function.Spec.Deploy.Dapr.AppID
 		podAnnotations["dapr.io/app-port"] = strconv.Itoa(function.Spec.Deploy.Dapr.AppPort)
-		// (Adicione outras anotações Dapr conforme necessário, ex: config, log-level) [4]
+		// Use a different metrics port to avoid conflict with Knative's queue-proxy
+		// which also uses port 9090 for http-autometric
+		podAnnotations["dapr.io/metrics-port"] = "9095"
 
 		// Se tracing está habilitado, adicionar configuração de tracing do Dapr
 		if function.Spec.Observability.Tracing.Enabled {
@@ -1130,15 +1133,10 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	// IMPORTANTE: Knative não suporta fieldRef/resourceFieldRef, então resolve-se esses valores aqui
 	resolvedEnv := r.resolveEnvVars(function)
 
-	// Lógica para resolver o endereço da imagem
-	// Se estivermos usando o registry interno, precisamos trocar o endereço para o NodePort
-	// para que o runtime do container consiga acessar (pois ele roda no host/node)
+	// Use the image digest directly from the Function status
+	// The internal registry (registry.registry.svc.cluster.local:5000) is accessible
+	// from within the cluster via the internal DNS name
 	image := function.Status.ImageDigest
-	if strings.HasPrefix(image, "registry.registry.svc.cluster.local:5000") {
-		// Substituir pelo endereço "localhost:30500" (ou configurável via env var futuramente)
-		// Isso funciona no Minikube/Kind e na maioria dos setups onde a porta é exposta no nó
-		image = strings.Replace(image, "registry.registry.svc.cluster.local:5000", "127.0.0.1:30500", 1)
-	}
 
 	container := v1.Container{
 		// Usa o digest do build bem-sucedido da Fase 3.3
