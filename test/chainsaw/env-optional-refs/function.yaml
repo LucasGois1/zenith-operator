@@ -1,0 +1,33 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-optional-refs
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/optional-refs:latest
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080
+    env:
+      # Optional Secret reference - Secret does NOT exist
+      - name: OPTIONAL_SECRET_VALUE
+        valueFrom:
+          secretKeyRef:
+            name: non-existent-secret
+            key: some-key
+            optional: true
+      # Optional ConfigMap reference - ConfigMap does NOT exist
+      - name: OPTIONAL_CONFIGMAP_VALUE
+        valueFrom:
+          configMapKeyRef:
+            name: non-existent-configmap
+            key: some-key
+            optional: true
+      # Static value to ensure env vars work
+      - name: STATIC_VALUE
+        value: "this-is-static"

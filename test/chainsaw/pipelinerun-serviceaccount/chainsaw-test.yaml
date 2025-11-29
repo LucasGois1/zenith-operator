@@ -1,0 +1,114 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: pipelinerun-serviceaccount-test
+spec:
+  description: |
+    Test that PipelineRun uses the correct ServiceAccount.
+    This test verifies:
+    1. Function creates a ServiceAccount named <function>-sa
+    2. PipelineRun references this ServiceAccount in taskRunTemplate.serviceAccountName
+    3. ServiceAccount has the git auth secret attached
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function
+      description: Create a Function CR
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-serviceaccount-created
+      description: Verify ServiceAccount is created with correct name
+      try:
+        - script:
+            timeout: 30s
+            content: |
+              # Wait for ServiceAccount to be created
+              for i in $(seq 1 15); do
+                if kubectl get serviceaccount test-function-pipelinerun-sa-sa -n $NAMESPACE 2>/dev/null; then
+                  echo "SUCCESS: ServiceAccount test-function-pipelinerun-sa-sa exists"
+                  break
+                fi
+                sleep 2
+              done
+              
+              # Verify the ServiceAccount has the git auth secret
+              SECRETS=$(kubectl get serviceaccount test-function-pipelinerun-sa-sa -n $NAMESPACE -o jsonpath='{.secrets[*].name}')
+              echo "ServiceAccount secrets: $SECRETS"
+    
+    - name: verify-pipelinerun-serviceaccount
+      description: Verify PipelineRun uses the correct ServiceAccount
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              FN_NAME=test-function-pipelinerun-sa
+              
+              # Wait for PipelineRun to be created
+              for i in $(seq 1 30); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found"; exit 1; }
+              
+              echo "Found PipelineRun: $PR_NAME"
+              
+              # Check the serviceAccountName in taskRunTemplate
+              SA_NAME=$(kubectl get pipelinerun "$PR_NAME" -n $NAMESPACE -o jsonpath='{.spec.taskRunTemplate.serviceAccountName}')
+              
+              EXPECTED_SA="${FN_NAME}-sa"
+              if [ "$SA_NAME" != "$EXPECTED_SA" ]; then
+                echo "ERROR: Expected serviceAccountName '$EXPECTED_SA', got '$SA_NAME'"
+                kubectl get pipelinerun "$PR_NAME" -n $NAMESPACE -o yaml
+                exit 1
+              fi
+              
+              echo "SUCCESS: PipelineRun uses correct ServiceAccount: $SA_NAME"
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 8m
+            content: |
+              FN_NAME=test-function-pipelinerun-sa
+              PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m

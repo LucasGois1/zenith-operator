@@ -1,0 +1,83 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: env-optional-refs-test
+spec:
+  description: |
+    Test that optional Secret/ConfigMap references allow Function to become Ready.
+    This test verifies:
+    1. Function with optional: true on secretKeyRef becomes Ready even if Secret doesn't exist
+    2. Function with optional: true on configMapKeyRef becomes Ready even if ConfigMap doesn't exist
+    3. The validation logic correctly skips optional references
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-with-optional-refs
+      description: Create a Function CR with optional Secret and ConfigMap refs (resources don't exist)
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 8m
+            content: |
+              FN_NAME=test-function-optional-refs
+              for i in $(seq 1 60); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "PipelineRun not found for $FN_NAME"; exit 1; }
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status despite missing optional refs
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-knative-service-created
+      description: Verify Knative Service was created
+      try:
+        - script:
+            timeout: 30s
+            content: |
+              if ! kubectl get service.serving.knative.dev test-function-optional-refs -n $NAMESPACE 2>/dev/null; then
+                echo "ERROR: Knative Service should exist"
+                exit 1
+              fi
+              echo "SUCCESS: Knative Service created with optional refs"

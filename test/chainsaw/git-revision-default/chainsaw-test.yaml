@@ -1,0 +1,89 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: git-revision-default-test
+spec:
+  description: |
+    Test that gitRevision defaults to "main" when not specified.
+    This test verifies:
+    1. Function without gitRevision field is accepted
+    2. PipelineRun uses "main" as the revision parameter
+    3. Build completes successfully using default branch
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-without-gitrevision
+      description: Create a Function CR without gitRevision field
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-pipelinerun-uses-main
+      description: Verify PipelineRun was created with revision=main
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              # Wait for PipelineRun to be created
+              for i in $(seq 1 30); do
+                PR_NAME=$(kubectl get pipelinerun -n $NAMESPACE -o name | grep -F "test-function-revision-default" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found"; exit 1; }
+              
+              # Check that revision parameter is "main"
+              REVISION=$(kubectl get pipelinerun $PR_NAME -n $NAMESPACE -o jsonpath='{.spec.pipelineSpec.tasks[?(@.name=="fetch-source")].params[?(@.name=="revision")].value}')
+              echo "Found revision: $REVISION"
+              
+              if [ "$REVISION" != "main" ]; then
+                echo "ERROR: Expected revision 'main', got '$REVISION'"
+                exit 1
+              fi
+              
+              echo "SUCCESS: PipelineRun correctly uses default revision 'main'"
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 8m
+            content: |
+              PR_NAME=$(kubectl get pipelinerun -n $NAMESPACE -o name | grep -F "test-function-revision-default" | head -1 | cut -d/ -f2)
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n $NAMESPACE --timeout=8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m

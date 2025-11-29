@@ -1,0 +1,50 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: buildpacks-phases
+spec:
+  params:
+    - name: APP_IMAGE
+      type: string
+    - name: SOURCE_SUBPATH
+      type: string
+      default: ""
+    - name: CNB_BUILDER_IMAGE
+      type: string
+      default: "paketobuildpacks/builder-jammy-base:latest"
+    - name: CNB_PROCESS_TYPE
+      type: string
+      default: ""
+    - name: CNB_INSECURE_REGISTRIES
+      type: string
+      default: ""
+  workspaces:
+    - name: source
+  results:
+    - name: APP_IMAGE_DIGEST
+      description: Digest of the image pushed to the registry
+  steps:
+    - name: fast-build
+      image: gcr.io/go-containerregistry/crane:debug
+      script: |
+        #!/busybox/sh
+        set -e
+        
+        echo "Fast-path builder for testing operator behavior"
+        echo "This pushes a minimal image to the registry for testing"
+        
+        APP_IMAGE="$(params.APP_IMAGE)"
+        echo "Target image: $APP_IMAGE"
+        
+        # Copy a simple HTTP server image to the target registry
+        # This creates a real image that can be pulled and runs a web server
+        # Using hello-app which listens on port 8080 by default
+        crane copy --insecure gcr.io/google-samples/hello-app:1.0 "$APP_IMAGE"
+        
+        # Get the actual digest of the pushed image
+        DIGEST=$(crane digest --insecure "$APP_IMAGE")
+        echo "Pushed image with digest: $DIGEST"
+        
+        echo -n "$DIGEST" > "$(results.APP_IMAGE_DIGEST.path)"
+        
+        echo "Fast build completed successfully"
