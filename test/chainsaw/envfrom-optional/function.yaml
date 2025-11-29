@@ -1,0 +1,22 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-envfrom-optional
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/envfrom-optional:latest
+  deploy:
+    envFrom:
+      - secretRef:
+          name: nonexistent-optional-secret
+          optional: true
+      - configMapRef:
+          name: nonexistent-optional-configmap
+          optional: true
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080

@@ -1,0 +1,28 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-field-ref-uid
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/field-ref-uid:latest
+  deploy:
+    env:
+      - name: POD_UID
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.uid
+      - name: POD_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: POD_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080
