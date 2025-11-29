@@ -132,8 +132,9 @@ spec:
               
               LOGS=$(kubectl logs -n "$NAMESPACE" "$POD_NAME" --tail=100 || echo "")
               
-              if echo "$LOGS" | grep -q "Ce-Type.*com.zenith.test.ping"; then
-                echo "SUCCESS: Function received CloudEvent with correct type"
+              # PingSource uses type=dev.knative.sources.ping by default
+              if echo "$LOGS" | grep -q "Ce-Type.*dev.knative.sources.ping"; then
+                echo "SUCCESS: Function received CloudEvent with correct type (dev.knative.sources.ping)"
                 echo "Log excerpt:"
                 echo "$LOGS" | grep -A 5 "CloudEvent Headers Detected"
                 exit 0
