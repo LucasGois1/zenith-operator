@@ -1,66 +1,66 @@
-# Zenith Operator - Documentação
+# Zenith Operator - Documentation
 
-Bem-vindo à documentação do Zenith Operator! Esta é uma plataforma serverless para Kubernetes que simplifica o desenvolvimento e deployment de funções através de um único Custom Resource.
+Welcome to the Zenith Operator documentation! This is a serverless platform for Kubernetes that simplifies function development and deployment through a single Custom Resource.
 
-## 🚀 O que é o Zenith Operator?
+## 🚀 What is Zenith Operator?
 
-O Zenith Operator é um operador Kubernetes que abstrai a complexidade de integrar múltiplas tecnologias cloud-native (Tekton Pipelines, Knative Serving, Knative Eventing e Dapr) em uma experiência simples e declarativa.
+Zenith Operator is a Kubernetes operator that abstracts the complexity of integrating multiple cloud-native technologies (Tekton Pipelines, Knative Serving, Knative Eventing, and Dapr) into a simple and declarative experience.
 
-Com o Zenith Operator, você pode:
+With Zenith Operator, you can:
 
-- **Construir** imagens de container automaticamente a partir do código-fonte (sem Dockerfile)
-- **Deployar** funções serverless com auto-scaling e scale-to-zero
-- **Conectar** funções a eventos para processamento assíncrono
-- **Comunicar** entre funções usando HTTP ou service mesh
-- **Rastrear** requisições distribuídas com OpenTelemetry
+- **Build** container images automatically from source code (no Dockerfile required)
+- **Deploy** serverless functions with auto-scaling and scale-to-zero
+- **Connect** functions to events for asynchronous processing
+- **Communicate** between functions using HTTP or service mesh
+- **Trace** distributed requests with OpenTelemetry
 
-Tudo isso através de um único Custom Resource `Function`.
+All this through a single `Function` Custom Resource.
 
-## 📖 Navegação da Documentação
+## 📖 Documentation Navigation
 
-### [01. Introdução](01-introducao/)
+### [01. Introduction](01-introduction/)
 
-Comece aqui se você é novo no Zenith Operator.
+Start here if you are new to Zenith Operator.
 
-- **[Visão Geral](01-introducao/visao-geral.md)** - Entenda o que é o operator e suas principais características
-- **[Instalação](01-introducao/instalacao.md)** - Instale o operator em seu cluster Kubernetes
-- **[Início Rápido](01-introducao/inicio-rapido.md)** - Crie sua primeira função em 5 minutos
+- **[Overview](01-introduction/overview.md)** - Understand what the operator is and its main features
+- **[Installation](01-introduction/installation.md)** - Install the operator on your Kubernetes cluster
+- **[Quick Start](01-introduction/quick-start.md)** - Create your first function in 5 minutes
 
-### [02. Guias](02-guias/)
+### [02. Guides](02-guides/)
 
-Tutoriais práticos para criar diferentes tipos de funções.
+Practical tutorials for creating different types of functions.
 
-- **[Funções HTTP](02-guias/funcoes-http.md)** - APIs REST, webhooks e microserviços síncronos
-- **[Funções com Eventos](02-guias/funcoes-eventos.md)** - Processamento assíncrono orientado a eventos
-- **[Comunicação entre Funções](02-guias/comunicacao-funcoes.md)** - Arquiteturas de microserviços distribuídos
-- **[Autenticação Git](02-guias/autenticacao-git.md)** - Configure acesso a repositórios privados
-- **[Observabilidade](02-guias/observabilidade.md)** - Distributed tracing com OpenTelemetry
+- **[HTTP Functions](02-guides/http-functions.md)** - REST APIs, webhooks, and synchronous microservices
+- **[Event Functions](02-guides/event-functions.md)** - Asynchronous event-driven processing
+- **[Function Communication](02-guides/function-communication.md)** - Distributed microservices architectures
+- **[Git Authentication](02-guides/git-authentication.md)** - Configure access to private repositories
+- **[Observability](02-guides/observability.md)** - Distributed tracing with OpenTelemetry
 
-### [03. Conceitos](03-conceitos/)
+### [03. Concepts](03-concepts/)
 
-Entenda a arquitetura e os conceitos fundamentais.
+Understand the architecture and fundamental concepts.
 
-- **[Arquitetura](03-conceitos/arquitetura.md)** - Diagramas e explicações da arquitetura completa
-- **[Ciclo de Vida das Funções](03-conceitos/ciclo-vida-funcoes.md)** - Como as funções são criadas, atualizadas e removidas
+- **[Architecture](03-concepts/architecture.md)** - Diagrams and explanations of the complete architecture
+- **[Function Lifecycle](03-concepts/function-lifecycle.md)** - How functions are created, updated, and removed
 
-### [04. Referência](04-referencia/)
+### [04. Reference](04-reference/)
 
-Documentação técnica completa da API.
+Complete technical API documentation.
 
-- **[Function CRD](04-referencia/function-crd.md)** - Especificação completa de todos os campos
-- **[Referência do Operator](04-referencia/operator-reference.md)** - Comportamento e integrações internas
-- **[Troubleshooting](04-referencia/troubleshooting.md)** - Solução de problemas comuns
+- **[Function CRD](04-reference/function-crd.md)** - Complete specification of all fields
+- **[Operator Reference](04-reference/operator-reference.md)** - Internal behavior and integrations
+- **[Troubleshooting](04-reference/troubleshooting.md)** - Common issues troubleshooting
 
-### [05. Operações](05-operacoes/)
+### [05. Operations](05-operations/)
 
-Configuração e gerenciamento em produção.
+Configuration and management in production.
 
-- **[Helm Chart](05-operacoes/helm-chart.md)** - Instalação via Helm e configuração da stack
-- **[Configuração de Registry](05-operacoes/configuracao-registry.md)** - Setup de container registries
+- **[Helm Chart](05-operations/helm-chart.md)** - Helm installation and stack configuration
+- **[Registry Configuration](05-operations/registry-configuration.md)** - Container registry setup
 
-## 🎯 Casos de Uso Comuns
+## 🎯 Common Use Cases
 
-### API REST Síncrona
+### Synchronous REST API
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -75,7 +75,7 @@ spec:
   deploy: {}
 ```
 
-### Processamento de Eventos
+### Event Processing
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -94,7 +94,7 @@ spec:
       type: com.example.order.created
 ```
 
-### Microserviços com Service Mesh
+### Microservices with Service Mesh
 
 ```yaml
 apiVersion: functions.zenith.com/v1alpha1
@@ -113,55 +113,55 @@ spec:
       appPort: 8080
 ```
 
-## 🚦 Início Rápido
+## 🚦 Quick Start
 
-1. **Instale o operator** seguindo o [guia de instalação](01-introducao/instalacao.md)
+1. **Install the operator** following the [installation guide](01-introduction/installation.md)
 
-2. **Crie sua primeira função** com o [tutorial de início rápido](01-introducao/inicio-rapido.md)
+2. **Create your first function** with the [quick start tutorial](01-introduction/quick-start.md)
 
-3. **Explore os guias** para aprender recursos avançados:
-   - [Funções HTTP](02-guias/funcoes-http.md)
-   - [Funções com Eventos](02-guias/funcoes-eventos.md)
-   - [Comunicação entre Funções](02-guias/comunicacao-funcoes.md)
+3. **Explore the guides** to learn advanced features:
+   - [HTTP Functions](02-guides/http-functions.md)
+   - [Event Functions](02-guides/event-functions.md)
+   - [Function Communication](02-guides/function-communication.md)
 
-## 🔍 Encontrando o que Você Precisa
+## 🔍 Finding What You Need
 
-### Estou começando agora
-→ Comece com [Introdução](01-introducao/) e siga o [Início Rápido](01-introducao/inicio-rapido.md)
+### I'm just starting
+→ Start with [Introduction](01-introduction/) and follow the [Quick Start](01-introduction/quick-start.md)
 
-### Quero criar uma função HTTP
-→ Veja o guia [Funções HTTP](02-guias/funcoes-http.md)
+### I want to create an HTTP function
+→ See the [HTTP Functions](02-guides/http-functions.md) guide
 
-### Quero processar eventos
-→ Veja o guia [Funções com Eventos](02-guias/funcoes-eventos.md)
+### I want to process events
+→ See the [Event Functions](02-guides/event-functions.md) guide
 
-### Preciso configurar autenticação Git
-→ Veja o guia [Autenticação Git](02-guias/autenticacao-git.md)
+### I need to configure Git authentication
+→ See the [Git Authentication](02-guides/git-authentication.md) guide
 
-### Estou tendo problemas
-→ Consulte o [Troubleshooting](04-referencia/troubleshooting.md)
+### I'm having problems
+→ Consult [Troubleshooting](04-reference/troubleshooting.md)
 
-### Preciso da referência completa da API
-→ Veja [Function CRD](04-referencia/function-crd.md)
+### I need the complete API reference
+→ See [Function CRD](04-reference/function-crd.md)
 
-### Quero entender como funciona internamente
-→ Leia sobre [Arquitetura](03-conceitos/arquitetura.md) e [Referência do Operator](04-referencia/operator-reference.md)
+### I want to understand how it works internally
+→ Read about [Architecture](03-concepts/architecture.md) and [Operator Reference](04-reference/operator-reference.md)
 
-## 🤝 Contribuindo
+## 🤝 Contributing
 
-Contribuições são bem-vindas! Visite o [repositório no GitHub](https://github.com/LucasGois1/zenith-operator) para:
+Contributions are welcome! Visit the [GitHub repository](https://github.com/LucasGois1/zenith-operator) to:
 
-- Reportar bugs e problemas
-- Sugerir novas funcionalidades
-- Contribuir com código
-- Melhorar a documentação
+- Report bugs and issues
+- Suggest new features
+- Contribute with code
+- Improve documentation
 
-## 📄 Licença
+## 📄 License
 
-Este projeto está licenciado sob a Apache License 2.0.
+This project is licensed under the Apache License 2.0.
 
-## 🔗 Links Úteis
+## 🔗 Useful Links
 
-- [Repositório GitHub](https://github.com/LucasGois1/zenith-operator)
-- [Exemplos de Funções](https://github.com/LucasGois1/zenith-test-functions)
-- [Issues e Suporte](https://github.com/LucasGois1/zenith-operator/issues)
+- [GitHub Repository](https://github.com/LucasGois1/zenith-operator)
+- [Function Examples](https://github.com/LucasGois1/zenith-test-functions)
+- [Issues and Support](https://github.com/LucasGois1/zenith-operator/issues)
