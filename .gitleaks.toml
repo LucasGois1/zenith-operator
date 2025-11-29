@@ -1,0 +1,13 @@
+# Gitleaks configuration for zenith-operator
+# This file configures gitleaks to ignore false positives in test files
+
+title = "zenith-operator gitleaks config"
+
+[allowlist]
+  description = "Allow test files with fake secrets"
+  paths = [
+    # Test files contain fake/example secrets for testing purposes
+    '''test/chainsaw/.*/app-secret\.yaml''',
+    '''test/chainsaw/.*/.*-secret\.yaml''',
+    '''test/e2e/.*''',
+  ]
