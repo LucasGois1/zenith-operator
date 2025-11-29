@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.16](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.15...zenith-operator-0.2.16) (2025-11-29)
+
+
+### Bug Fixes
+
+* add external registry mode for kind clusters ([0696859](https://github.com/LucasGois1/zenith-operator/commit/0696859270ebf6a1d57125a551d7e8c103adf959))
+* add InMemoryChannel and MT Broker components for Knative Eventing ([a9e441d](https://github.com/LucasGois1/zenith-operator/commit/a9e441d699e71e4c79bbfd8ece67ab5dd02d0c2b))
+* simplify config-gateway patch to eliminate race condition ([8a37086](https://github.com/LucasGois1/zenith-operator/commit/8a370860e79116c2b09859dfa3b1aee71a7d122a))
+
 ## [0.2.15](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.14...zenith-operator-0.2.15) (2025-11-27)
 
 
