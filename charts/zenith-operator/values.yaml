@@ -1,3 +1,4 @@
+
 profile: standard
 
 global:
@@ -41,18 +42,7 @@ envoyGateway:
 metallb:
   enabled: true
   version: "v0.14.9"
-  # The addressPool can be set to "auto" to automatically detect the IP range
-  # from the cluster's node IPs, or set to a specific range like "172.18.255.200-172.18.255.250"
-  #
-  # When set to "auto" (default for kind clusters):
-  #   - The installer Job will detect the first node's InternalIP
-  #   - It will calculate the pool as <first-two-octets>.255.200-<first-two-octets>.255.250
-  #   - Example: If node IP is 172.19.0.2, pool becomes 172.19.255.200-172.19.255.250
-  #
-  # For manual configuration:
-  #   - Set to a specific range matching your cluster's network
-  #   - For kind: docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
-  addressPool: "auto"
+  addressPool: "auto"  # Auto-detect from node IPs for kind clusters
 
 dapr:
   enabled: true
@@ -72,24 +62,23 @@ registry:
   # When enabled, the Helm chart creates only a Service without a Deployment.
   # The Endpoints must be created separately (e.g., by dev-up.sh for kind clusters).
   external:
-    enabled: false
+    enabled: true
   image:
     repository: registry
     tag: "2"
     pullPolicy: IfNotPresent
   storage:
     size: "10Gi"
-    storageClass: ""  # Use default StorageClass
+    storageClass: "standard"  # Kind default StorageClass
   service:
-    type: NodePort
+    type: ClusterIP
     port: 5000
-    nodePort: 30500
   hostname: "registry.registry.svc.cluster.local"
 
 operator:
   image:
     repository: ghcr.io/lucasgois1/zenith-operator
-    tag: ""  # Defaults to Chart.AppVersion
+    tag: ""
     pullPolicy: IfNotPresent
 
   replicaCount: 1
@@ -110,7 +99,7 @@ operator:
     allowPrivilegeEscalation: false
     capabilities:
       drop:
-        - "ALL"
+      - "ALL"
 
   resources:
     limits:
@@ -121,17 +110,12 @@ operator:
       memory: 64Mi
 
   nodeSelector: {}
-
   tolerations: []
-
   affinity: {}
-
   imagePullSecrets: []
 
   controller:
-    # Insecure registries that the operator should trust for image builds.
-    # These are passed to buildpacks via CNB_INSECURE_REGISTRIES.
-    # Default includes the in-cluster registry addresses for kind/local development.
+    # Insecure registries for kind/local development
     insecureRegistries:
       - "registry.registry.svc.cluster.local:5000"
       - "127.0.0.1:30500"
