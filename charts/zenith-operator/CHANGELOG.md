@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.17](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.16...zenith-operator-0.2.17) (2025-11-30)
+
+
+### Bug Fixes
+
+* update values.yaml for improved configuration and defaults ([16f5409](https://github.com/LucasGois1/zenith-operator/commit/16f54094225a9b5846263f85e53ef07d86f416d7))
+
 ## [0.2.16](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.15...zenith-operator-0.2.16) (2025-11-29)
 
 
