@@ -1,0 +1,100 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: git-revision-invalid-test
+spec:
+  description: |
+    Test that Function handles invalid gitRevision (non-existent branch) correctly.
+    This test verifies:
+    1. Function with non-existent branch causes PipelineRun to fail
+    2. Function status shows BuildFailed with appropriate error message
+    3. No Knative Service is created when build fails
+  timeouts:
+    apply: 1m
+    assert: 8m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-with-invalid-revision
+      description: Create a Function CR with non-existent branch
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-pipelinerun-failure
+      description: Wait for PipelineRun to fail due to invalid branch
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              # Wait for PipelineRun to be created
+              for i in $(seq 1 30); do
+                PR_NAME=$(kubectl get pipelinerun -n $NAMESPACE -o name | grep -F "test-function-invalid-revision" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found"; exit 1; }
+              
+              echo "Found PipelineRun: $PR_NAME"
+              
+              # Wait for PipelineRun to fail (Succeeded=False)
+              kubectl wait --for=condition=Succeeded=False "pipelinerun/$PR_NAME" -n $NAMESPACE --timeout=4m
+              echo "PipelineRun failed as expected"
+    
+    - name: verify-function-build-failed
+      description: Verify Function status shows BuildFailed
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              # Wait for Function status to be updated
+              for i in $(seq 1 30); do
+                REASON=$(kubectl get function test-function-invalid-revision -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}')
+                if [ "$REASON" = "BuildFailed" ]; then
+                  echo "SUCCESS: Function status shows BuildFailed"
+                  exit 0
+                fi
+                sleep 2
+              done
+              
+              echo "ERROR: Expected reason 'BuildFailed', got '$REASON'"
+              kubectl get function test-function-invalid-revision -n $NAMESPACE -o yaml
+              exit 1
+    
+    - name: verify-no-knative-service
+      description: Verify no Knative Service was created
+      try:
+        - script:
+            timeout: 30s
+            content: |
+              if kubectl get service.serving.knative.dev test-function-invalid-revision -n $NAMESPACE 2>/dev/null; then
+                echo "ERROR: Knative Service should not exist when build fails"
+                exit 1
+              fi
+              echo "SUCCESS: No Knative Service created (as expected)"

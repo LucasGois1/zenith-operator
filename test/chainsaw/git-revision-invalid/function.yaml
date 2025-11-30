@@ -1,0 +1,15 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-invalid-revision
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: this-branch-does-not-exist-12345
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/invalid-revision:latest
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080

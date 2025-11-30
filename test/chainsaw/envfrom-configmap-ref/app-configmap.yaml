@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-configmap
+data:
+  APP_NAME: "my-function-app"
+  APP_ENV: "production"
+  LOG_FORMAT: "json"
+  MAX_CONNECTIONS: "100"

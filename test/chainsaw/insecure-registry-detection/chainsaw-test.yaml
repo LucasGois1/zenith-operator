@@ -1,0 +1,100 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: insecure-registry-detection-test
+spec:
+  description: |
+    Test that the operator correctly detects insecure registries and sets CNB_INSECURE_REGISTRIES.
+    This test verifies:
+    1. Function using local registry (registry.registry.svc.cluster.local:5000) is detected as insecure
+    2. PipelineRun has CNB_INSECURE_REGISTRIES parameter set correctly
+    3. Build completes successfully with insecure registry
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-with-local-registry
+      description: Create a Function CR using local insecure registry
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-insecure-registry-param
+      description: Verify PipelineRun has CNB_INSECURE_REGISTRIES parameter
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              FN_NAME=test-function-insecure-registry
+              
+              # Wait for PipelineRun to be created
+              for i in $(seq 1 30); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found"; exit 1; }
+              
+              echo "Found PipelineRun: $PR_NAME"
+              
+              # Check for CNB_INSECURE_REGISTRIES parameter in the build task
+              INSECURE_REGISTRIES=$(kubectl get pipelinerun "$PR_NAME" -n $NAMESPACE -o jsonpath='{.spec.pipelineSpec.tasks[?(@.name=="build-and-push")].params[?(@.name=="CNB_INSECURE_REGISTRIES")].value}')
+              
+              if [ -z "$INSECURE_REGISTRIES" ]; then
+                echo "ERROR: CNB_INSECURE_REGISTRIES parameter not found"
+                kubectl get pipelinerun "$PR_NAME" -n $NAMESPACE -o yaml
+                exit 1
+              fi
+              
+              # Verify the local registry is in the insecure list
+              if echo "$INSECURE_REGISTRIES" | grep -q "registry.registry.svc.cluster.local"; then
+                echo "SUCCESS: CNB_INSECURE_REGISTRIES contains local registry: $INSECURE_REGISTRIES"
+              else
+                echo "ERROR: Expected local registry in CNB_INSECURE_REGISTRIES, got: $INSECURE_REGISTRIES"
+                exit 1
+              fi
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 8m
+            content: |
+              FN_NAME=test-function-insecure-registry
+              PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m

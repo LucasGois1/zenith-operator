@@ -1,0 +1,19 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-trigger-cleanup
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/trigger-cleanup:latest
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080
+  eventing:
+    broker: test-broker
+    filters:
+      type: com.example.cleanup-test

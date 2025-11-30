@@ -47,6 +47,7 @@ jobs:
       - name: Setup cluster and dependencies
         run: |
           echo "🚀 Setting up Kubernetes cluster and dependencies..."
+          echo $GITHUB_TOKEN
           
           # Run dev-up.sh to install everything (Tekton, Knative, Envoy Gateway, MetalLB, etc.)
           bash hack/dev-up.sh

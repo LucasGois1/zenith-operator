@@ -1,0 +1,18 @@
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: test-function-envfrom-configmap
+spec:
+  gitRepo: https://github.com/LucasGois1/zenith-test-functions
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.registry.svc.cluster.local:5000/zenith-test/envfrom-configmap:latest
+  deploy:
+    dapr:
+      enabled: false
+      appID: ""
+      appPort: 8080
+    envFrom:
+      - configMapRef:
+          name: app-config-configmap
