@@ -1,0 +1,152 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: multi-functions-same-broker-test
+spec:
+  description: |
+    Test that multiple Functions can use the same Broker for eventing.
+    This test verifies:
+    1. Two Functions with eventing enabled pointing to the same Broker
+    2. Both Functions create their own Triggers
+    3. Both Triggers point to the same Broker
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-broker
+      description: Create a shared Broker for both Functions
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              kubectl apply -f - -n "$NAMESPACE" <<EOF
+              apiVersion: eventing.knative.dev/v1
+              kind: Broker
+              metadata:
+                name: shared-broker
+              EOF
+              
+              # Wait for Broker to be ready
+              kubectl wait --for=condition=Ready broker/shared-broker -n "$NAMESPACE" --timeout=60s
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-1
+      description: Create first Function with eventing
+      try:
+        - apply:
+            file: function-1.yaml
+    
+    - name: create-function-2
+      description: Create second Function with eventing
+      try:
+        - apply:
+            file: function-2.yaml
+    
+    - name: wait-for-builds
+      description: Wait for both PipelineRuns to complete
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              # Wait for first function's PipelineRun
+              FN1_NAME=test-function-broker-1
+              for i in $(seq 1 30); do
+                PR1_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN1_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR1_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR1_NAME" ] && { echo "ERROR: PipelineRun for $FN1_NAME not found"; exit 1; }
+              echo "Found PipelineRun for function 1: $PR1_NAME"
+              
+              # Wait for second function's PipelineRun
+              FN2_NAME=test-function-broker-2
+              for i in $(seq 1 30); do
+                PR2_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN2_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR2_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR2_NAME" ] && { echo "ERROR: PipelineRun for $FN2_NAME not found"; exit 1; }
+              echo "Found PipelineRun for function 2: $PR2_NAME"
+              
+              # Wait for both to complete
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR1_NAME" -n "$NAMESPACE" --timeout=8m
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR2_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-both-functions-ready
+      description: Verify both Functions reach Ready status
+      try:
+        - assert:
+            file: function-1-ready-assert.yaml
+            timeout: 2m
+        - assert:
+            file: function-2-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-triggers-created
+      description: Verify both Triggers are created and point to the same Broker
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              # Check Trigger for function 1
+              TRIGGER1_NAME=$(kubectl get trigger -n "$NAMESPACE" -o name | grep -F "test-function-broker-1" | head -1)
+              if [ -z "$TRIGGER1_NAME" ]; then
+                echo "ERROR: Trigger for function 1 not found"
+                kubectl get trigger -n "$NAMESPACE"
+                exit 1
+              fi
+              echo "Found Trigger for function 1: $TRIGGER1_NAME"
+              
+              # Check Trigger for function 2
+              TRIGGER2_NAME=$(kubectl get trigger -n "$NAMESPACE" -o name | grep -F "test-function-broker-2" | head -1)
+              if [ -z "$TRIGGER2_NAME" ]; then
+                echo "ERROR: Trigger for function 2 not found"
+                kubectl get trigger -n "$NAMESPACE"
+                exit 1
+              fi
+              echo "Found Trigger for function 2: $TRIGGER2_NAME"
+              
+              # Get the trigger names without the prefix
+              T1=$(echo "$TRIGGER1_NAME" | cut -d/ -f2)
+              T2=$(echo "$TRIGGER2_NAME" | cut -d/ -f2)
+              
+              # Verify both point to the same broker
+              BROKER1=$(kubectl get trigger "$T1" -n "$NAMESPACE" -o jsonpath='{.spec.broker}')
+              BROKER2=$(kubectl get trigger "$T2" -n "$NAMESPACE" -o jsonpath='{.spec.broker}')
+              
+              echo "Function 1 Trigger broker: $BROKER1"
+              echo "Function 2 Trigger broker: $BROKER2"
+              
+              if [ "$BROKER1" = "shared-broker" ] && [ "$BROKER2" = "shared-broker" ]; then
+                echo "SUCCESS: Both Triggers point to the same shared-broker"
+              else
+                echo "ERROR: Triggers do not point to the same broker"
+                exit 1
+              fi

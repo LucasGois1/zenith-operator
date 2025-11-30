@@ -1,0 +1,125 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: registry-secret-update-test
+spec:
+  description: |
+    Test that updating registrySecretName in a Function updates the ServiceAccount.
+    This test verifies:
+    1. Initial Function with registrySecretName creates SA with that secret
+    2. Updating registrySecretName updates the SA imagePullSecrets
+  timeouts:
+    apply: 1m
+    assert: 5m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-registry-secrets
+      description: Create two registry secrets for testing
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              kubectl create secret docker-registry registry-secret-v1 \
+                --docker-server=registry.example.com \
+                --docker-username=user1 \
+                --docker-password=pass1 \
+                -n "$NAMESPACE"
+              
+              kubectl create secret docker-registry registry-secret-v2 \
+                --docker-server=registry.example.com \
+                --docker-username=user2 \
+                --docker-password=pass2 \
+                -n "$NAMESPACE"
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-with-registry-secret-v1
+      description: Create a Function CR with registrySecretName v1
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-sa-has-registry-secret-v1
+      description: Verify ServiceAccount has registry-secret-v1
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-registry-secret-update
+              
+              # Wait for ServiceAccount to be created
+              for i in $(seq 1 15); do
+                SA=$(kubectl get sa "${FN_NAME}-sa" -n "$NAMESPACE" -o name 2>/dev/null)
+                [ -n "$SA" ] && break
+                sleep 2
+              done
+              
+              if [ -z "$SA" ]; then
+                echo "ERROR: ServiceAccount ${FN_NAME}-sa not found"
+                exit 1
+              fi
+              
+              # Check imagePullSecrets
+              IMAGE_PULL_SECRETS=$(kubectl get sa "${FN_NAME}-sa" -n "$NAMESPACE" -o jsonpath='{.imagePullSecrets[*].name}')
+              echo "ImagePullSecrets: $IMAGE_PULL_SECRETS"
+              
+              if echo "$IMAGE_PULL_SECRETS" | grep -q "registry-secret-v1"; then
+                echo "SUCCESS: ServiceAccount has registry-secret-v1"
+              else
+                echo "ERROR: ServiceAccount does not have registry-secret-v1"
+                exit 1
+              fi
+    
+    - name: update-function-to-registry-secret-v2
+      description: Update Function to use registry-secret-v2
+      try:
+        - apply:
+            file: function-updated.yaml
+    
+    - name: verify-sa-updated-to-registry-secret-v2
+      description: Verify ServiceAccount now has registry-secret-v2
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-registry-secret-update
+              
+              # Wait for reconciliation
+              sleep 3
+              
+              # Check imagePullSecrets
+              IMAGE_PULL_SECRETS=$(kubectl get sa "${FN_NAME}-sa" -n "$NAMESPACE" -o jsonpath='{.imagePullSecrets[*].name}')
+              echo "ImagePullSecrets after update: $IMAGE_PULL_SECRETS"
+              
+              if echo "$IMAGE_PULL_SECRETS" | grep -q "registry-secret-v2"; then
+                echo "SUCCESS: ServiceAccount updated to registry-secret-v2"
+              else
+                echo "ERROR: ServiceAccount not updated to registry-secret-v2"
+                kubectl get sa "${FN_NAME}-sa" -n "$NAMESPACE" -o yaml
+                exit 1
+              fi

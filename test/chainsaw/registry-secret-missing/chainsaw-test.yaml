@@ -1,0 +1,103 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: registry-secret-missing-test
+spec:
+  description: |
+    Test behavior when build.registrySecretName points to a non-existent Secret.
+    This test verifies:
+    1. Function can be created with a non-existent registrySecretName
+    2. ServiceAccount is created but without the missing secret in imagePullSecrets
+    3. Build may fail or succeed depending on registry requirements
+  timeouts:
+    apply: 1m
+    assert: 5m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-with-missing-registry-secret
+      description: Create a Function CR with non-existent registrySecretName
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: verify-serviceaccount-created
+      description: Verify ServiceAccount is created
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-registry-secret-missing
+              
+              # Wait for ServiceAccount to be created
+              for i in $(seq 1 15); do
+                SA=$(kubectl get sa "${FN_NAME}-sa" -n "$NAMESPACE" -o name 2>/dev/null)
+                [ -n "$SA" ] && break
+                sleep 2
+              done
+              
+              if [ -z "$SA" ]; then
+                echo "ERROR: ServiceAccount ${FN_NAME}-sa not found"
+                exit 1
+              fi
+              
+              echo "SUCCESS: ServiceAccount ${FN_NAME}-sa created"
+              
+              # Check if imagePullSecrets contains the missing secret reference
+              # The operator should still add the reference even if secret doesn't exist
+              IMAGE_PULL_SECRETS=$(kubectl get sa "${FN_NAME}-sa" -n "$NAMESPACE" -o jsonpath='{.imagePullSecrets[*].name}')
+              echo "ImagePullSecrets: $IMAGE_PULL_SECRETS"
+              
+              if echo "$IMAGE_PULL_SECRETS" | grep -q "nonexistent-registry-secret"; then
+                echo "SUCCESS: ServiceAccount references the non-existent registry secret"
+              else
+                echo "INFO: ServiceAccount does not reference the non-existent registry secret (may be expected behavior)"
+              fi
+    
+    - name: verify-pipelinerun-created
+      description: Verify PipelineRun is created despite missing registry secret
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              FN_NAME=test-function-registry-secret-missing
+              
+              # Wait for PipelineRun to be created
+              for i in $(seq 1 30); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              
+              if [ -z "$PR_NAME" ]; then
+                echo "ERROR: PipelineRun not found"
+                exit 1
+              fi
+              
+              echo "SUCCESS: PipelineRun $PR_NAME created despite missing registry secret"

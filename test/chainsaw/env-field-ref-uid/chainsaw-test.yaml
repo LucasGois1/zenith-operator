@@ -1,0 +1,113 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: env-field-ref-uid-test
+spec:
+  description: |
+    Test that fieldRef with metadata.uid works correctly.
+    This test verifies:
+    1. Function with env using fieldRef: metadata.uid
+    2. KService container has the POD_UID environment variable
+    3. Function becomes Ready
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-with-field-ref-uid
+      description: Create a Function CR with fieldRef metadata.uid
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 8m
+            content: |
+              FN_NAME=test-function-field-ref-uid
+              
+              # Wait for PipelineRun to be created
+              for i in $(seq 1 30); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found"; exit 1; }
+              
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-kservice-has-field-ref-uid
+      description: Verify KService has the fieldRef metadata.uid environment variable resolved
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-field-ref-uid
+              
+              # Get KService env configuration
+              ENV_CONFIG=$(kubectl get ksvc "$FN_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].env}')
+              
+              echo "KService env configuration:"
+              echo "$ENV_CONFIG" | jq .
+              
+              # The operator resolves fieldRef values at reconciliation time
+              # So we verify that POD_UID has a non-empty value (the Function's UID)
+              POD_UID_VALUE=$(echo "$ENV_CONFIG" | jq -r '.[] | select(.name == "POD_UID") | .value')
+              
+              if [ -n "$POD_UID_VALUE" ] && [ "$POD_UID_VALUE" != "null" ]; then
+                echo "SUCCESS: KService has POD_UID with resolved value: $POD_UID_VALUE"
+              else
+                echo "ERROR: KService does not have POD_UID with a resolved value"
+                exit 1
+              fi
+              
+              # Verify POD_NAME and POD_NAMESPACE are also resolved
+              POD_NAME_VALUE=$(echo "$ENV_CONFIG" | jq -r '.[] | select(.name == "POD_NAME") | .value')
+              POD_NAMESPACE_VALUE=$(echo "$ENV_CONFIG" | jq -r '.[] | select(.name == "POD_NAMESPACE") | .value')
+              
+              echo "POD_NAME resolved to: $POD_NAME_VALUE"
+              echo "POD_NAMESPACE resolved to: $POD_NAMESPACE_VALUE"
+              
+              if [ "$POD_NAME_VALUE" = "$FN_NAME" ]; then
+                echo "SUCCESS: POD_NAME correctly resolved to function name"
+              else
+                echo "ERROR: POD_NAME not correctly resolved"
+                exit 1
+              fi

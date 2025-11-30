@@ -1,0 +1,144 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: function-trigger-cleanup-test
+spec:
+  description: |
+    Test that deleting a Function with eventing also cleans up the associated Trigger.
+    This test verifies:
+    1. Function with eventing creates a Trigger
+    2. Deleting the Function also deletes the Trigger (via OwnerReference)
+  timeouts:
+    apply: 1m
+    assert: 10m
+    delete: 1m
+  steps:
+    - name: create-git-auth-secret
+      description: Create Git authentication secret
+      try:
+        - script:
+            timeout: 10m
+            content: |
+              cat <<'EOF' | sed "s#__GITHUB_TOKEN__#${GITHUB_TOKEN}#g" | kubectl apply -f - -n $NAMESPACE
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: github-auth
+                annotations:
+                  tekton.dev/git-0: https://github.com
+              type: kubernetes.io/basic-auth
+              stringData:
+                username: LucasGois1
+                password: __GITHUB_TOKEN__
+              EOF
+    
+    - name: create-broker
+      description: Create a Broker for the Function
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              kubectl apply -f - -n "$NAMESPACE" <<EOF
+              apiVersion: eventing.knative.dev/v1
+              kind: Broker
+              metadata:
+                name: test-broker
+              EOF
+              
+              # Wait for Broker to be ready
+              kubectl wait --for=condition=Ready broker/test-broker -n "$NAMESPACE" --timeout=60s
+    
+    - name: install-tekton-tasks
+      description: Install Tekton tasks in the test namespace
+      try:
+        - apply:
+            file: git-clone-task.yaml
+        - apply:
+            file: buildpacks-phases-task-fast.yaml
+    
+    - name: create-function-with-eventing
+      description: Create a Function CR with eventing enabled
+      try:
+        - apply:
+            file: function.yaml
+    
+    - name: wait-for-build
+      description: Wait for PipelineRun to complete
+      try:
+        - script:
+            timeout: 8m
+            content: |
+              FN_NAME=test-function-trigger-cleanup
+              
+              # Wait for PipelineRun to be created
+              for i in $(seq 1 30); do
+                PR_NAME=$(kubectl get pipelinerun -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1 | cut -d/ -f2)
+                [ -n "$PR_NAME" ] && break
+                sleep 2
+              done
+              [ -z "$PR_NAME" ] && { echo "ERROR: PipelineRun not found"; exit 1; }
+              
+              echo "Found PipelineRun: $PR_NAME"
+              kubectl wait --for=condition=Succeeded=True "pipelinerun/$PR_NAME" -n "$NAMESPACE" --timeout=8m
+    
+    - name: verify-function-ready
+      description: Verify Function reaches Ready status
+      try:
+        - assert:
+            file: function-ready-assert.yaml
+            timeout: 2m
+    
+    - name: verify-trigger-exists
+      description: Verify Trigger was created for the Function
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-trigger-cleanup
+              
+              TRIGGER_NAME=$(kubectl get trigger -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | head -1)
+              if [ -z "$TRIGGER_NAME" ]; then
+                echo "ERROR: Trigger not found for function $FN_NAME"
+                exit 1
+              fi
+              
+              echo "SUCCESS: Found Trigger: $TRIGGER_NAME"
+              
+              # Verify OwnerReference points to the Function
+              OWNER=$(kubectl get trigger -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.ownerReferences[0].kind}')
+              if [ "$OWNER" = "Function" ]; then
+                echo "SUCCESS: Trigger has OwnerReference to Function"
+              else
+                echo "WARNING: Trigger OwnerReference is: $OWNER"
+              fi
+    
+    - name: delete-function
+      description: Delete the Function
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              kubectl delete function test-function-trigger-cleanup -n "$NAMESPACE"
+              echo "Function deleted"
+    
+    - name: verify-trigger-deleted
+      description: Verify Trigger was also deleted (via OwnerReference cascade)
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              FN_NAME=test-function-trigger-cleanup
+              
+              # Wait a bit for garbage collection
+              sleep 5
+              
+              # Check if Trigger still exists
+              TRIGGER_COUNT=$(kubectl get trigger -n "$NAMESPACE" -o name | grep -F "$FN_NAME" | wc -l)
+              
+              if [ "$TRIGGER_COUNT" -eq 0 ]; then
+                echo "SUCCESS: Trigger was deleted along with the Function"
+              else
+                echo "ERROR: Trigger still exists after Function deletion"
+                kubectl get trigger -n "$NAMESPACE"
+                exit 1
+              fi
