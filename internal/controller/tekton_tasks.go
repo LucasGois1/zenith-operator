@@ -203,7 +203,7 @@ The git-clone Task will clone a repo from the provided url into the output Works
 						{Name: "WORKSPACE_SSH_DIRECTORY_PATH", Value: "$(workspaces.ssh-directory.path)"},
 						{Name: "WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND", Value: "$(workspaces.basic-auth.bound)"},
 						{Name: "WORKSPACE_BASIC_AUTH_DIRECTORY_PATH", Value: "$(workspaces.basic-auth.path)"},
-					{Name: "WORKSPACE_SSL_CA_DIRECTORY_BOUND", Value: "$(workspaces.ssl-ca-directory.bound)"},
+						{Name: "WORKSPACE_SSL_CA_DIRECTORY_BOUND", Value: "$(workspaces.ssl-ca-directory.bound)"},
 						{Name: "WORKSPACE_SSL_CA_DIRECTORY_PATH", Value: "$(workspaces.ssl-ca-directory.path)"},
 					},
 					SecurityContext: &corev1.SecurityContext{

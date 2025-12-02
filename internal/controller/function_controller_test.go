@@ -804,7 +804,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				if err != nil {
 					return false
 				}
-			annotations := ksvc.Spec.Template.Annotations
+				annotations := ksvc.Spec.Template.Annotations
 				return annotations["dapr.io/enabled"] == "true" &&
 					annotations["dapr.io/app-id"] == "test-app" &&
 					annotations["dapr.io/app-port"] == "8080" &&

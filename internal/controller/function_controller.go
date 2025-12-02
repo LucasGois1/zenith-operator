@@ -83,12 +83,12 @@ const (
 //
 //nolint:gocyclo // Monolithic reconcile function; to be refactored into phases in a follow-up
 func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	// 1. Obter o recurso 'Function' que acionou esta reconciliação
 	var function functionsv1alpha1.Function
 	if err := r.Get(ctx, req.NamespacedName, &function); err != nil {
-		log.Error(err, "Não foi possível buscar o recurso Function")
+		logger.Error(err, "Não foi possível buscar o recurso Function")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -99,7 +99,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	err := r.Get(ctx, saKey, serviceAccount)
 	if err != nil && errors.IsNotFound(err) {
 		// ServiceAccount não existe, criar um novo
-		log.Info("Criando ServiceAccount dedicado para Function", "ServiceAccountName", saName)
+		logger.Info("Criando ServiceAccount dedicado para Function", "ServiceAccountName", saName)
 		serviceAccount = &v1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      saName,
@@ -111,19 +111,19 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		if err := controllerutil.SetControllerReference(&function, serviceAccount, r.Scheme); err != nil {
-			log.Error(err, "Falha ao definir OwnerReference no ServiceAccount")
+			logger.Error(err, "Falha ao definir OwnerReference no ServiceAccount")
 			return ctrl.Result{}, err
 		}
 
 		if err := r.Create(ctx, serviceAccount); err != nil {
-			log.Error(err, "Falha ao criar ServiceAccount")
+			logger.Error(err, "Falha ao criar ServiceAccount")
 			return ctrl.Result{}, err
 		}
 
-		log.Info("ServiceAccount criado com sucesso")
+		logger.Info("ServiceAccount criado com sucesso")
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	} else if err != nil {
-		log.Error(err, "Falha ao buscar ServiceAccount")
+		logger.Error(err, "Falha ao buscar ServiceAccount")
 		return ctrl.Result{}, err
 	}
 
@@ -136,7 +136,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		gitSecret := &v1.Secret{}
 		if err := r.Get(ctx, types.NamespacedName{Name: gitSecretName, Namespace: function.Namespace}, gitSecret); err != nil {
 			if errors.IsNotFound(err) {
-				log.Error(err, "Git auth secret não encontrado", "SecretName", gitSecretName)
+				logger.Error(err, "Git auth secret não encontrado", "SecretName", gitSecretName)
 				// Atualizar status com erro
 				gitAuthMissingCondition := metav1.Condition{
 					Type:    "Ready",
@@ -162,7 +162,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 		}
 		if !found {
-			log.Info("Adicionando Git auth secret ao ServiceAccount", "SecretName", gitSecretName)
+			logger.Info("Adicionando Git auth secret ao ServiceAccount", "SecretName", gitSecretName)
 			serviceAccount.Secrets = append(serviceAccount.Secrets, v1.ObjectReference{Name: gitSecretName})
 			needsUpdate = true
 		}
@@ -179,7 +179,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 		}
 		if !found {
-			log.Info("Adicionando Registry secret ao ServiceAccount", "SecretName", registrySecretName)
+			logger.Info("Adicionando Registry secret ao ServiceAccount", "SecretName", registrySecretName)
 			serviceAccount.ImagePullSecrets = append(serviceAccount.ImagePullSecrets, v1.LocalObjectReference{Name: registrySecretName})
 			needsUpdate = true
 		}
@@ -188,10 +188,10 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// 3.3. Atualizar ServiceAccount se necessário
 	if needsUpdate {
 		if err := r.Update(ctx, serviceAccount); err != nil {
-			log.Error(err, "Falha ao atualizar ServiceAccount")
+			logger.Error(err, "Falha ao atualizar ServiceAccount")
 			return ctrl.Result{}, err
 		}
-		log.Info("ServiceAccount atualizado com sucesso")
+		logger.Info("ServiceAccount atualizado com sucesso")
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
@@ -203,11 +203,11 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Verifica se o PipelineRun não existe
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("PipelineRun não encontrado. Criando um novo...", "PipelineRun.Name", pipelineRunName)
+		logger.Info("PipelineRun não encontrado. Criando um novo...", "PipelineRun.Name", pipelineRunName)
 
 		// Ensure Tekton Tasks exist in the namespace before creating PipelineRun
 		if err := r.ensureTektonTasks(ctx, function.Namespace); err != nil {
-			log.Error(err, "Failed to ensure Tekton Tasks exist in namespace", "namespace", function.Namespace)
+			logger.Error(err, "Failed to ensure Tekton Tasks exist in namespace", "namespace", function.Namespace)
 			// Update status to indicate the failure
 			taskFailedCondition := metav1.Condition{
 				Type:    "Ready",
@@ -218,7 +218,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			meta.SetStatusCondition(&function.Status.Conditions, taskFailedCondition)
 			function.Status.ObservedGeneration = function.Generation
 			if statusErr := r.Status().Update(ctx, &function); statusErr != nil {
-				log.Error(statusErr, "Failed to update status after Task setup failure")
+				logger.Error(statusErr, "Failed to update status after Task setup failure")
 			}
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
@@ -234,18 +234,18 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// 2. Definir o OwnerReference [2]
 		// Isso torna o 'Function' dono do 'PipelineRun'.
 		if err := controllerutil.SetControllerReference(&function, newPipelineRun, r.Scheme); err != nil {
-			log.Error(err, "Falha ao definir OwnerReference no PipelineRun")
+			logger.Error(err, "Falha ao definir OwnerReference no PipelineRun")
 			return ctrl.Result{}, err
 		}
 
 		// 3. Criar o PipelineRun no cluster
 		if err := r.Create(ctx, newPipelineRun); err != nil {
-			log.Error(err, "Falha ao criar PipelineRun")
+			logger.Error(err, "Falha ao criar PipelineRun")
 			return ctrl.Result{}, err
 		}
 
 		// 4. Atualizar o Status para "Building" e solicitar nova fila (requeue)
-		log.Info("PipelineRun criado com sucesso. Atualizando status para 'Building'.")
+		logger.Info("PipelineRun criado com sucesso. Atualizando status para 'Building'.")
 
 		newCondition := metav1.Condition{
 			Type:    "Ready", // Tipo de condição padrão
@@ -260,7 +260,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 		// Atualiza o sub-recurso de status [3]
 		if err := r.Status().Update(ctx, &function); err != nil {
-			log.Error(err, "Falha ao atualizar o status da Função para 'Building'")
+			logger.Error(err, "Falha ao atualizar o status da Função para 'Building'")
 			return ctrl.Result{}, err
 		}
 
@@ -269,18 +269,18 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	} else if err != nil {
 		// Algum outro erro ocorreu ao tentar obter o PipelineRun
-		log.Error(err, "Falha ao obter o PipelineRun")
+		logger.Error(err, "Falha ao obter o PipelineRun")
 		return ctrl.Result{}, err
 	}
 
 	// Se chegamos aqui, 'err' foi 'nil', o que significa que o PipelineRun já existe.
-	log.Info("PipelineRun já existe, passando para a fase de monitoramento.")
+	logger.Info("PipelineRun já existe, passando para a fase de monitoramento.")
 
 	// --- FIM DA LÓGICA DO PASSO 3.2.2 ---
 
 	// 1. Verificar se o PipelineRun terminou
 	if !pipelineRun.IsDone() {
-		log.Info("PipelineRun is still running", "PipelineRun.Name", pipelineRun.Name)
+		logger.Info("PipelineRun is still running", "PipelineRun.Name", pipelineRun.Name)
 		// Ainda em execução, verificar novamente em 30 segundos
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
@@ -290,7 +290,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Extrair informações detalhadas sobre a falha do PipelineRun e TaskRuns
 		failureReason, failureMessage := r.extractPipelineRunFailure(ctx, pipelineRun)
 
-		log.Error(nil, "PipelineRun failed",
+		logger.Error(nil, "PipelineRun failed",
 			"PipelineRun.Name", pipelineRun.Name,
 			"Reason", failureReason,
 			"Message", failureMessage)
@@ -311,7 +311,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3. Sucesso! Extrair o ImageDigest.
-	log.Info("PipelineRun succeeded", "PipelineRun.Name", pipelineRun.Name)
+	logger.Info("PipelineRun succeeded", "PipelineRun.Name", pipelineRun.Name)
 	imageDigest := ""
 	for _, result := range pipelineRun.Status.Results {
 		// O nome 'APP_IMAGE_DIGEST' é definido pela Task 'buildpacks-phases'
@@ -356,7 +356,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	log.Info("Iniciando Fase 3.4: Reconciliação do Knative Service")
+	logger.Info("Iniciando Fase 3.4: Reconciliação do Knative Service")
 
 	// Validar referências a Secrets/ConfigMaps antes de criar/atualizar o Knative Service
 	if validationResult, err := r.validateEnvReferences(ctx, &function); err != nil || validationResult.RequeueAfter > 0 {
@@ -371,7 +371,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		err = r.Get(ctx, types.NamespacedName{Name: brokerName, Namespace: function.Namespace}, broker)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				log.Error(err, "Broker não encontrado", "Broker.Name", brokerName)
+				logger.Error(err, "Broker não encontrado", "Broker.Name", brokerName)
 				brokerNotFoundCondition := metav1.Condition{
 					Type:    "Ready",
 					Status:  metav1.ConditionFalse,
@@ -385,10 +385,10 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				}
 				return ctrl.Result{RequeueAfter: time.Second * 30}, nil
 			}
-			log.Error(err, "Falha ao verificar Broker")
+			logger.Error(err, "Falha ao verificar Broker")
 			return ctrl.Result{}, err
 		}
-		log.Info("Broker validado com sucesso", "Broker.Name", brokerName)
+		logger.Info("Broker validado com sucesso", "Broker.Name", brokerName)
 	}
 
 	knativeServiceName := function.Name
@@ -403,35 +403,35 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	if err != nil && errors.IsNotFound(err) {
 		// --- CAMINHO DE CRIAÇÃO ---
-		log.Info("Knative Service não encontrado. Criando...", "KnativeService.Name", knativeServiceName)
+		logger.Info("Knative Service não encontrado. Criando...", "KnativeService.Name", knativeServiceName)
 
 		// 3. Definir o OwnerReference
 		// Isso é CRÍTICO para que o 'Function' gerencie o ciclo de vida do 'KnativeService' [1, 2]
 		if err := controllerutil.SetControllerReference(&function, desiredKsvc, r.Scheme); err != nil {
-			log.Error(err, "Falha ao definir OwnerReference no Knative Service")
+			logger.Error(err, "Falha ao definir OwnerReference no Knative Service")
 			return ctrl.Result{}, err
 		}
 
 		// 4. Criar o Knative Service no cluster
 		if err := r.Create(ctx, desiredKsvc); err != nil {
-			log.Error(err, "Falha ao criar Knative Service")
+			logger.Error(err, "Falha ao criar Knative Service")
 			return ctrl.Result{}, err
 		}
 
-		log.Info("Knative Service criado com sucesso.")
+		logger.Info("Knative Service criado com sucesso.")
 		// Re-enfileira a requisição. A próxima reconciliação irá monitorar
 		// o status do ksvc recém-criado (e eventualmente passar para a Fase 3.5).
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 
 	} else if err != nil {
 		// Erro real ao tentar o Get
-		log.Error(err, "Falha ao obter Knative Service")
+		logger.Error(err, "Falha ao obter Knative Service")
 		return ctrl.Result{}, err
 	}
 
 	// --- CAMINHO DE ATUALIZAÇÃO ---
 	// Se chegamos aqui, o Knative Service FOI encontrado.
-	log.Info("Knative Service encontrado. Verificando se há atualizações...")
+	logger.Info("Knative Service encontrado. Verificando se há atualizações...")
 
 	needsUpdate = false
 
@@ -445,7 +445,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	desiredImage := desiredKsvc.Spec.Template.Spec.Containers[0].Image
 
 	if currentImage != desiredImage {
-		log.Info("ImageDigest desatualizado, marcando para atualização.", "Atual", currentImage, "Desejado", desiredImage)
+		logger.Info("ImageDigest desatualizado, marcando para atualização.", "Atual", currentImage, "Desejado", desiredImage)
 		needsUpdate = true
 	}
 
@@ -456,7 +456,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	} else {
 		for k, v := range desiredKsvc.Spec.Template.Annotations {
 			if knativeService.Spec.Template.Annotations[k] != v {
-				log.Info("Anotações do Dapr mudaram, marcando para atualização.")
+				logger.Info("Anotações do Dapr mudaram, marcando para atualização.")
 				needsUpdate = true
 				break
 			}
@@ -472,7 +472,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 		// Comparar Env
 		if len(currentEnv) != len(desiredEnv) {
-			log.Info("Variáveis de ambiente mudaram (tamanho diferente), marcando para atualização.")
+			logger.Info("Variáveis de ambiente mudaram (tamanho diferente), marcando para atualização.")
 			needsUpdate = true
 		} else {
 			// Comparação simples: serializar para string e comparar
@@ -480,7 +480,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			currentEnvStr := fmt.Sprintf("%+v", currentEnv)
 			desiredEnvStr := fmt.Sprintf("%+v", desiredEnv)
 			if currentEnvStr != desiredEnvStr {
-				log.Info("Variáveis de ambiente mudaram, marcando para atualização.")
+				logger.Info("Variáveis de ambiente mudaram, marcando para atualização.")
 				needsUpdate = true
 			}
 		}
@@ -488,13 +488,13 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Comparar EnvFrom
 		if !needsUpdate {
 			if len(currentEnvFrom) != len(desiredEnvFrom) {
-				log.Info("EnvFrom mudou (tamanho diferente), marcando para atualização.")
+				logger.Info("EnvFrom mudou (tamanho diferente), marcando para atualização.")
 				needsUpdate = true
 			} else {
 				currentEnvFromStr := fmt.Sprintf("%+v", currentEnvFrom)
 				desiredEnvFromStr := fmt.Sprintf("%+v", desiredEnvFrom)
 				if currentEnvFromStr != desiredEnvFromStr {
-					log.Info("EnvFrom mudou, marcando para atualização.")
+					logger.Info("EnvFrom mudou, marcando para atualização.")
 					needsUpdate = true
 				}
 			}
@@ -503,18 +503,18 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// 4. Executar a atualização se necessário
 	if needsUpdate {
-		log.Info("Atualizando Knative Service...")
+		logger.Info("Atualizando Knative Service...")
 		// Atualiza o spec do objeto existente com o spec desejado
 		knativeService.Spec = desiredKsvc.Spec
 		if err := r.Update(ctx, knativeService); err != nil {
-			log.Error(err, "Falha ao atualizar Knative Service")
+			logger.Error(err, "Falha ao atualizar Knative Service")
 			return ctrl.Result{}, err
 		}
-		log.Info("Knative Service atualizado com sucesso.")
+		logger.Info("Knative Service atualizado com sucesso.")
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
-	log.Info("Knative Service está sincronizado.")
+	logger.Info("Knative Service está sincronizado.")
 	// --- FIM DA FASE 3.4 ---
 
 	// Atualizar URL se disponível
@@ -568,7 +568,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
-	log.Info("Knative Service is ready")
+	logger.Info("Knative Service is ready")
 
 	// Se 'eventing' não estiver configurado, limpar qualquer Trigger existente e marcar como Ready.
 	if function.Spec.Eventing.Broker == "" {
@@ -577,15 +577,15 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		err := r.Get(ctx, types.NamespacedName{Name: triggerName, Namespace: function.Namespace}, existingTrigger)
 
 		if err == nil {
-			log.Info("Eventing removido, deletando Trigger existente", "Trigger.Name", triggerName)
+			logger.Info("Eventing removido, deletando Trigger existente", "Trigger.Name", triggerName)
 			if err := r.Delete(ctx, existingTrigger); err != nil {
-				log.Error(err, "Falha ao deletar Trigger")
+				logger.Error(err, "Falha ao deletar Trigger")
 				return ctrl.Result{}, err
 			}
-			log.Info("Trigger deletado com sucesso")
+			logger.Info("Trigger deletado com sucesso")
 			return ctrl.Result{RequeueAfter: time.Second}, nil
 		} else if !errors.IsNotFound(err) {
-			log.Error(err, "Falha ao verificar Trigger existente")
+			logger.Error(err, "Falha ao verificar Trigger existente")
 			return ctrl.Result{}, err
 		}
 
@@ -620,7 +620,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		// 3. Criar
-		log.Info("Creating new Knative Trigger", "Trigger.Name", newTrigger.Name)
+		logger.Info("Creating new Knative Trigger", "Trigger.Name", newTrigger.Name)
 		if err := r.Create(ctx, newTrigger); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -640,13 +640,13 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil // Fim!
 	} else if err != nil {
 		// Erro real ao tentar o Get
-		log.Error(err, "Falha ao obter Knative Trigger")
+		logger.Error(err, "Falha ao obter Knative Trigger")
 		return ctrl.Result{}, err
 	}
 
 	// --- CAMINHO DE ATUALIZAÇÃO DO TRIGGER ---
 	// Se chegamos aqui, o Trigger FOI encontrado.
-	log.Info("Knative Trigger encontrado. Verificando se há atualizações...")
+	logger.Info("Knative Trigger encontrado. Verificando se há atualizações...")
 
 	// Construir o Trigger desejado
 	desiredTrigger := r.buildKnativeTrigger(&function)
@@ -655,7 +655,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// 1. Verificar se o broker mudou
 	if trigger.Spec.Broker != desiredTrigger.Spec.Broker {
-		log.Info("Broker mudou, marcando para atualização.", "Atual", trigger.Spec.Broker, "Desejado", desiredTrigger.Spec.Broker)
+		logger.Info("Broker mudou, marcando para atualização.", "Atual", trigger.Spec.Broker, "Desejado", desiredTrigger.Spec.Broker)
 		needsUpdate = true
 	}
 
@@ -675,7 +675,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		} else {
 			for k, v := range desiredFilters.Attributes {
 				if currentFilters.Attributes[k] != v {
-					log.Info("Filtros do Trigger mudaram, marcando para atualização.")
+					logger.Info("Filtros do Trigger mudaram, marcando para atualização.")
 					needsUpdate = true
 					break
 				}
@@ -685,18 +685,18 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// 3. Executar a atualização se necessário
 	if needsUpdate {
-		log.Info("Atualizando Knative Trigger...")
+		logger.Info("Atualizando Knative Trigger...")
 		// Atualiza o spec do objeto existente com o spec desejado
 		trigger.Spec = desiredTrigger.Spec
 		if err := r.Update(ctx, trigger); err != nil {
-			log.Error(err, "Falha ao atualizar Knative Trigger")
+			logger.Error(err, "Falha ao atualizar Knative Trigger")
 			return ctrl.Result{}, err
 		}
-		log.Info("Knative Trigger atualizado com sucesso.")
+		logger.Info("Knative Trigger atualizado com sucesso.")
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
-	log.Info("Knative Trigger está sincronizado.")
+	logger.Info("Knative Trigger está sincronizado.")
 
 	readyCondition := metav1.Condition{
 		Type:    "Ready",
@@ -758,7 +758,7 @@ func (r *FunctionReconciler) validateEnvReferences(ctx context.Context, function
 }
 
 func (r *FunctionReconciler) validateSecretRef(ctx context.Context, function *functionsv1alpha1.Function, secretRef *v1.SecretKeySelector) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	// Só validar se não for opcional
 	if secretRef.Optional != nil && *secretRef.Optional {
@@ -768,7 +768,7 @@ func (r *FunctionReconciler) validateSecretRef(ctx context.Context, function *fu
 	secret := &v1.Secret{}
 	err := r.Get(ctx, types.NamespacedName{Name: secretRef.Name, Namespace: function.Namespace}, secret)
 	if err != nil && errors.IsNotFound(err) {
-		log.Error(err, "Secret não encontrado", "Secret.Name", secretRef.Name)
+		logger.Error(err, "Secret não encontrado", "Secret.Name", secretRef.Name)
 		condition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
@@ -782,7 +782,7 @@ func (r *FunctionReconciler) validateSecretRef(ctx context.Context, function *fu
 		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	} else if err != nil {
-		log.Error(err, "Falha ao verificar Secret")
+		logger.Error(err, "Falha ao verificar Secret")
 		return ctrl.Result{}, err
 	}
 
@@ -790,7 +790,7 @@ func (r *FunctionReconciler) validateSecretRef(ctx context.Context, function *fu
 }
 
 func (r *FunctionReconciler) validateConfigMapRef(ctx context.Context, function *functionsv1alpha1.Function, configMapRef *v1.ConfigMapKeySelector) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	// Só validar se não for opcional
 	if configMapRef.Optional != nil && *configMapRef.Optional {
@@ -800,7 +800,7 @@ func (r *FunctionReconciler) validateConfigMapRef(ctx context.Context, function 
 	configMap := &v1.ConfigMap{}
 	err := r.Get(ctx, types.NamespacedName{Name: configMapRef.Name, Namespace: function.Namespace}, configMap)
 	if err != nil && errors.IsNotFound(err) {
-		log.Error(err, "ConfigMap não encontrado", "ConfigMap.Name", configMapRef.Name)
+		logger.Error(err, "ConfigMap não encontrado", "ConfigMap.Name", configMapRef.Name)
 		condition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
@@ -814,7 +814,7 @@ func (r *FunctionReconciler) validateConfigMapRef(ctx context.Context, function 
 		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	} else if err != nil {
-		log.Error(err, "Falha ao verificar ConfigMap")
+		logger.Error(err, "Falha ao verificar ConfigMap")
 		return ctrl.Result{}, err
 	}
 
@@ -822,7 +822,7 @@ func (r *FunctionReconciler) validateConfigMapRef(ctx context.Context, function 
 }
 
 func (r *FunctionReconciler) validateSecretEnvSource(ctx context.Context, function *functionsv1alpha1.Function, secretRef *v1.SecretEnvSource) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	// Só validar se não for opcional
 	if secretRef.Optional != nil && *secretRef.Optional {
@@ -832,7 +832,7 @@ func (r *FunctionReconciler) validateSecretEnvSource(ctx context.Context, functi
 	secret := &v1.Secret{}
 	err := r.Get(ctx, types.NamespacedName{Name: secretRef.Name, Namespace: function.Namespace}, secret)
 	if err != nil && errors.IsNotFound(err) {
-		log.Error(err, "Secret não encontrado", "Secret.Name", secretRef.Name)
+		logger.Error(err, "Secret não encontrado", "Secret.Name", secretRef.Name)
 		condition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
@@ -846,7 +846,7 @@ func (r *FunctionReconciler) validateSecretEnvSource(ctx context.Context, functi
 		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	} else if err != nil {
-		log.Error(err, "Falha ao verificar Secret")
+		logger.Error(err, "Falha ao verificar Secret")
 		return ctrl.Result{}, err
 	}
 
@@ -854,7 +854,7 @@ func (r *FunctionReconciler) validateSecretEnvSource(ctx context.Context, functi
 }
 
 func (r *FunctionReconciler) validateConfigMapEnvSource(ctx context.Context, function *functionsv1alpha1.Function, configMapRef *v1.ConfigMapEnvSource) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	// Só validar se não for opcional
 	if configMapRef.Optional != nil && *configMapRef.Optional {
@@ -864,7 +864,7 @@ func (r *FunctionReconciler) validateConfigMapEnvSource(ctx context.Context, fun
 	configMap := &v1.ConfigMap{}
 	err := r.Get(ctx, types.NamespacedName{Name: configMapRef.Name, Namespace: function.Namespace}, configMap)
 	if err != nil && errors.IsNotFound(err) {
-		log.Error(err, "ConfigMap não encontrado", "ConfigMap.Name", configMapRef.Name)
+		logger.Error(err, "ConfigMap não encontrado", "ConfigMap.Name", configMapRef.Name)
 		condition := metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
@@ -878,7 +878,7 @@ func (r *FunctionReconciler) validateConfigMapEnvSource(ctx context.Context, fun
 		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	} else if err != nil {
-		log.Error(err, "Falha ao verificar ConfigMap")
+		logger.Error(err, "Falha ao verificar ConfigMap")
 		return ctrl.Result{}, err
 	}
 
@@ -1349,7 +1349,7 @@ func (r *FunctionReconciler) buildKnativeTrigger(function *functionsv1alpha1.Fun
 // This function first checks the PipelineRun's Succeeded condition, then attempts to
 // get more specific details from failed TaskRuns if available.
 func (r *FunctionReconciler) extractPipelineRunFailure(ctx context.Context, pipelineRun *tektonv1.PipelineRun) (reason string, message string) {
-	log := logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	// Default values
 	reason = "BuildFailed"
@@ -1364,7 +1364,7 @@ func (r *FunctionReconciler) extractPipelineRunFailure(ctx context.Context, pipe
 		if succeededCondition.Message != "" {
 			message = succeededCondition.Message
 		}
-		log.Info("PipelineRun failure details from Succeeded condition",
+		logger.Info("PipelineRun failure details from Succeeded condition",
 			"PipelineRun.Name", pipelineRun.Name,
 			"Reason", reason,
 			"Message", message)
@@ -1384,7 +1384,7 @@ func (r *FunctionReconciler) extractPipelineRunFailure(ctx context.Context, pipe
 			Namespace: pipelineRun.Namespace,
 		}, taskRun)
 		if err != nil {
-			log.V(1).Info("Could not fetch TaskRun for failure details",
+			logger.V(1).Info("Could not fetch TaskRun for failure details",
 				"TaskRun.Name", childRef.Name,
 				"error", err.Error())
 			continue
@@ -1406,7 +1406,7 @@ func (r *FunctionReconciler) extractPipelineRunFailure(ctx context.Context, pipe
 			// Build a more descriptive message including the task name
 			detailedMessage := fmt.Sprintf("Task '%s' falhou: %s", taskName, taskRunCondition.Message)
 
-			log.Info("Found failed TaskRun with details",
+			logger.Info("Found failed TaskRun with details",
 				"TaskRun.Name", childRef.Name,
 				"PipelineTask", taskName,
 				"Reason", taskRunCondition.Reason,
