@@ -9,8 +9,6 @@ installStack: true
 tekton:
   enabled: true
   version: "v0.68.0"
-  # Note: Tekton Tasks (git-clone, buildpacks-phases) are created dynamically
-  # by the operator in the Function's namespace. No ClusterTasks are used.
 
 knativeServing:
   enabled: true
@@ -42,7 +40,7 @@ envoyGateway:
 metallb:
   enabled: true
   version: "v0.14.9"
-  addressPool: "auto"  # Auto-detect from node IPs for kind clusters
+  addressPool: "auto"
 
 dapr:
   enabled: true
@@ -54,7 +52,7 @@ opentelemetry:
   version: "v0.140.0"
   repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
   jaeger:
-    enabled: true  # Enable Jaeger for trace visualization (recommended for development)
+    enabled: true
 
 registry:
   enabled: true
@@ -69,7 +67,7 @@ registry:
     pullPolicy: IfNotPresent
   storage:
     size: "10Gi"
-    storageClass: "standard"  # Kind default StorageClass
+    storageClass: "standard"
   service:
     type: ClusterIP
     port: 5000
@@ -115,7 +113,6 @@ operator:
   imagePullSecrets: []
 
   controller:
-    # Insecure registries for kind/local development
     insecureRegistries:
       - "registry.registry.svc.cluster.local:5000"
       - "127.0.0.1:30500"
