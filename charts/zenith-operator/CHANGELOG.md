@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.18](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.17...zenith-operator-0.2.18) (2025-12-02)
+
+
+### Bug Fixes
+
+* disable external registry by default in Helm chart values ([6de1f63](https://github.com/LucasGois1/zenith-operator/commit/6de1f63df58b75cd171f136836d084807c451a55))
+
 ## [0.2.17](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.16...zenith-operator-0.2.17) (2025-11-30)
 
 
