@@ -62,7 +62,7 @@ registry:
   # When enabled, the Helm chart creates only a Service without a Deployment.
   # The Endpoints must be created separately (e.g., by dev-up.sh for kind clusters).
   external:
-    enabled: true
+    enabled: false
   image:
     repository: registry
     tag: "2"
