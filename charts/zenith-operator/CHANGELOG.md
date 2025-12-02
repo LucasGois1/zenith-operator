@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.19](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.18...zenith-operator-0.2.19) (2025-12-02)
+
+
+### Bug Fixes
+
+* remove comments ([f071f52](https://github.com/LucasGois1/zenith-operator/commit/f071f52bf61fe199a4914c73c35028b0412aadbd))
+
 ## [0.2.18](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.17...zenith-operator-0.2.18) (2025-12-02)
 
 
