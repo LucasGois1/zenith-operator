@@ -582,6 +582,8 @@ http://my-api.default.example.com
 ```
 
 **Accessing External Functions**:
+
+On Linux:
 ```bash
 # Get the gateway IP
 GATEWAY_IP=$(kubectl get svc -n envoy-gateway-system \
@@ -590,6 +592,18 @@ GATEWAY_IP=$(kubectl get svc -n envoy-gateway-system \
 
 # Access the function using Host header
 curl -H "Host: my-api.default.example.com" http://$GATEWAY_IP/
+```
+
+On MacOS (Docker Desktop / Colima):
+```bash
+# MacOS: Docker runs in a VM, so use port-forward instead
+kubectl port-forward -n envoy-gateway-system \
+  $(kubectl get svc -n envoy-gateway-system \
+    -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
+    -o jsonpath='{.items[0].metadata.name}') 8080:80
+
+# In another terminal, access via localhost
+curl -H "Host: my-api.default.example.com" http://localhost:8080/
 ```
 
 **Use Cases**:
