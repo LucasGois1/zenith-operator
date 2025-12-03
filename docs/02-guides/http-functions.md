@@ -307,14 +307,46 @@ spec:
 ```
 
 Access from outside the cluster:
+
+**Linux:**
 ```bash
-# Get the gateway IP
+# Get the gateway IP (works on Linux where Docker network is directly accessible)
 GATEWAY_IP=$(kubectl get svc -n envoy-gateway-system \
   -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
   -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
 
 # Access using Host header
 curl -H "Host: public-api.default.example.com" http://$GATEWAY_IP/
+```
+
+**MacOS (Docker Desktop / Colima):**
+
+On MacOS, Docker runs inside a Linux VM, so the LoadBalancer IP (172.18.x.x) is not directly accessible from the host. Use port-forwarding instead:
+
+```bash
+# Terminal 1: Find the Envoy Gateway service name
+kubectl get svc -n envoy-gateway-system
+
+# Start port-forward (keep this terminal open)
+kubectl port-forward -n envoy-gateway-system \
+  svc/envoy-default-knative-gateway-<hash> 8080:80
+
+# Terminal 2: Access the function via localhost
+curl -H "Host: public-api.default.example.com" http://localhost:8080/
+```
+
+Alternatively, you can use a one-liner to find and forward the service:
+```bash
+# Find and forward the Envoy Gateway service
+kubectl port-forward -n envoy-gateway-system \
+  $(kubectl get svc -n envoy-gateway-system \
+    -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
+    -o jsonpath='{.items[0].metadata.name}') 8080:80
+```
+
+Then access your function:
+```bash
+curl -H "Host: public-api.default.example.com" http://localhost:8080/
 ```
 
 #### URL Patterns
