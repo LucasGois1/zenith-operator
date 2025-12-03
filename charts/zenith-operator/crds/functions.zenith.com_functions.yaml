@@ -285,6 +285,35 @@ spec:
                           x-kubernetes-map-type: atomic
                       type: object
                     type: array
+                  scale:
+                    description: Opcional. Configurações de autoscaling.
+                    properties:
+                      maxScale:
+                        description: |-
+                          Opcional. Número máximo de réplicas permitido.
+                          Se definido como 0 (default), não há limite máximo.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      minScale:
+                        description: |-
+                          Opcional. Número mínimo de réplicas a manter.
+                          Se definido como 1 ou mais, previne scale-to-zero e cold starts.
+                          Default: 0 (scale-to-zero habilitado)
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
+                  visibility:
+                    default: cluster-local
+                    description: |-
+                      Opcional. Define a visibilidade de rede da função.
+                      - "cluster-local": A função só é acessível dentro do cluster (padrão).
+                      - "external": A função é acessível de fora do cluster via gateway externo.
+                    enum:
+                    - cluster-local
+                    - external
+                    type: string
                 type: object
               eventing:
                 description: Opcional. Configurações de Eventing (Knative Eventing)

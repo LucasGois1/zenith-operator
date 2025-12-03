@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -1139,15 +1138,12 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	// from within the cluster via the internal DNS name
 	image := function.Status.ImageDigest
 
-	// Lógica para resolver o endereço da imagem em ambientes de desenvolvimento (Kind/Minikube)
-	// Se estivermos usando o registry interno, precisamos trocar o endereço para o NodePort/Localhost
-	// para que o runtime do container no nó consiga acessar a imagem.
+	// Rewrite the image URL for Kind/Minikube compatibility
+	// Containerd on Kind nodes cannot resolve Kubernetes internal DNS names,
+	// so we need to use the NodePort service (127.0.0.1:30500) instead.
+	// The Helm chart creates a NodePort service on port 30500 for this purpose.
 	if strings.HasPrefix(image, "registry.registry.svc.cluster.local:5000") {
-		// Substituir pelo endereço "127.0.0.1:30500"
 		image = strings.Replace(image, "registry.registry.svc.cluster.local:5000", "127.0.0.1:30500", 1)
-		log.Printf("DEBUG: Updated image URL to %s for Kind/Minikube compatibility", image)
-	} else {
-		log.Printf("DEBUG: Using original image URL: %s", image)
 	}
 
 	container := v1.Container{
@@ -1164,15 +1160,24 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		EnvFrom: function.Spec.Deploy.EnvFrom,
 	}
 
+	// Construir labels para o Knative Service
+	// A visibilidade é controlada pela label networking.knative.dev/visibility
+	serviceLabels := make(map[string]string)
+
+	// Aplicar visibilidade baseada na configuração da função
+	// Se visibility é "cluster-local" (padrão) ou não especificado, adiciona a label
+	// Se visibility é "external", não adiciona a label (permite acesso externo)
+	if function.Spec.Deploy.Visibility == "" || function.Spec.Deploy.Visibility == functionsv1alpha1.VisibilityClusterLocal {
+		serviceLabels["networking.knative.dev/visibility"] = "cluster-local"
+	}
+	// Para visibility == "external", não adicionamos a label, permitindo acesso externo
+
 	// Construir o Service object
 	ksvc := &knservingv1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      function.Name,
 			Namespace: function.Namespace,
-			Labels:    map[string]string{
-				// Removido para permitir acesso externo por padrão
-				// "networking.knative.dev/visibility": "cluster-local",
-			},
+			Labels:    serviceLabels,
 		},
 		// O Spec 'v1' do Knative Service [6]
 		Spec: knservingv1.ServiceSpec{
