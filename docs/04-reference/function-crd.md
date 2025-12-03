@@ -37,6 +37,8 @@ spec:
   
   # Deploy Configuration
   deploy:
+    # Network visibility (cluster-local or external)
+    visibility: external
     dapr:
       enabled: true
       appID: example-function
@@ -530,6 +532,97 @@ deploy:
 When configured, the operator adds the following annotations to Knative Service template:
 - `autoscaling.knative.dev/min-scale`: Value of minScale
 - `autoscaling.knative.dev/max-scale`: Value of maxScale
+
+#### deploy.visibility (Optional)
+
+**Type**: `string`
+
+**Description**: Network visibility configuration for the function. Controls whether the function is accessible only within the cluster or from external networks.
+
+**Allowed Values**:
+- `cluster-local`: Function is only accessible within the Kubernetes cluster (default)
+- `external`: Function is accessible from outside the cluster via the external gateway
+
+**Default**: `cluster-local`
+
+**Examples**:
+
+**Cluster-local (default)**:
+```yaml
+deploy:
+  visibility: cluster-local  # Only accessible within the cluster
+```
+
+**External access**:
+```yaml
+deploy:
+  visibility: external  # Accessible from outside the cluster
+```
+
+**Behavior**:
+
+| Visibility | URL Format | Access |
+|------------|-----------|--------|
+| `cluster-local` | `http://{name}.{namespace}.svc.cluster.local` | Only from within the cluster |
+| `external` | `http://{name}.{namespace}.{domain}` | From outside the cluster via gateway |
+
+**How it works**:
+- When `visibility: cluster-local` (or not specified), the operator adds the label `networking.knative.dev/visibility: cluster-local` to the Knative Service, which restricts access to cluster-internal traffic only.
+- When `visibility: external`, the operator does NOT add the visibility label, allowing Knative to create HTTPRoutes on the external gateway.
+
+**External Domain Configuration**:
+The external domain is configured in the Helm chart via `knativeServing.domain` (default: `example.com`). Functions with `visibility: external` will be accessible at:
+```
+http://{function-name}.{namespace}.{domain}
+```
+
+For example, a function named `my-api` in the `default` namespace with domain `example.com`:
+```
+http://my-api.default.example.com
+```
+
+**Accessing External Functions**:
+```bash
+# Get the gateway IP
+GATEWAY_IP=$(kubectl get svc -n envoy-gateway-system \
+  -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
+  -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
+
+# Access the function using Host header
+curl -H "Host: my-api.default.example.com" http://$GATEWAY_IP/
+```
+
+**Use Cases**:
+- **cluster-local**: Internal microservices, backend APIs, functions that should not be exposed publicly
+- **external**: Public APIs, webhooks, functions that need to receive external HTTP requests
+
+**Security Considerations**:
+- Functions with `visibility: external` are publicly accessible - ensure proper authentication/authorization
+- Use `cluster-local` for internal services that don't need external access
+- Consider using network policies for additional security
+
+**Complete Example**:
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: public-api
+  namespace: default
+spec:
+  gitRepo: https://github.com/myorg/public-api
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.example.com/public-api:latest
+  deploy:
+    visibility: external  # Publicly accessible
+    scale:
+      minScale: 1         # No cold starts for public API
+      maxScale: 50
+    env:
+      - name: LOG_LEVEL
+        value: info
+```
 
 ### eventing (Optional)
 
