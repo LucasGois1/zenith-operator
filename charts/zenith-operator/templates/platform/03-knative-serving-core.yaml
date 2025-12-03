@@ -1057,6 +1057,9 @@ metadata:
   annotations:
     knative.dev/example-checksum: "26c09de5"
 data:
+  # External domain for functions with visibility: external
+  # This domain will be used for all routes that don't have cluster-local visibility
+  {{ .Values.knativeServing.domain | default "example.com" }}: ""
   _example: |
     ################################
     #                              #

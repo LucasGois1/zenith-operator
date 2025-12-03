@@ -304,6 +304,16 @@ spec:
                         minimum: 0
                         type: integer
                     type: object
+                  visibility:
+                    default: cluster-local
+                    description: |-
+                      Opcional. Define a visibilidade de rede da função.
+                      - "cluster-local": A função só é acessível dentro do cluster (padrão).
+                      - "external": A função é acessível de fora do cluster via gateway externo.
+                    enum:
+                    - cluster-local
+                    - external
+                    type: string
                 type: object
               eventing:
                 description: Opcional. Configurações de Eventing (Knative Eventing)

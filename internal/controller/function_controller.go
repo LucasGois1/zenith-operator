@@ -1160,15 +1160,24 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 		EnvFrom: function.Spec.Deploy.EnvFrom,
 	}
 
+	// Construir labels para o Knative Service
+	// A visibilidade é controlada pela label networking.knative.dev/visibility
+	serviceLabels := make(map[string]string)
+
+	// Aplicar visibilidade baseada na configuração da função
+	// Se visibility é "cluster-local" (padrão) ou não especificado, adiciona a label
+	// Se visibility é "external", não adiciona a label (permite acesso externo)
+	if function.Spec.Deploy.Visibility == "" || function.Spec.Deploy.Visibility == functionsv1alpha1.VisibilityClusterLocal {
+		serviceLabels["networking.knative.dev/visibility"] = "cluster-local"
+	}
+	// Para visibility == "external", não adicionamos a label, permitindo acesso externo
+
 	// Construir o Service object
 	ksvc := &knservingv1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      function.Name,
 			Namespace: function.Namespace,
-			Labels:    map[string]string{
-				// Removido para permitir acesso externo por padrão
-				// "networking.knative.dev/visibility": "cluster-local",
-			},
+			Labels:    serviceLabels,
 		},
 		// O Spec 'v1' do Knative Service [6]
 		Spec: knservingv1.ServiceSpec{

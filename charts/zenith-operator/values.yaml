@@ -12,6 +12,10 @@ tekton:
 knativeServing:
   enabled: true
   version: "v0.41.2"
+  # External domain for functions with visibility: external
+  # Functions with visibility: external will be accessible at:
+  # {function-name}.{namespace}.{domain}
+  domain: "example.com"
   config:
     ingressClass: "gateway-api.ingress.networking.knative.dev"
 

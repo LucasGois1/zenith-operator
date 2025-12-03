@@ -70,6 +70,17 @@ type BuildSpec struct {
 	Image string `json:"image"`
 }
 
+// FunctionVisibility defines the network visibility of a function.
+// +kubebuilder:validation:Enum=cluster-local;external
+type FunctionVisibility string
+
+const (
+	// VisibilityClusterLocal means the function is only accessible within the cluster.
+	VisibilityClusterLocal FunctionVisibility = "cluster-local"
+	// VisibilityExternal means the function is accessible from outside the cluster.
+	VisibilityExternal FunctionVisibility = "external"
+)
+
 // DeploySpec define os parâmetros para o runtime
 type DeploySpec struct {
 	// Opcional. Configura a injeção do sidecar Dapr.
@@ -89,6 +100,13 @@ type DeploySpec struct {
 	// Opcional. Configurações de autoscaling.
 	// +kubebuilder:validation:Optional
 	Scale *ScaleSpec `json:"scale,omitempty"`
+
+	// Opcional. Define a visibilidade de rede da função.
+	// - "cluster-local": A função só é acessível dentro do cluster (padrão).
+	// - "external": A função é acessível de fora do cluster via gateway externo.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=cluster-local
+	Visibility FunctionVisibility `json:"visibility,omitempty"`
 }
 
 // ScaleSpec define os parâmetros de autoscaling

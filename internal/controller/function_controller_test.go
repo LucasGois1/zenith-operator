@@ -811,6 +811,201 @@ var _ = Describe("Function Controller Reconciliation", func() {
 					annotations["dapr.io/metrics-port"] == "9095"
 			}, timeout, interval).Should(BeTrue())
 		})
+
+		It("should apply cluster-local visibility label by default", func() {
+			ctx := context.Background()
+			functionName := "test-ksvc-visibility-default"
+			namespace := testNamespace
+
+			function := &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      functionName,
+					Namespace: namespace,
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					GitRepo: "https://github.com/user/repo",
+					Build: functionsv1alpha1.BuildSpec{
+						Image: "registry.io/test:latest",
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						// No visibility specified - should default to cluster-local
+						Dapr: functionsv1alpha1.DaprConfig{
+							Enabled: false,
+							AppPort: 8080,
+						},
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, function)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Setup: Create ServiceAccount, PipelineRun with success
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+
+			pr := &tektonv1.PipelineRun{}
+			Eventually(func() bool {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: functionName + "-build", Namespace: namespace}, pr) == nil
+			}, timeout, interval).Should(BeTrue())
+
+			pr.Status.Conditions = []apis.Condition{{Type: apis.ConditionSucceeded, Status: v1.ConditionTrue}}
+			pr.Status.Results = []tektonv1.PipelineRunResult{
+				{Name: "APP_IMAGE_DIGEST", Value: tektonv1.ResultValue{Type: tektonv1.ParamTypeString, StringVal: "sha256:visibility-default"}},
+			}
+			Expect(k8sClient.Status().Update(ctx, pr)).To(Succeed())
+
+			// Reconcile to create Knative Service
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+
+			// Verify Knative Service has cluster-local visibility label
+			ksvc := &knservingv1.Service{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: functionName, Namespace: namespace}, ksvc)
+				if err != nil {
+					return false
+				}
+				// Default visibility should be cluster-local
+				return ksvc.Labels["networking.knative.dev/visibility"] == "cluster-local"
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should apply cluster-local visibility label when explicitly set", func() {
+			ctx := context.Background()
+			functionName := "test-ksvc-visibility-local"
+			namespace := testNamespace
+
+			function := &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      functionName,
+					Namespace: namespace,
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					GitRepo: "https://github.com/user/repo",
+					Build: functionsv1alpha1.BuildSpec{
+						Image: "registry.io/test:latest",
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Visibility: functionsv1alpha1.VisibilityClusterLocal,
+						Dapr: functionsv1alpha1.DaprConfig{
+							Enabled: false,
+							AppPort: 8080,
+						},
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, function)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Setup: Create ServiceAccount, PipelineRun with success
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+
+			pr := &tektonv1.PipelineRun{}
+			Eventually(func() bool {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: functionName + "-build", Namespace: namespace}, pr) == nil
+			}, timeout, interval).Should(BeTrue())
+
+			pr.Status.Conditions = []apis.Condition{{Type: apis.ConditionSucceeded, Status: v1.ConditionTrue}}
+			pr.Status.Results = []tektonv1.PipelineRunResult{
+				{Name: "APP_IMAGE_DIGEST", Value: tektonv1.ResultValue{Type: tektonv1.ParamTypeString, StringVal: "sha256:visibility-local"}},
+			}
+			Expect(k8sClient.Status().Update(ctx, pr)).To(Succeed())
+
+			// Reconcile to create Knative Service
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+
+			// Verify Knative Service has cluster-local visibility label
+			ksvc := &knservingv1.Service{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: functionName, Namespace: namespace}, ksvc)
+				if err != nil {
+					return false
+				}
+				return ksvc.Labels["networking.knative.dev/visibility"] == "cluster-local"
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should not apply cluster-local label when visibility is external", func() {
+			ctx := context.Background()
+			functionName := "test-ksvc-visibility-external"
+			namespace := testNamespace
+
+			function := &functionsv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      functionName,
+					Namespace: namespace,
+				},
+				Spec: functionsv1alpha1.FunctionSpec{
+					GitRepo: "https://github.com/user/repo",
+					Build: functionsv1alpha1.BuildSpec{
+						Image: "registry.io/test:latest",
+					},
+					Deploy: functionsv1alpha1.DeploySpec{
+						Visibility: functionsv1alpha1.VisibilityExternal,
+						Dapr: functionsv1alpha1.DaprConfig{
+							Enabled: false,
+							AppPort: 8080,
+						},
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, function)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, function)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Setup: Create ServiceAccount, PipelineRun with success
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+
+			pr := &tektonv1.PipelineRun{}
+			Eventually(func() bool {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: functionName + "-build", Namespace: namespace}, pr) == nil
+			}, timeout, interval).Should(BeTrue())
+
+			pr.Status.Conditions = []apis.Condition{{Type: apis.ConditionSucceeded, Status: v1.ConditionTrue}}
+			pr.Status.Results = []tektonv1.PipelineRunResult{
+				{Name: "APP_IMAGE_DIGEST", Value: tektonv1.ResultValue{Type: tektonv1.ParamTypeString, StringVal: "sha256:visibility-external"}},
+			}
+			Expect(k8sClient.Status().Update(ctx, pr)).To(Succeed())
+
+			// Reconcile to create Knative Service
+			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: functionName, Namespace: namespace}})
+
+			// Verify Knative Service does NOT have cluster-local visibility label
+			ksvc := &knservingv1.Service{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: functionName, Namespace: namespace}, ksvc)
+				if err != nil {
+					return false
+				}
+				// External visibility should NOT have the cluster-local label
+				_, hasLabel := ksvc.Labels["networking.knative.dev/visibility"]
+				return !hasLabel
+			}, timeout, interval).Should(BeTrue())
+		})
 	})
 
 	Context("Knative Trigger Management", func() {
