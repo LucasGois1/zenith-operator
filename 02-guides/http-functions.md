@@ -257,6 +257,121 @@ spec:
 
 ## Advanced Configurations
 
+### Network Visibility (Cluster-Local vs External)
+
+By default, functions are only accessible within the cluster (`cluster-local`). To expose a function externally, configure the `visibility` field.
+
+#### Cluster-Local (Default)
+
+Functions with `cluster-local` visibility are only accessible from within the Kubernetes cluster:
+
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: internal-service
+  namespace: default
+spec:
+  gitRepo: https://github.com/myorg/internal-service
+  gitRevision: main
+  build:
+    image: registry.example.com/internal-service:latest
+  deploy:
+    visibility: cluster-local  # Default - only accessible within cluster
+```
+
+Access from within the cluster:
+```bash
+# From another pod in the cluster
+curl http://internal-service.default.svc.cluster.local/
+```
+
+#### External Access
+
+Functions with `external` visibility are accessible from outside the cluster via the Envoy Gateway:
+
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: public-api
+  namespace: default
+spec:
+  gitRepo: https://github.com/myorg/public-api
+  gitRevision: main
+  gitAuthSecretName: github-auth
+  build:
+    image: registry.example.com/public-api:latest
+  deploy:
+    visibility: external  # Accessible from outside the cluster
+```
+
+Access from outside the cluster:
+```bash
+# Get the gateway IP
+GATEWAY_IP=$(kubectl get svc -n envoy-gateway-system \
+  -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
+  -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
+
+# Access using Host header
+curl -H "Host: public-api.default.example.com" http://$GATEWAY_IP/
+```
+
+#### URL Patterns
+
+| Visibility | URL Pattern | Example |
+|------------|-------------|---------|
+| `cluster-local` | `http://{name}.{namespace}.svc.cluster.local` | `http://my-api.default.svc.cluster.local` |
+| `external` | `http://{name}.{namespace}.{domain}` | `http://my-api.default.example.com` |
+
+The external domain is configured in the Helm chart via `knativeServing.domain` (default: `example.com`).
+
+#### When to Use Each
+
+**Use `cluster-local` for:**
+- Internal microservices
+- Backend APIs that don't need external access
+- Services that communicate only with other cluster services
+- Security-sensitive functions
+
+**Use `external` for:**
+- Public REST APIs
+- Webhook endpoints
+- Functions that receive external HTTP requests
+- APIs consumed by external clients
+
+#### Multiple Functions Example
+
+You can have multiple functions with different visibility settings:
+
+```yaml
+# Internal backend service
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: user-service
+spec:
+  gitRepo: https://github.com/myorg/user-service
+  build:
+    image: registry.example.com/user-service:latest
+  deploy:
+    visibility: cluster-local  # Internal only
+---
+# Public API gateway
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: api-gateway
+spec:
+  gitRepo: https://github.com/myorg/api-gateway
+  build:
+    image: registry.example.com/api-gateway:latest
+  deploy:
+    visibility: external  # Publicly accessible
+    scale:
+      minScale: 1  # No cold starts for public API
+```
+
 ### Environment Variables
 
 Add environment variables to your function:
