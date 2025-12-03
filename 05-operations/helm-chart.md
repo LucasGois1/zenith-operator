@@ -26,31 +26,14 @@ This Helm chart simplifies installation by automatically deploying all required 
   - 8 GB memory
   - 20 GB storage
 
-## Supported Environments
-
-Zenith Operator can be installed in different types of Kubernetes clusters. The main difference is LoadBalancer support:
-
-| Environment | Values File | Reason |
-|-------------|-------------|--------|
-| **kind** | `values-dev.yaml` | kind does not have native LoadBalancer support (MetalLB included) |
-| **Minikube** | `values-dev.yaml` | Minikube does not have native LoadBalancer support (MetalLB included) |
-| **GKE** | `values.yaml` (default) | Google Cloud provides native LoadBalancer |
-| **EKS** | `values.yaml` (default) | AWS provides native LoadBalancer |
-| **AKS** | `values.yaml` (default) | Azure provides native LoadBalancer |
-| **Bare-metal** | Depends | Can use `values-dev.yaml` with MetalLB or custom configuration |
-
-> **Important:** MetalLB is required for Envoy Gateway to receive an external IP and for HTTP routes to work correctly. Without it, LoadBalancer Services remain in "Pending" state indefinitely.
-
 ## Quick Start
-
-### Local Development (kind/Minikube)
 
 ```bash
 # Add Helm repository
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 helm repo update
 
-# Install with development profile
+# Install
 helm install zenith-operator zenith/zenith-operator \
   --create-namespace \
   --namespace zenith-operator-system \
@@ -58,24 +41,7 @@ helm install zenith-operator zenith/zenith-operator \
   --timeout 15m
 ```
 
-> **Important:** The `values-dev.yaml` file already includes all necessary configurations for local development:
-> - `metallb.enabled: true` with IP auto-detection
-> - Local Registry enabled
-> - Dapr enabled
-> - Insecure registries configuration for development
-
-### Production (GKE/EKS/AKS)
-
-```bash
-# Install WITHOUT MetalLB (cloud provider provides LoadBalancer)
-helm install zenith-operator zenith/zenith-operator \
-  --create-namespace \
-  --namespace zenith-operator-system \
-  --wait \
-  --timeout 15m
-```
-
-> **Important:** In production environments on managed clouds, DO NOT enable MetalLB. The cloud native load balancer is more reliable and integrated.
+> **Important:** In production environments on managed clouds, DISABLE MetalLB. The cloud native load balancer is more reliable and integrated.
 
 ### Local Installation (from source)
 
@@ -101,32 +67,16 @@ helm install zenith-operator ./charts/zenith-operator \
 
 ## Installation Profiles
 
-### Development Profile (`values-dev.yaml`)
+### Standard Profile (`values.yaml`)
 
 Optimized for local development with kind/Minikube:
-- ✅ All dependencies enabled (Tekton, Knative, Envoy Gateway, OpenTelemetry, Dapr)
+- ✅ All dependencies enabled (Tekton, Knative, Envoy Gateway, OpenTelemetry, Jaeger, Dapr)
 - ✅ MetalLB enabled with IP auto-detection
 - ✅ Local Registry included
 - ✅ Insecure registries configuration for development
 - ✅ Lower resources to run on local machines
 
 ```bash
-helm install zenith-operator ./charts/zenith-operator \
-  --namespace zenith-operator-system \
-  --create-namespace
-```
-
-### Standard Profile (`values.yaml`)
-
-Default configurations for production on managed clouds (GKE/EKS/AKS):
-- ✅ All dependencies enabled
-- ❌ MetalLB disabled (uses cloud native LoadBalancer)
-- ❌ Local Registry disabled (use external registry like Docker Hub, GCR, ECR)
-- ✅ Production resource limits
-- ❌ Dapr disabled by default
-
-```bash
-# For GKE/EKS/AKS - DO NOT enable MetalLB
 helm install zenith-operator ./charts/zenith-operator \
   --namespace zenith-operator-system \
   --create-namespace
