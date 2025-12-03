@@ -21,22 +21,9 @@ helm repo update
 
 ### Step 2: Install the Operator
 
-**For Local Development (kind/Minikube):**
-
-```bash
-# Install with development profile
-helm install zenith-operator zenith-operator/zenith-operator
-```
-
-> **Important:** The `values-dev.yaml` comes configured with MetalLB enabled, local registry, and other development-optimized settings. This is mandatory on local clusters (kind/Minikube) for Envoy Gateway to receive an external IP.
-
-**For Production (GKE/EKS/AKS):**
-
 ```bash
 helm install zenith-operator zenith-operator/zenith-operator
 ```
-
-> **Note:** On managed clouds, DO NOT enable MetalLB. The cloud native load balancer is used automatically.
 
 This will install the operator along with all required dependencies:
 - Tekton Pipelines (for building functions)
@@ -44,7 +31,7 @@ This will install the operator along with all required dependencies:
 - Knative Eventing (for event-driven architectures)
 - Envoy Gateway (for routing)
 - Gateway API CRDs
-- MetalLB (only if enabled, for local clusters)
+- MetalLB (disable if you are trying to use this operator in a cloud environment)
 
 ### Step 3: Verify Installation
 

@@ -140,11 +140,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 if ! helm list -n zenith-operator-system 2>/dev/null | grep -q "zenith-operator"; then
-  echo "📦 Installing platform via Helm chart (values-dev.yaml)..."
   echo "   This includes: Tekton, Knative, Gateway API, MetalLB, Envoy Gateway, OpenTelemetry, Dapr"
   
   helm install zenith-operator "${PROJECT_ROOT}/charts/zenith-operator" \
-    -f "${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml" \
     --namespace zenith-operator-system \
     --create-namespace \
     --wait \
@@ -153,7 +151,6 @@ if ! helm list -n zenith-operator-system 2>/dev/null | grep -q "zenith-operator"
   echo "✅ Platform installed via Helm"
 else
   echo "✅ Platform already installed via Helm"
-  echo "   To upgrade: helm upgrade zenith-operator ${PROJECT_ROOT}/charts/zenith-operator -f ${PROJECT_ROOT}/charts/zenith-operator/values-dev.yaml -n zenith-operator-system"
 fi
 
 # =============================================================================
@@ -281,7 +278,7 @@ echo "  make test-chainsaw                    # Run all tests (~10 min)"
 echo ""
 echo "Helm commands:"
 echo "  helm list -n zenith-operator-system   # View installed releases"
-echo "  helm upgrade zenith-operator ./charts/zenith-operator -f ./charts/zenith-operator/values-dev.yaml -n zenith-operator-system  # Upgrade"
+echo "  helm upgrade zenith-operator ./charts/zenith-operator -n zenith-operator-system  # Upgrade"
 echo "  helm uninstall zenith-operator -n zenith-operator-system  # Uninstall"
 echo ""
 echo "Examples:"

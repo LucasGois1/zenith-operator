@@ -49,12 +49,8 @@ spec:
 ```bash
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 
-# Download values-dev.yaml
-curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
-
 # Install with development profile (includes MetalLB, local registry, etc.)
 helm install zenith-operator zenith/zenith-operator \
-  -f values-dev.yaml \
   --namespace zenith-operator-system \
   --create-namespace
 ```

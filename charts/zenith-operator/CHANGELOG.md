@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.21](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.20...zenith-operator-0.2.21) (2025-12-03)
+
+
+### Features
+
+* add per-function visibility configuration and fix registry NodePort ([#110](https://github.com/LucasGois1/zenith-operator/issues/110)) ([eb799ef](https://github.com/LucasGois1/zenith-operator/commit/eb799efdb70fa88dfeffe27e9678c789eaa8bf28))
+
 ## [0.2.20](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.19...zenith-operator-0.2.20) (2025-12-03)
 
 
