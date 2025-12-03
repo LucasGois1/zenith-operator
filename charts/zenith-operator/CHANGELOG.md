@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.20](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.19...zenith-operator-0.2.20) (2025-12-03)
+
+
+### Bug Fixes
+
+* remove references to values-dev.yaml from documentation ([ea3ad52](https://github.com/LucasGois1/zenith-operator/commit/ea3ad521f3c84f0a2ac3dac469d90bcddadb903c))
+
 ## [0.2.19](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.18...zenith-operator-0.2.19) (2025-12-02)
 
 
