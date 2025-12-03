@@ -24,12 +24,8 @@ helm repo update
 **For Local Development (kind/Minikube):**
 
 ```bash
-# Download values-dev.yaml (includes MetalLB, local registry, Dapr, etc.)
-curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
-
 # Install with development profile
-helm install zenith-operator zenith-operator/zenith-operator \
-  -f values-dev.yaml
+helm install zenith-operator zenith-operator/zenith-operator
 ```
 
 > **Important:** The `values-dev.yaml` comes configured with MetalLB enabled, local registry, and other development-optimized settings. This is mandatory on local clusters (kind/Minikube) for Envoy Gateway to receive an external IP.

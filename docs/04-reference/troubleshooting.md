@@ -347,10 +347,7 @@ kubectl get svc -n envoy-gateway-system
 # Check if MetalLB is installed
 kubectl get pods -n metallb-system
 
-# If no pods, reinstall using values-dev.yaml:
-curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
 helm upgrade zenith-operator zenith/zenith-operator \
-  -f values-dev.yaml \
   --namespace zenith-operator-system
 ```
 

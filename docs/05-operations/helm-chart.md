@@ -50,12 +50,8 @@ Zenith Operator can be installed in different types of Kubernetes clusters. The 
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 helm repo update
 
-# Download values-dev.yaml (includes MetalLB, local registry, Dapr, etc.)
-curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
-
 # Install with development profile
 helm install zenith-operator zenith/zenith-operator \
-  -f values-dev.yaml \
   --create-namespace \
   --namespace zenith-operator-system \
   --wait \
@@ -90,7 +86,6 @@ cd zenith-operator
 
 # For local development (kind/Minikube)
 helm install zenith-operator ./charts/zenith-operator \
-  -f ./charts/zenith-operator/values-dev.yaml \
   --create-namespace \
   --namespace zenith-operator-system \
   --wait \
@@ -116,9 +111,7 @@ Optimized for local development with kind/Minikube:
 - ✅ Lower resources to run on local machines
 
 ```bash
-# For kind/Minikube - uses values-dev.yaml which has MetalLB enabled
 helm install zenith-operator ./charts/zenith-operator \
-  -f ./charts/zenith-operator/values-dev.yaml \
   --namespace zenith-operator-system \
   --create-namespace
 ```
@@ -510,7 +503,6 @@ helm upgrade zenith-operator zenith/zenith-operator \
 # Upgrade with new values
 helm upgrade zenith-operator zenith/zenith-operator \
   --namespace zenith-operator-system \
-  -f values-dev.yaml \
   --wait \
   --timeout 15m
 ```
@@ -551,13 +543,11 @@ helm lint ./charts/zenith-operator
 
 # Template the chart (dry-run)
 helm template zenith-operator ./charts/zenith-operator \
-  -f ./charts/zenith-operator/values-dev.yaml \
   --namespace zenith-operator-system
 
 # Install in Kind cluster
 kind create cluster --name zenith-test
 helm install zenith-operator ./charts/zenith-operator \
-  -f ./charts/zenith-operator/values-dev.yaml \
   --namespace zenith-operator-system \
   --create-namespace \
   --wait \
