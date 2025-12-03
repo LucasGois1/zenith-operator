@@ -115,12 +115,8 @@ spec:
 # Add Helm repository
 helm repo add zenith https://lucasgois1.github.io/zenith-operator
 
-# Download values-dev.yaml (includes MetalLB, local registry, Dapr, etc.)
-curl -O https://raw.githubusercontent.com/LucasGois1/zenith-operator/main/charts/zenith-operator/values-dev.yaml
-
 # Install operator with development profile
 helm install zenith-operator zenith/zenith-operator \
-  -f values-dev.yaml \
   --namespace zenith-operator-system \
   --create-namespace
 ```
