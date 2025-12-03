@@ -43,65 +43,58 @@ Zenith Operator automatically:
 
 Your function must receive HTTP POST requests with events in CloudEvents format:
 
+### Important: Response Format Requirements
+
+When processing CloudEvents, your function **MUST** return one of the following:
+
+1. **Empty response** (HTTP 200 with no body) - Recommended for most cases
+2. **Valid CloudEvent response** - Only if you need to emit a new event
+
+Returning any other response (like JSON) will cause errors in the Knative Eventing broker. The broker validates responses and expects either empty or CloudEvent format.
+
 ### Go Example
 
 ```go
 package main
 
 import (
-    "encoding/json"
-    "fmt"
+    "io"
     "log"
     "net/http"
     "os"
+    "strings"
 )
 
-// CloudEvent represents an event in CloudEvents format
-type CloudEvent struct {
-    SpecVersion     string                 `json:"specversion"`
-    Type            string                 `json:"type"`
-    Source          string                 `json:"source"`
-    ID              string                 `json:"id"`
-    Time            string                 `json:"time"`
-    DataContentType string                 `json:"datacontenttype"`
-    Data            map[string]interface{} `json:"data"`
-}
-
-type Response struct {
-    Status  string `json:"status"`
-    Message string `json:"message"`
-}
-
 func eventHandler(w http.ResponseWriter, r *http.Request) {
-    // Decode CloudEvent
-    var event CloudEvent
-    if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
+    // Log CloudEvent headers
+    log.Printf("Received CloudEvent:")
+    log.Printf("  Ce-Id: %s", r.Header.Get("Ce-Id"))
+    log.Printf("  Ce-Type: %s", r.Header.Get("Ce-Type"))
+    log.Printf("  Ce-Source: %s", r.Header.Get("Ce-Source"))
+    log.Printf("  Ce-Specversion: %s", r.Header.Get("Ce-Specversion"))
     
-    // Process event
-    log.Printf("Received event: type=%s, source=%s, id=%s", 
-        event.Type, event.Source, event.ID)
-    log.Printf("Event data: %+v", event.Data)
+    // Read event data from body
+    if r.Body != nil {
+        body, err := io.ReadAll(r.Body)
+        if err == nil && len(body) > 0 {
+            log.Printf("  Data: %s", string(body))
+        }
+    }
     
     // Your processing logic here
-    processEvent(event)
+    processEvent(r)
     
-    // Return response
-    response := Response{
-        Status:  "processed",
-        Message: fmt.Sprintf("Event %s processed successfully", event.ID),
-    }
-    
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(response)
+    // IMPORTANT: Return empty response for CloudEvents
+    // Do NOT return JSON - Knative Eventing expects empty or CloudEvent response
+    log.Printf("CloudEvent processed successfully")
+    w.WriteHeader(http.StatusOK)
 }
 
-func processEvent(event CloudEvent) {
+func processEvent(r *http.Request) {
     // Implement your processing logic
     // Example: save to database, send notification, etc.
-    log.Printf("Processing event of type: %s", event.Type)
+    eventType := r.Header.Get("Ce-Type")
+    log.Printf("Processing event of type: %s", eventType)
 }
 
 func main() {
@@ -119,7 +112,7 @@ func main() {
 ### Python Example
 
 ```python
-from flask import Flask, request, jsonify
+from flask import Flask, request, Response
 import logging
 import os
 
@@ -128,34 +121,33 @@ logging.basicConfig(level=logging.INFO)
 
 @app.route('/', methods=['POST'])
 def event_handler():
-    # Receive CloudEvent
-    event = request.get_json()
+    # CloudEvent headers are passed as HTTP headers
+    ce_id = request.headers.get('Ce-Id')
+    ce_type = request.headers.get('Ce-Type')
+    ce_source = request.headers.get('Ce-Source')
     
     # Log event
-    logging.info(f"Received event: type={event.get('type')}, "
-                f"source={event.get('source')}, id={event.get('id')}")
-    logging.info(f"Event data: {event.get('data')}")
+    logging.info(f"Received CloudEvent: id={ce_id}, type={ce_type}, source={ce_source}")
+    
+    # Event data is in the body
+    data = request.get_json(silent=True) or {}
+    logging.info(f"Event data: {data}")
     
     # Process event
-    process_event(event)
+    process_event(ce_type, data)
     
-    # Return response
-    return jsonify({
-        'status': 'processed',
-        'message': f"Event {event.get('id')} processed successfully"
-    })
+    # IMPORTANT: Return empty response for CloudEvents
+    logging.info("CloudEvent processed successfully")
+    return Response(status=200)
 
-def process_event(event):
+def process_event(event_type, data):
     # Implement your processing logic
-    event_type = event.get('type')
-    data = event.get('data', {})
-    
     logging.info(f"Processing event of type: {event_type}")
     # Your logic here
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=port)
 ```
 
 ### Node.js Example
@@ -167,26 +159,26 @@ const app = express();
 app.use(express.json());
 
 app.post('/', (req, res) => {
-    // Receive CloudEvent
-    const event = req.body;
+    // CloudEvent headers are passed as HTTP headers
+    const ceId = req.headers['ce-id'];
+    const ceType = req.headers['ce-type'];
+    const ceSource = req.headers['ce-source'];
     
     // Log event
-    console.log(`Received event: type=${event.type}, source=${event.source}, id=${event.id}`);
-    console.log(`Event data:`, event.data);
+    console.log(`Received CloudEvent: id=${ceId}, type=${ceType}, source=${ceSource}`);
+    console.log(`Event data:`, req.body);
     
     // Process event
-    processEvent(event);
+    processEvent(ceType, req.body);
     
-    // Return response
-    res.json({
-        status: 'processed',
-        message: `Event ${event.id} processed successfully`
-    });
+    // IMPORTANT: Return empty response for CloudEvents
+    console.log('CloudEvent processed successfully');
+    res.status(200).end();
 });
 
-function processEvent(event) {
+function processEvent(eventType, data) {
     // Implement your processing logic
-    console.log(`Processing event of type: ${event.type}`);
+    console.log(`Processing event of type: ${eventType}`);
     // Your logic here
 }
 
@@ -257,6 +249,106 @@ Apply the resource:
 ```bash
 kubectl apply -f order-processor.yaml
 ```
+
+## Network Visibility for Event Functions
+
+Event functions support the same visibility options as HTTP functions. By default, event functions are `cluster-local`, meaning they can only receive events from within the cluster.
+
+### Cluster-Local (Default)
+
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: order-processor
+spec:
+  gitRepo: https://github.com/myorg/order-processor
+  build:
+    image: registry.example.com/order-processor:latest
+  deploy:
+    visibility: cluster-local  # Default - events from within cluster only
+  eventing:
+    broker: default
+    filters:
+      type: com.example.order.created
+```
+
+With `cluster-local` visibility:
+- Events are delivered via the Knative Eventing Broker/Trigger mechanism
+- The function URL is `http://{name}.{namespace}.svc.cluster.local`
+- Events must be sent to the Broker from within the cluster
+
+### External Visibility
+
+If you need to also expose the function for direct HTTP access (in addition to event processing):
+
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: order-processor
+spec:
+  gitRepo: https://github.com/myorg/order-processor
+  build:
+    image: registry.example.com/order-processor:latest
+  deploy:
+    visibility: external  # Accessible externally AND via events
+  eventing:
+    broker: default
+    filters:
+      type: com.example.order.created
+```
+
+With `external` visibility:
+- Events are still delivered via the Broker/Trigger mechanism
+- The function is also accessible externally at `http://{name}.{namespace}.{domain}`
+- Useful for functions that handle both events AND direct HTTP requests
+
+### Accessing External Event Functions
+
+**Linux:**
+```bash
+# Get the gateway IP
+GATEWAY_IP=$(kubectl get svc -n envoy-gateway-system \
+  -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
+  -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
+
+# Access function directly (bypassing eventing)
+curl -H "Host: order-processor.default.example.com" http://$GATEWAY_IP/
+```
+
+**MacOS (Docker Desktop / Colima):**
+
+On MacOS, the LoadBalancer IP is not directly accessible. Use port-forwarding:
+
+```bash
+# Terminal 1: Start port-forward
+kubectl port-forward -n envoy-gateway-system \
+  $(kubectl get svc -n envoy-gateway-system \
+    -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
+    -o jsonpath='{.items[0].metadata.name}') 8080:80
+
+# Terminal 2: Access the function
+curl -H "Host: order-processor.default.example.com" http://localhost:8080/
+```
+
+### Sending Events to the Broker
+
+Regardless of function visibility, events are always sent to the Broker. The Broker is only accessible from within the cluster:
+
+```bash
+# From within the cluster (e.g., from a pod)
+curl http://broker-ingress.knative-eventing.svc.cluster.local/{namespace}/{broker-name} \
+  -X POST \
+  -H "Ce-Id: event-123" \
+  -H "Ce-Specversion: 1.0" \
+  -H "Ce-Type: com.example.order.created" \
+  -H "Ce-Source: my-service" \
+  -H "Content-Type: application/json" \
+  -d '{"orderId": "123"}'
+```
+
+To send events from outside the cluster, you need an event producer service running inside the cluster that exposes an external endpoint and forwards events to the Broker.
 
 ## Step 3: Understand Event Filters
 
@@ -587,7 +679,31 @@ kubectl logs -l serving.knative.dev/service=order-processor -f
 2. **Check Event Format**:
 Ensure your function is decoding the CloudEvent correctly.
 
-3. **Test Locally**:
+3. **Check Response Format**:
+If you see errors in the broker-filter logs like:
+```
+"error":"received a non-empty response not recognized as CloudEvent. The response MUST be either empty or a valid CloudEvent"
+```
+
+This means your function is returning a response body (like JSON) instead of an empty response. Event handlers **MUST** return either:
+- Empty response (HTTP 200 with no body) - Recommended
+- Valid CloudEvent response
+
+Fix your function to return an empty response:
+```go
+// Go
+w.WriteHeader(http.StatusOK)
+```
+```python
+# Python
+return Response(status=200)
+```
+```javascript
+// Node.js
+res.status(200).end();
+```
+
+4. **Test Locally**:
 Send a test CloudEvent directly to the function:
 ```bash
 FUNCTION_URL=$(kubectl get function order-processor -o jsonpath='{.status.url}')
