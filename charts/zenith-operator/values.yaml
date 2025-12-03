@@ -69,8 +69,12 @@ registry:
     size: "10Gi"
     storageClass: "standard"
   service:
-    type: ClusterIP
+    # NodePort is required for Kind/Minikube clusters because containerd
+    # cannot resolve Kubernetes internal DNS names. The operator rewrites
+    # registry.registry.svc.cluster.local:5000 to 127.0.0.1:30500.
+    type: NodePort
     port: 5000
+    nodePort: 30500
   hostname: "registry.registry.svc.cluster.local"
 
 operator:

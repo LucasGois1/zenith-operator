@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -1139,15 +1138,12 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	// from within the cluster via the internal DNS name
 	image := function.Status.ImageDigest
 
-	// Lógica para resolver o endereço da imagem em ambientes de desenvolvimento (Kind/Minikube)
-	// Se estivermos usando o registry interno, precisamos trocar o endereço para o NodePort/Localhost
-	// para que o runtime do container no nó consiga acessar a imagem.
+	// Rewrite the image URL for Kind/Minikube compatibility
+	// Containerd on Kind nodes cannot resolve Kubernetes internal DNS names,
+	// so we need to use the NodePort service (127.0.0.1:30500) instead.
+	// The Helm chart creates a NodePort service on port 30500 for this purpose.
 	if strings.HasPrefix(image, "registry.registry.svc.cluster.local:5000") {
-		// Substituir pelo endereço "127.0.0.1:30500"
 		image = strings.Replace(image, "registry.registry.svc.cluster.local:5000", "127.0.0.1:30500", 1)
-		log.Printf("DEBUG: Updated image URL to %s for Kind/Minikube compatibility", image)
-	} else {
-		log.Printf("DEBUG: Using original image URL: %s", image)
 	}
 
 	container := v1.Container{
