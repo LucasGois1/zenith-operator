@@ -348,7 +348,153 @@ curl http://broker-ingress.knative-eventing.svc.cluster.local/{namespace}/{broke
   -d '{"orderId": "123"}'
 ```
 
-To send events from outside the cluster, you need an event producer service running inside the cluster that exposes an external endpoint and forwards events to the Broker.
+To send events from outside the cluster, you can create an "Event Gateway" function - see the section below.
+
+### Sending Events from Outside the Cluster (Event Gateway Pattern)
+
+Since the Knative Eventing Broker is only accessible from within the cluster, you need to create an intermediary service that:
+1. Exposes an external HTTP endpoint
+2. Receives CloudEvents from external sources
+3. Forwards them to the internal Broker
+
+Here's how to create an Event Gateway function:
+
+**1. Create the Event Gateway code (Go example):**
+
+```go
+package main
+
+import (
+    "bytes"
+    "io"
+    "log"
+    "net/http"
+    "os"
+)
+
+func main() {
+    // Broker URL - adjust namespace and broker name as needed
+    brokerURL := os.Getenv("BROKER_URL")
+    if brokerURL == "" {
+        brokerURL = "http://broker-ingress.knative-eventing.svc.cluster.local/default/default"
+    }
+
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = "8080"
+    }
+
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        // Read the incoming request body
+        body, err := io.ReadAll(r.Body)
+        if err != nil {
+            http.Error(w, "Failed to read body", http.StatusBadRequest)
+            return
+        }
+        defer r.Body.Close()
+
+        // Create request to internal Broker
+        req, err := http.NewRequest("POST", brokerURL, bytes.NewReader(body))
+        if err != nil {
+            http.Error(w, "Failed to create request", http.StatusInternalServerError)
+            return
+        }
+
+        // Forward all CloudEvent headers (Ce-*)
+        for name, values := range r.Header {
+            for _, value := range values {
+                req.Header.Add(name, value)
+            }
+        }
+
+        // Send to Broker
+        client := &http.Client{}
+        resp, err := client.Do(req)
+        if err != nil {
+            log.Printf("Failed to forward event: %v", err)
+            http.Error(w, "Failed to forward event", http.StatusBadGateway)
+            return
+        }
+        defer resp.Body.Close()
+
+        // Return Broker's response
+        w.WriteHeader(resp.StatusCode)
+        io.Copy(w, resp.Body)
+        log.Printf("Event forwarded to broker, status: %d", resp.StatusCode)
+    })
+
+    log.Printf("Event Gateway listening on port %s, forwarding to %s", port, brokerURL)
+    log.Fatal(http.ListenAndServe(":"+port, nil))
+}
+```
+
+**2. Deploy the Event Gateway with external visibility:**
+
+```yaml
+apiVersion: functions.zenith.com/v1alpha1
+kind: Function
+metadata:
+  name: event-gateway
+  namespace: default
+spec:
+  gitRepo: https://github.com/myorg/event-gateway
+  gitRevision: main
+  build:
+    image: registry.example.com/event-gateway:latest
+  deploy:
+    visibility: external  # Accessible from outside the cluster
+    env:
+      - name: BROKER_URL
+        value: "http://broker-ingress.knative-eventing.svc.cluster.local/default/default"
+```
+
+**3. Send events from outside the cluster:**
+
+**Linux:**
+```bash
+# Get gateway IP
+GATEWAY_IP=$(kubectl get svc -n envoy-gateway-system \
+  -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
+  -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
+
+# Send event through the Event Gateway
+curl -X POST \
+  -H "Host: event-gateway.default.example.com" \
+  -H "Ce-Id: external-event-123" \
+  -H "Ce-Specversion: 1.0" \
+  -H "Ce-Type: com.example.order.created" \
+  -H "Ce-Source: external-system" \
+  -H "Content-Type: application/json" \
+  -d '{"orderId": "EXT-001", "amount": 150.00}' \
+  http://$GATEWAY_IP/
+```
+
+**MacOS (Docker Desktop / Colima):**
+```bash
+# Terminal 1: Start port-forward
+kubectl port-forward -n envoy-gateway-system \
+  $(kubectl get svc -n envoy-gateway-system \
+    -l gateway.envoyproxy.io/owning-gateway-name=knative-gateway \
+    -o jsonpath='{.items[0].metadata.name}') 8080:80
+
+# Terminal 2: Send event through the Event Gateway
+curl -X POST \
+  -H "Host: event-gateway.default.example.com" \
+  -H "Ce-Id: external-event-123" \
+  -H "Ce-Specversion: 1.0" \
+  -H "Ce-Type: com.example.order.created" \
+  -H "Ce-Source: external-system" \
+  -H "Content-Type: application/json" \
+  -d '{"orderId": "EXT-001", "amount": 150.00}' \
+  http://localhost:8080/
+```
+
+The Event Gateway will forward the CloudEvent to the internal Broker, which will then route it to the appropriate function based on the Trigger filters.
+
+**Architecture:**
+```
+External Client → Event Gateway (external) → Broker (internal) → Trigger → Function
+```
 
 ## Step 3: Understand Event Filters
 
