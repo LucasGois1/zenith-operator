@@ -82,6 +82,7 @@ var _ = BeforeSuite(func() {
 			filepath.Join("..", "..", "config", "crd", "bases"),
 			filepath.Join("..", "..", "config", "testcrds", "tekton"),
 			filepath.Join("..", "..", "config", "testcrds", "knative"),
+			filepath.Join("..", "..", "config", "testcrds", "opentelemetry"),
 		},
 		ErrorIfCRDPathMissing: true,
 	}

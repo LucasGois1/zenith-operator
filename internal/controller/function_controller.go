@@ -30,7 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kneventingv1 "knative.dev/eventing/pkg/apis/eventing/v1"
 	"knative.dev/pkg/apis"
@@ -55,6 +57,8 @@ const (
 	annotationValueTrue = "true"
 	// defaultBrokerName is the default Knative Eventing broker name
 	defaultBrokerName = "default"
+	// visibilityClusterLocal is the value for cluster-local visibility in Knative
+	visibilityClusterLocal = "cluster-local"
 )
 
 // +kubebuilder:rbac:groups=functions.zenith.com,resources=functions,verbs=get;list;watch;create;update;patch;delete
@@ -66,6 +70,7 @@ const (
 // +kubebuilder:rbac:groups=serving.knative.dev,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eventing.knative.dev,resources=triggers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eventing.knative.dev,resources=brokers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=opentelemetry.io,resources=instrumentations,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
@@ -389,6 +394,21 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		logger.Info("Broker validado com sucesso", "Broker.Name", brokerName)
 	}
+
+	// --- Ponto de Integração do OpenTelemetry Auto-Instrumentation (Instrumentation CR) ---
+	// Se auto-instrumentação está habilitada, garantir que existe um CR Instrumentation no namespace
+	// O OTEL Operator só aplica instrumentação a pods no mesmo namespace do CR Instrumentation
+	if function.Spec.Observability.Tracing.Enabled && function.Spec.Observability.Tracing.AutoInstrumentation != nil {
+		language := function.Spec.Observability.Tracing.AutoInstrumentation.Language
+		if err := r.ensureNamespaceInstrumentation(ctx, function.Namespace, language); err != nil {
+			logger.Error(err, "Falha ao garantir Instrumentation CR no namespace",
+				"Namespace", function.Namespace,
+				"Language", language)
+			// Não falhar a reconciliação por causa disso, apenas logar o erro
+			// A função ainda será criada, mas sem auto-instrumentação
+		}
+	}
+	// ------------------------------------
 
 	knativeServiceName := function.Name
 	knativeService := &knservingv1.Service{}
@@ -1168,7 +1188,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	// Se visibility é "cluster-local" (padrão) ou não especificado, adiciona a label
 	// Se visibility é "external", não adiciona a label (permite acesso externo)
 	if function.Spec.Deploy.Visibility == "" || function.Spec.Deploy.Visibility == functionsv1alpha1.VisibilityClusterLocal {
-		serviceLabels["networking.knative.dev/visibility"] = "cluster-local"
+		serviceLabels["networking.knative.dev/visibility"] = visibilityClusterLocal
 	}
 	// Para visibility == "external", não adicionamos a label, permitindo acesso externo
 
@@ -1429,6 +1449,128 @@ func (r *FunctionReconciler) extractPipelineRunFailure(ctx context.Context, pipe
 	}
 
 	return reason, message
+}
+
+// instrumentationGVK is the GroupVersionKind for OpenTelemetry Instrumentation CR
+var instrumentationGVK = schema.GroupVersionKind{
+	Group:   "opentelemetry.io",
+	Version: "v1alpha1",
+	Kind:    "Instrumentation",
+}
+
+// otelCollectorEndpoint is the default endpoint for the OTEL Collector
+const otelCollectorEndpoint = "http://otel-collector-collector.opentelemetry-operator-system.svc.cluster.local:4318"
+
+// zenithInstrumentationName is the name of the Instrumentation CR created by the operator
+const zenithInstrumentationName = "zenith-instrumentation"
+
+// ensureNamespaceInstrumentation ensures that an Instrumentation CR exists in the given namespace
+// for OpenTelemetry auto-instrumentation to work. The OTEL Operator only applies instrumentation
+// to pods in the same namespace as the Instrumentation CR.
+// +kubebuilder:rbac:groups=opentelemetry.io,resources=instrumentations,verbs=get;list;watch;create;update;patch
+func (r *FunctionReconciler) ensureNamespaceInstrumentation(ctx context.Context, namespace string, language string) error {
+	logger := logf.FromContext(ctx)
+
+	// Create an unstructured object to represent the Instrumentation CR
+	instrumentation := &unstructured.Unstructured{}
+	instrumentation.SetGroupVersionKind(instrumentationGVK)
+
+	// Check if the Instrumentation CR already exists
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      zenithInstrumentationName,
+		Namespace: namespace,
+	}, instrumentation)
+
+	if err == nil {
+		// Instrumentation already exists, nothing to do
+		logger.V(1).Info("Instrumentation CR already exists in namespace",
+			"Namespace", namespace,
+			"Name", zenithInstrumentationName)
+		return nil
+	}
+
+	if !errors.IsNotFound(err) {
+		// Unexpected error
+		logger.Error(err, "Failed to check for existing Instrumentation CR",
+			"Namespace", namespace,
+			"Name", zenithInstrumentationName)
+		return err
+	}
+
+	// Instrumentation doesn't exist, create it
+	logger.Info("Creating Instrumentation CR in namespace",
+		"Namespace", namespace,
+		"Name", zenithInstrumentationName,
+		"Language", language)
+
+	// Build the Instrumentation spec
+	// This mirrors the configuration from the Helm chart (11-opentelemetry-instrumentation.yaml)
+	instrumentationSpec := map[string]interface{}{
+		"exporter": map[string]interface{}{
+			"endpoint": otelCollectorEndpoint,
+		},
+		"propagators": []interface{}{
+			"tracecontext",
+			"baggage",
+		},
+		"sampler": map[string]interface{}{
+			"type":     "parentbased_traceidratio",
+			"argument": "1.0",
+		},
+		// Go auto-instrumentation configuration
+		"go": map[string]interface{}{
+			"image": "ghcr.io/open-telemetry/opentelemetry-go-instrumentation/autoinstrumentation-go:v0.23.0",
+			"env": []interface{}{
+				map[string]interface{}{
+					"name":  "OTEL_GO_AUTO_TARGET_EXE",
+					"value": "/workspace",
+				},
+			},
+		},
+		// Java auto-instrumentation configuration
+		"java": map[string]interface{}{
+			"image": "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:latest",
+		},
+		// Node.js auto-instrumentation configuration
+		"nodejs": map[string]interface{}{
+			"image": "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-nodejs:latest",
+		},
+		// Python auto-instrumentation configuration
+		"python": map[string]interface{}{
+			"image": "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:latest",
+		},
+		// .NET auto-instrumentation configuration
+		"dotnet": map[string]interface{}{
+			"image": "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-dotnet:latest",
+		},
+	}
+
+	// Create the new Instrumentation CR
+	newInstrumentation := &unstructured.Unstructured{}
+	newInstrumentation.SetGroupVersionKind(instrumentationGVK)
+	newInstrumentation.SetName(zenithInstrumentationName)
+	newInstrumentation.SetNamespace(namespace)
+	newInstrumentation.Object["spec"] = instrumentationSpec
+
+	err = r.Create(ctx, newInstrumentation)
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			// Another reconciliation created it, that's fine
+			logger.V(1).Info("Instrumentation CR was created by another reconciliation",
+				"Namespace", namespace,
+				"Name", zenithInstrumentationName)
+			return nil
+		}
+		logger.Error(err, "Failed to create Instrumentation CR",
+			"Namespace", namespace,
+			"Name", zenithInstrumentationName)
+		return err
+	}
+
+	logger.Info("Successfully created Instrumentation CR",
+		"Namespace", namespace,
+		"Name", zenithInstrumentationName)
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

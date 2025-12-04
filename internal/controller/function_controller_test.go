@@ -27,12 +27,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kneventingv1 "knative.dev/eventing/pkg/apis/eventing/v1"
 	"knative.dev/pkg/apis"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	knservingv1 "knative.dev/serving/pkg/apis/serving/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	functionsv1alpha1 "github.com/lucasgois1/zenith-operator/api/v1alpha1"
@@ -2215,6 +2217,189 @@ var _ = Describe("Function Controller Reconciliation", func() {
 			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
 			Expect(reason).To(Equal("PipelineFailed"))
 			Expect(message).To(Equal("Pipeline failed"))
+		})
+	})
+
+	Context("Namespace Instrumentation", func() {
+		It("should be a no-op when Instrumentation already exists", func() {
+			ctx := context.Background()
+			namespace := "instrumentation-exists-test"
+
+			// Create namespace first
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, ns)
+			}()
+
+			// Pre-create the Instrumentation CR
+			existingInstrumentation := &unstructured.Unstructured{}
+			existingInstrumentation.SetGroupVersionKind(instrumentationGVK)
+			existingInstrumentation.SetName(zenithInstrumentationName)
+			existingInstrumentation.SetNamespace(namespace)
+			existingInstrumentation.Object["spec"] = map[string]interface{}{
+				"exporter": map[string]interface{}{
+					"endpoint": "http://existing-endpoint:4318",
+				},
+			}
+			Expect(k8sClient.Create(ctx, existingInstrumentation)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, existingInstrumentation)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Call ensureNamespaceInstrumentation - should be a no-op
+			err := reconciler.ensureNamespaceInstrumentation(ctx, namespace, "go")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the Instrumentation still has the original endpoint (not overwritten)
+			inst := &unstructured.Unstructured{}
+			inst.SetGroupVersionKind(instrumentationGVK)
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      zenithInstrumentationName,
+				Namespace: namespace,
+			}, inst)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec, ok := inst.Object["spec"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			exporter, ok := spec["exporter"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(exporter["endpoint"]).To(Equal("http://existing-endpoint:4318"))
+		})
+
+		It("should create Instrumentation when it does not exist", func() {
+			ctx := context.Background()
+			namespace := "instrumentation-create-test"
+
+			// Create namespace first
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, ns)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Call ensureNamespaceInstrumentation - should create the CR
+			err := reconciler.ensureNamespaceInstrumentation(ctx, namespace, "go")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the Instrumentation was created with correct spec
+			inst := &unstructured.Unstructured{}
+			inst.SetGroupVersionKind(instrumentationGVK)
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      zenithInstrumentationName,
+				Namespace: namespace,
+			}, inst)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec, ok := inst.Object["spec"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+
+			// Verify exporter endpoint
+			exporter, ok := spec["exporter"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(exporter["endpoint"]).To(Equal(otelCollectorEndpoint))
+
+			// Verify propagators
+			propagators, ok := spec["propagators"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(propagators).To(ContainElements("tracecontext", "baggage"))
+
+			// Verify sampler
+			sampler, ok := spec["sampler"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(sampler["type"]).To(Equal("parentbased_traceidratio"))
+			Expect(sampler["argument"]).To(Equal("1.0"))
+
+			// Verify Go auto-instrumentation config
+			goConfig, ok := spec["go"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(goConfig["image"]).To(Equal("ghcr.io/open-telemetry/opentelemetry-go-instrumentation/autoinstrumentation-go:v0.23.0"))
+
+			// Verify Java auto-instrumentation config
+			javaConfig, ok := spec["java"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(javaConfig["image"]).To(Equal("ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:latest"))
+
+			// Verify Node.js auto-instrumentation config
+			nodejsConfig, ok := spec["nodejs"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(nodejsConfig["image"]).To(Equal("ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-nodejs:latest"))
+
+			// Verify Python auto-instrumentation config
+			pythonConfig, ok := spec["python"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(pythonConfig["image"]).To(Equal("ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:latest"))
+
+			// Verify .NET auto-instrumentation config
+			dotnetConfig, ok := spec["dotnet"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(dotnetConfig["image"]).To(Equal("ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-dotnet:latest"))
+
+			// Cleanup
+			_ = k8sClient.Delete(ctx, inst)
+		})
+
+		It("should handle idempotent calls correctly", func() {
+			ctx := context.Background()
+			namespace := "instrumentation-idempotent-test"
+
+			// Create namespace first
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, ns)
+			}()
+
+			reconciler := &FunctionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// First call - should create
+			err := reconciler.ensureNamespaceInstrumentation(ctx, namespace, "go")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second call - should be a no-op
+			err = reconciler.ensureNamespaceInstrumentation(ctx, namespace, "java")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Third call - should still be a no-op
+			err = reconciler.ensureNamespaceInstrumentation(ctx, namespace, "python")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify only one Instrumentation exists
+			instList := &unstructured.UnstructuredList{}
+			instList.SetGroupVersionKind(instrumentationGVK)
+			err = k8sClient.List(ctx, instList, &client.ListOptions{Namespace: namespace})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instList.Items).To(HaveLen(1))
+
+			// Cleanup
+			for _, item := range instList.Items {
+				_ = k8sClient.Delete(ctx, &item)
+			}
 		})
 	})
 })

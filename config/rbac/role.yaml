@@ -72,6 +72,17 @@ rules:
   - patch
   - update
 - apiGroups:
+  - opentelemetry.io
+  resources:
+  - instrumentations
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - serving.knative.dev
   resources:
   - services
