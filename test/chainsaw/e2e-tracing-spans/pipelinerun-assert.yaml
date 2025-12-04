@@ -1,0 +1,5 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  labels:
+    functions.zenith.com/function-name: test-function-tracing-e2e

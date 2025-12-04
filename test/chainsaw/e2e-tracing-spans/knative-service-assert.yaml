@@ -1,0 +1,14 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: test-function-tracing-e2e
+spec:
+  template:
+    spec:
+      containers:
+        - env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: OTEL_SERVICE_NAME
+              value: test-function-tracing-e2e
+            - name: OTEL_TRACES_EXPORTER
+              value: otlp
