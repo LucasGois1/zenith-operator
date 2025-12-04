@@ -57,6 +57,8 @@ const (
 	annotationValueTrue = "true"
 	// defaultBrokerName is the default Knative Eventing broker name
 	defaultBrokerName = "default"
+	// visibilityClusterLocal is the value for cluster-local visibility in Knative
+	visibilityClusterLocal = "cluster-local"
 )
 
 // +kubebuilder:rbac:groups=functions.zenith.com,resources=functions,verbs=get;list;watch;create;update;patch;delete
@@ -1186,7 +1188,7 @@ func (r *FunctionReconciler) buildKnativeService(function *functionsv1alpha1.Fun
 	// Se visibility é "cluster-local" (padrão) ou não especificado, adiciona a label
 	// Se visibility é "external", não adiciona a label (permite acesso externo)
 	if function.Spec.Deploy.Visibility == "" || function.Spec.Deploy.Visibility == functionsv1alpha1.VisibilityClusterLocal {
-		serviceLabels["networking.knative.dev/visibility"] = "cluster-local"
+		serviceLabels["networking.knative.dev/visibility"] = visibilityClusterLocal
 	}
 	// Para visibility == "external", não adicionamos a label, permitindo acesso externo
 
