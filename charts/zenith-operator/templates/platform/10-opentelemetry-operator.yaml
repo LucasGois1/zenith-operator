@@ -111,6 +111,23 @@ spec:
           
           echo "✓ OpenTelemetry Operator is ready"
           
+          {{- if .Values.opentelemetry.enableGoAutoInstrumentation }}
+          echo "Enabling Go auto-instrumentation on OpenTelemetry Operator..."
+          
+          # Add --enable-go-instrumentation=true flag to enable Go eBPF auto-instrumentation
+          # Note: Go auto-instrumentation is experimental and may have limitations in kind/docker-in-docker
+          kubectl patch deployment opentelemetry-operator-controller-manager \
+            -n opentelemetry-operator-system \
+            --type=json \
+            -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--enable-go-instrumentation=true"}]' || true
+          
+          echo "Waiting for OpenTelemetry Operator to restart with new configuration..."
+          kubectl rollout status deployment/opentelemetry-operator-controller-manager \
+            -n opentelemetry-operator-system --timeout=60s || true
+          
+          echo "✓ Go auto-instrumentation enabled on OpenTelemetry Operator"
+          {{- end }}
+          
           echo "Creating default OpenTelemetry Collector for tracing..."
           
           cat <<EOF | kubectl apply -f -

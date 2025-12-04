@@ -54,6 +54,9 @@ opentelemetry:
   enabled: true
   version: "v0.140.0"
   repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+  # Enable Go auto-instrumentation (eBPF-based, experimental)
+  # Note: May have limitations in kind/docker-in-docker environments due to eBPF requirements
+  enableGoAutoInstrumentation: true
   jaeger:
     enabled: true
 
