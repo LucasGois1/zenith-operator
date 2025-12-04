@@ -2214,7 +2214,7 @@ var _ = Describe("Function Controller Reconciliation", func() {
 				},
 			}
 
-		reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
+			reason, message := reconciler.extractPipelineRunFailure(ctx, pr)
 			Expect(reason).To(Equal("PipelineFailed"))
 			Expect(message).To(Equal("Pipeline failed"))
 		})
