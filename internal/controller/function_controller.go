@@ -1519,7 +1519,7 @@ func (r *FunctionReconciler) ensureNamespaceInstrumentation(ctx context.Context,
 		},
 		// Go auto-instrumentation configuration
 		"go": map[string]interface{}{
-			"image": "ghcr.io/open-telemetry/opentelemetry-go-instrumentation/autoinstrumentation-go:v0.18.0-alpha",
+			"image": "ghcr.io/open-telemetry/opentelemetry-go-instrumentation/autoinstrumentation-go:v0.23.0",
 			"env": []interface{}{
 				map[string]interface{}{
 					"name":  "OTEL_GO_AUTO_TARGET_EXE",
