@@ -4,12 +4,13 @@ metadata:
   name: e2e-tracing-spans-test
 spec:
   description: |
-    End-to-end test that validates OpenTelemetry tracing spans are collected.
+    End-to-end test that validates OpenTelemetry tracing spans are collected using auto-instrumentation.
     This test verifies the complete tracing pipeline:
-    1. Function with tracing enabled deploys successfully
-    2. OTEL environment variables are injected
-    3. HTTP requests are sent to the function
-    4. Trace spans are received by the OpenTelemetry Collector
+    1. Instrumentation CR is created in the test namespace for auto-instrumentation
+    2. Function with tracing and autoInstrumentation.language=go deploys successfully
+    3. OTEL environment variables are injected and auto-instrumentation annotation is set
+    4. HTTP requests are sent to the function
+    5. Trace spans are received by the OpenTelemetry Collector (via Go auto-instrumentation)
   timeouts:
     apply: 1m
     assert: 12m
@@ -33,6 +34,12 @@ spec:
                 username: LucasGois1
                 password: __GITHUB_TOKEN__
               EOF
+
+    - name: create-instrumentation
+      description: Create Instrumentation CR in test namespace for auto-instrumentation
+      try:
+        - apply:
+            file: instrumentation.yaml
 
     - name: create-function
       description: Create a Function CR with tracing enabled

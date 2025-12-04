@@ -16,3 +16,5 @@ spec:
   observability:
     tracing:
       enabled: true
+      autoInstrumentation:
+        language: go
