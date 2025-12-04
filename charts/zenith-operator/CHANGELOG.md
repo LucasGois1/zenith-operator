@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.22](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.21...zenith-operator-0.2.22) (2025-12-04)
+
+
+### Features
+
+* dynamically create Instrumentation CR in Function namespace ([#116](https://github.com/LucasGois1/zenith-operator/issues/116)) ([45f2355](https://github.com/LucasGois1/zenith-operator/commit/45f2355a59ccc7a744e218230ff8fae00f447172))
+
 ## [0.2.21](https://github.com/LucasGois1/zenith-operator/compare/zenith-operator-0.2.20...zenith-operator-0.2.21) (2025-12-03)
 
 
