@@ -24,9 +24,25 @@ concurrency:
 
 jobs:
   test-e2e:
-    name: E2E Tests (Sequential)
+    name: E2E Tests (${{ matrix.group_name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group_name: "Group 1 - Basic & Build"
+            tests: "basic-function broker-not-found build-failure build-no-digest containerport-default dapr-config delete-during-build e2e-event-delivery e2e-http-basic e2e-http-dapr e2e-tracing-spans"
+          - group_name: "Group 2 - Env Variables"
+            tests: "env-configmap-ref-exists env-configmap-ref-missing env-field-ref env-field-ref-uid env-mixed-types env-optional-refs env-resource-field-ref env-secret-ref-exists env-secret-ref-missing env-static-values env-update-propagation"
+          - group_name: "Group 3 - EnvFrom & Eventing"
+            tests: "envfrom-configmap-ref envfrom-optional envfrom-secret-ref eventing-dapr-combined eventing-removal eventing-trigger financial-integration function-trigger-cleanup git-auth-missing git-clone-validation git-revision-default"
+          - group_name: "Group 4 - Git & KService"
+            tests: "git-revision-invalid insecure-registry-detection kservice-drift-correction kservice-recreation ksvc-not-ready ksvc-update-dapr ksvc-update-image multi-functions multi-functions-same-broker no-eventing-ready"
+          - group_name: "Group 5 - Observability & Pipeline"
+            tests: "observability-autoinstrumentation observability-sampling-rate observability-tracing-basic observability-tracing-dapr observability-tracing-disabled ownerref-cleanup pipelinerun-progress pipelinerun-serviceaccount registry-secret-missing registry-secret-update"
+          - group_name: "Group 6 - Scale & ServiceAccount"
+            tests: "sa-idempotent scale-both-defined scale-edge-cases scale-maxscale-only scale-minscale-only scale-removal scale-update serviceaccount-secret trigger-update update-no-rebuild"
     env:
       CLUSTER_NAME: zenith-operator-ci
       IMG: zenith-operator:ci-test
@@ -46,17 +62,16 @@ jobs:
 
       - name: Setup cluster and dependencies
         run: |
-          echo "🚀 Setting up Kubernetes cluster and dependencies..."
-          echo $GITHUB_TOKEN
+          echo "Setting up Kubernetes cluster and dependencies..."
           
           # Run dev-up.sh to install everything (Tekton, Knative, Envoy Gateway, MetalLB, etc.)
           bash hack/dev-up.sh
           
-          echo "✅ Cluster setup complete"
+          echo "Cluster setup complete"
 
       - name: Verify cluster readiness
         run: |
-          echo "🔍 Verifying cluster components..."
+          echo "Verifying cluster components..."
           
           kubectl get pods -n tekton-pipelines
           kubectl get pods -n knative-serving
@@ -67,11 +82,11 @@ jobs:
           
           kubectl get gateway -n knative-serving
           
-          echo "✅ All components ready"
+          echo "All components ready"
 
       - name: Run Chainsaw tests sequentially
         run: |
-          echo "🧪 Running Chainsaw tests one by one..."
+          echo "Running Chainsaw tests for ${{ matrix.group_name }}..."
           
           # Install chainsaw if not already installed by dev-up.sh
           if ! command -v chainsaw &> /dev/null; then
@@ -79,36 +94,35 @@ jobs:
             export PATH="$(pwd)/bin:$PATH"
           fi
           
-          # Get list of all test directories
-          TEST_DIRS=$(ls -1 test/chainsaw | grep -v README | sort)
+          # Get list of tests for this group
+          TESTS="${{ matrix.tests }}"
           
           PASSED=0
           FAILED=0
           FAILED_TESTS=""
           
           # Run each test sequentially with increased cleanup timeout
-          for test_dir in $TEST_DIRS; do
+          for test_dir in $TESTS; do
             echo ""
             echo "=========================================="
             echo "Running test: $test_dir"
             echo "=========================================="
             
             # Run test with increased cleanup timeout (180s instead of default 30s)
-            # and skip Chainsaw's cleanup (we'll do it manually with longer timeout)
             if chainsaw test \
               --test-dir "test/chainsaw/$test_dir" \
               --cleanup-timeout 180s \
               --parallel 1; then
-              echo "✅ PASSED: $test_dir"
+              echo "PASSED: $test_dir"
               PASSED=$((PASSED + 1))
             else
-              echo "❌ FAILED: $test_dir"
+              echo "FAILED: $test_dir"
               FAILED=$((FAILED + 1))
               FAILED_TESTS="$FAILED_TESTS\n  - $test_dir"
             fi
             
             # Manual cleanup of any leftover chainsaw namespaces with extended timeout
-            echo "🧹 Cleaning up test namespaces..."
+            echo "Cleaning up test namespaces..."
             kubectl get ns | awk '/^chainsaw-/{print $1}' | xargs -r -n1 kubectl delete ns --timeout=180s --wait=true || true
             
             # Small delay between tests
@@ -117,11 +131,11 @@ jobs:
           
           echo ""
           echo "=========================================="
-          echo "📊 Test Results Summary"
+          echo "Test Results Summary for ${{ matrix.group_name }}"
           echo "=========================================="
           echo "Total tests: $((PASSED + FAILED))"
-          echo "✅ Passed: $PASSED"
-          echo "❌ Failed: $FAILED"
+          echo "Passed: $PASSED"
+          echo "Failed: $FAILED"
           
           if [ $FAILED -gt 0 ]; then
             echo ""
@@ -130,12 +144,12 @@ jobs:
           fi
           
           echo ""
-          echo "🎉 All tests passed!"
+          echo "All tests in ${{ matrix.group_name }} passed!"
 
       - name: Collect logs on failure
         if: failure()
         run: |
-          echo "📋 Collecting diagnostic logs..."
+          echo "Collecting diagnostic logs..."
           
           mkdir -p /tmp/logs
           
@@ -154,12 +168,29 @@ jobs:
           # Chainsaw namespaces (if any remain)
           kubectl get ns | grep chainsaw || echo "No chainsaw namespaces found"
           
-          echo "✅ Logs collected"
+          echo "Logs collected"
 
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-test-logs
+          name: e2e-test-logs-${{ matrix.group_name }}
           path: /tmp/logs/
           retention-days: 7
+
+  # Summary job that waits for all test groups to complete
+  test-e2e-summary:
+    name: E2E Tests Summary
+    runs-on: ubuntu-latest
+    needs: test-e2e
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.test-e2e.result }}" == "success" ]; then
+            echo "All E2E test groups passed!"
+            exit 0
+          else
+            echo "Some E2E test groups failed. Check individual job logs for details."
+            exit 1
+          fi
